@@ -369,7 +369,10 @@ function quizPlayer() {
         },
         renderMarkdown(text) {
             if (!text) return '';
-            let processed = this.renderBBCode(text);
+            marked.setOptions({ breaks: true });
+            // Convert "--- TEXT ---" to a bold highlighted format
+            let processed = text.replace(/--- (.*?) ---/g, '\n**$1**\n');
+            processed = this.renderBBCode(processed);
             return marked.parse(processed);
         },
         renderBBCode(text) {
