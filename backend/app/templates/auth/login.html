@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="pt-32 px-6 flex items-center justify-center min-h-[80vh]">
+    <div class="glass p-10 rounded-[2.5rem] border border-white/10 w-full max-w-md shadow-2xl">
+        <div class="text-center mb-10">
+            <div class="w-16 h-16 premium-gradient rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="lock" class="w-8 h-8 text-white"></i>
+            </div>
+            <h2 class="text-3xl font-bold mb-2">Welcome Back</h2>
+            <p class="text-slate-400">Login to your QuizMind account</p>
+        </div>
+
+        <!-- Local Login Form -->
+        <form action="/auth/login" method="POST" class="space-y-6">
+            <div>
+                <label class="block text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Username</label>
+                <input type="text" name="username" required
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 focus:border-purple-500 focus:outline-none transition-all"
+                       placeholder="Enter your username">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Password</label>
+                <input type="password" name="password" required
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 focus:border-purple-500 focus:outline-none transition-all"
+                       placeholder="••••••••">
+            </div>
+            
+            <button type="submit" class="w-full py-4 premium-gradient rounded-2xl font-bold shadow-lg shadow-purple-500/20 hover:scale-[1.02] transition-all">
+                Login Locally
+            </button>
+        </form>
+
+        <div class="relative my-10">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/10"></div></div>
+            <div class="relative flex justify-center text-xs uppercase"><span class="bg-[#0f172a] px-4 text-slate-500">Or use ecosystem login</span></div>
+        </div>
+
+        <!-- SSO Login Button -->
+        <a href="{{ login_url }}" 
+           class="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-white/10 transition-all group">
+            <i data-lucide="shield-check" class="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform"></i>
+            Login with CentralAuth
+        </a>
+
+        {% if error %}
+        <p class="mt-6 text-center text-rose-400 text-sm font-medium">{{ error }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

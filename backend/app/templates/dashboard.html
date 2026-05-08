@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .glass-pill { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.4); }
+    .hero-gradient { background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.08) 0%, transparent 70%); }
+    .level-badge { background: linear-gradient(135deg, #6366F1 0%, #A855F7 100%); }
+</style>
+
+<div class="hero-gradient min-h-screen pb-32" x-data="dashboardController()">
+    
+    <!-- Premium Mobile Header -->
+    <div class="px-6 pt-10 md:pt-32 pb-8">
+        <div class="max-w-6xl mx-auto flex items-end justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="relative">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-100 border-2 border-white shadow-sm overflow-hidden">
+                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar">
+                    </div>
+                    <div class="absolute -bottom-2 -right-2 level-badge text-white text-[8px] font-black px-2 py-1 rounded-lg border-2 border-white shadow-sm">
+                        LV. <span x-text="gamify.level"></span>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mb-1">LEVEL <span x-text="gamify.level"></span> • <span x-text="gamify.xp"></span> XP</p>
+                    <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">Quiz Center</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="relative md:hidden" @click="toggleNotifs()">
+                    <button class="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 transition-all">
+                        <i data-lucide="bell" class="w-6 h-6"></i>
+                    </button>
+                    <template x-if="unreadCount > 0">
+                        <div class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white" x-text="unreadCount"></div>
+                    </template>
+                </div>
+                <a href="/quiz/import" class="w-12 h-12 md:w-auto md:px-8 md:py-4 bg-indigo-600 text-white rounded-2xl flex items-center justify-center gap-3 shadow-2xl shadow-indigo-500/40 active:scale-90 transition-all">
+                    <i data-lucide="plus" class="w-6 h-6"></i>
+                    <span class="hidden md:block font-black text-xs uppercase tracking-widest">New Quiz</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Notification Dropdown (Mobile) -->
+        <div x-show="showNotifs" @click.away="showNotifs = false" x-transition class="md:hidden mt-4 mx-auto max-w-md bg-white rounded-3xl border border-slate-100 shadow-2xl p-4 z-50">
+            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">RECENT NOTIFICATIONS</h4>
+            <div class="space-y-2">
+                <template x-for="n in notifications" :key="n.id">
+                    <div class="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex gap-3 items-start">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                            <i data-lucide="zap" class="w-4 h-4 fill-current"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-black text-slate-800" x-text="n.title"></p>
+                            <p class="text-[10px] font-medium text-slate-500" x-text="n.message"></p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Quick Stats Row (REAL DATA) -->
+        <div class="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 mt-8">
+            <div class="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3">
+                <div class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center">
+                    <i data-lucide="flame" class="w-5 h-5 md:w-6 md:h-6 fill-current"></i>
+                </div>
+                <div>
+                    <p class="text-xl md:text-2xl font-black text-slate-900" x-text="gamify.streak"></p>
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Streak</p>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3">
+                <div class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                    <i data-lucide="target" class="w-5 h-5 md:w-6 md:h-6"></i>
+                </div>
+                <div>
+                    <p class="text-xl md:text-2xl font-black text-slate-900" x-text="stats.avg_accuracy + '%'"></p>
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Accuracy</p>
+                </div>
+            </div>
+            <div class="hidden md:flex bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-sm items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                    <i data-lucide="clock" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-black text-slate-900" x-text="stats.total_time_hours"></p>
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Hours Spent</p>
+                </div>
+            </div>
+            <div class="hidden md:flex bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-sm items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center">
+                    <i data-lucide="award" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-black text-slate-900" x-text="stats.total_questions"></p>
+                    <p class="text-[8px] font-black text-slate-400 uppercase">Questions</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="px-6 max-w-6xl mx-auto">
+        <!-- Modern Search -->
+        <div class="relative mb-10 group">
+            <i data-lucide="search" class="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-500 transition-colors"></i>
+            <input type="text" x-model="searchQuery" @input="page = 1" placeholder="Search your quizzes..." 
+                   class="w-full pl-14 pr-6 py-4 md:py-5 bg-white border border-slate-100 rounded-[2rem] text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 outline-none shadow-xl shadow-slate-200/20 transition-all">
+        </div>
+
+        <!-- Pill Tabs -->
+        <div class="flex items-center gap-3 mb-10 overflow-x-auto no-scrollbar py-2">
+            <button @click="activeTab = 'my'; page = 1" 
+                    class="px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm"
+                    :class="activeTab === 'my' ? 'bg-slate-900 text-white shadow-slate-900/20 scale-105' : 'bg-white text-slate-400 border border-slate-100'">
+                My Quizzes (<span x-text="filteredMy().length"></span>)
+            </button>
+            <button @click="activeTab = 'archived'; page = 1" 
+                    class="px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm"
+                    :class="activeTab === 'archived' ? 'bg-slate-900 text-white shadow-slate-900/20 scale-105' : 'bg-white text-slate-400 border border-slate-100'">
+                Archive (<span x-text="filteredArchived().length"></span>)
+            </button>
+            <button @click="activeTab = 'discover'; page = 1" 
+                    class="px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm"
+                    :class="activeTab === 'discover' ? 'bg-slate-900 text-white shadow-slate-900/20 scale-105' : 'bg-white text-slate-400 border border-slate-100'">
+                Discover (<span x-text="filteredDiscover().length"></span>)
+            </button>
+        </div>
+
+        <!-- Quiz Grid -->
+        <div x-show="activeTab === 'my'" x-transition:enter="transition ease-out duration-300" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="quiz in paginatedMy()" :key="quiz.id">
+                <a :href="'/quiz/' + quiz.id" class="group bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all flex items-center gap-5">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 transition-all flex-shrink-0 shadow-sm">
+                        <i data-lucide="play" class="w-6 h-6 fill-current"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-base font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors" x-text="quiz.title"></h3>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest" x-text="quiz.questions_count + ' Questions'"></span>
+                            <div class="w-1 h-1 rounded-full bg-slate-100"></div>
+                            <span class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Active</span>
+                        </div>
+                    </div>
+                    <button @click.prevent.stop="toggleArchive(quiz.id)" class="w-10 h-10 rounded-full border border-slate-50 flex items-center justify-center text-slate-200 hover:text-indigo-600 hover:bg-indigo-50 transition-all" title="Archive">
+                        <i data-lucide="folder-down" class="w-4 h-4"></i>
+                    </button>
+                </a>
+            </template>
+        </div>
+
+        <!-- Archived Grid -->
+        <div x-show="activeTab === 'archived'" x-transition:enter="transition ease-out duration-300" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="quiz in paginatedArchived()" :key="quiz.id">
+                <div class="group bg-slate-50/50 p-5 rounded-[2rem] border border-slate-100 flex items-center gap-5 opacity-60 hover:opacity-100 transition-all">
+                    <div class="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <i data-lucide="archive" class="w-6 h-6"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-base font-black text-slate-400" x-text="quiz.title"></h3>
+                        <p class="text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1" x-text="quiz.questions_count + ' Questions'"></p>
+                    </div>
+                    <button @click.prevent.stop="toggleArchive(quiz.id)" class="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-indigo-600 shadow-sm active:scale-90 transition-all" title="Unarchive">
+                        <i data-lucide="folder-up" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </template>
+        </div>
+
+        <!-- Discover Grid -->
+        <div x-show="activeTab === 'discover'" x-transition:enter="transition ease-out duration-300" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="quiz in paginatedDiscover()" :key="quiz.id">
+                <a :href="'/quiz/' + quiz.id" class="group bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all flex items-center gap-5">
+                    <div class="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all flex-shrink-0">
+                        <i data-lucide="layers" class="w-6 h-6"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-base font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors" x-text="quiz.title"></h3>
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1" x-text="quiz.questions_count + ' Questions'"></p>
+                    </div>
+                    <button @click.prevent.stop="enroll(quiz.id)" 
+                            class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-90">
+                        <i data-lucide="plus" class="w-5 h-5"></i>
+                    </button>
+                </a>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function dashboardController() {
+    return {
+        activeTab: 'my', searchQuery: '', page: 1, pageSize: 12, showNotifs: false,
+        myQuizzes: {{ my_quizzes | tojson | safe }},
+        archivedQuizzes: {{ archived_quizzes | tojson | safe }},
+        discoverQuizzes: {{ discover_quizzes | tojson | safe }},
+        gamify: {{ gamify | tojson | safe }},
+        stats: {{ stats_summary | tojson | safe }},
+        notifications: {{ notifications | tojson | safe }},
+        unreadCount: {{ unread_count }},
+        filteredMy() { return this.myQuizzes.filter(q => q.title.toLowerCase().includes(this.searchQuery.toLowerCase())); },
+        filteredArchived() { return this.archivedQuizzes.filter(q => q.title.toLowerCase().includes(this.searchQuery.toLowerCase())); },
+        filteredDiscover() { return this.discoverQuizzes.filter(q => q.title.toLowerCase().includes(this.searchQuery.toLowerCase())); },
+        paginatedMy() { return this.filteredMy().slice(0, this.page * this.pageSize); },
+        paginatedArchived() { return this.filteredArchived().slice(0, this.page * this.pageSize); },
+        paginatedDiscover() { return this.filteredDiscover().slice(0, this.page * this.pageSize); },
+        hasMore() { 
+            const list = this.activeTab === 'my' ? this.filteredMy() : (this.activeTab === 'archived' ? this.filteredArchived() : this.filteredDiscover()); 
+            return list.length > this.page * this.pageSize; 
+        },
+        loadMore() { this.page++; this.$nextTick(() => lucide.createIcons()); },
+        init() {
+            // Handle Tab redirect
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tab')) this.activeTab = urlParams.get('tab');
+            
+            this.$nextTick(() => lucide.createIcons());
+        },
+        toggleNotifs() {
+            this.showNotifs = !this.showNotifs;
+            if (this.showNotifs && this.unreadCount > 0) {
+                // Mark as read
+                fetch('/api/v1/notifications/read-all', { method: 'POST' })
+                    .then(() => { this.unreadCount = 0; });
+            }
+        },
+        async enroll(quizId) {
+            try {
+                const res = await fetch(`/api/v1/quiz/${quizId}/enroll`, { method: 'POST' });
+                if (res.ok) {
+                    const idx = this.discoverQuizzes.findIndex(q => q.id === quizId);
+                    if (idx !== -1) {
+                        const quiz = this.discoverQuizzes.splice(idx, 1)[0];
+                        this.myQuizzes.push(quiz);
+                    }
+                    this.$nextTick(() => lucide.createIcons());
+                }
+            } catch (e) {
+                alert("Could not add quiz.");
+            }
+        },
+        async toggleArchive(quizId) {
+            try {
+                const res = await fetch(`/api/v1/quiz/${quizId}/archive`, { method: 'POST' });
+                if (res.ok) {
+                    if (this.activeTab === 'my') {
+                        const idx = this.myQuizzes.findIndex(q => q.id === quizId);
+                        if (idx !== -1) {
+                            const quiz = this.myQuizzes.splice(idx, 1)[0];
+                            this.archivedQuizzes.push(quiz);
+                        }
+                    } else if (this.activeTab === 'archived') {
+                        const idx = this.archivedQuizzes.findIndex(q => q.id === quizId);
+                        if (idx !== -1) {
+                            const quiz = this.archivedQuizzes.splice(idx, 1)[0];
+                            this.myQuizzes.push(quiz);
+                        }
+                    }
+                    this.$nextTick(() => lucide.createIcons());
+                }
+            } catch (e) {
+                alert("Action failed.");
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

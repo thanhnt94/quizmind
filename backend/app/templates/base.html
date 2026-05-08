@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title or "QuizMind - Mastery Through Practice" }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+... (rest of style)
+    </style>
+</head>
+<body class="bg-[#F8FAFC] min-h-screen flex flex-col transition-all duration-300 {% if not hide_navbar %}md:pt-20 pb-24 md:pb-0{% endif %}">
+    
+    {% if not hide_navbar %}
+    <!-- Desktop Top Navbar (Always shown on desktop if not hidden) -->
+    <nav class="fixed top-0 left-0 right-0 z-[110] bg-white/80 backdrop-blur-2xl border-b border-slate-100 px-8 py-4 hidden md:flex items-center justify-between">
+        <div class="flex items-center gap-8">
+            <a href="/" class="flex items-center gap-2 group">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200 group-hover:rotate-12 transition-transform">
+                    <i data-lucide="brain-circuit" class="w-6 h-6"></i>
+                </div>
+                <span class="text-xl font-black text-slate-900 tracking-tighter">QuizMind</span>
+            </a>
+            <div class="flex items-center gap-6">
+                <a href="/" class="text-xs font-black uppercase tracking-widest transition-colors {% if is_home %}text-indigo-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Dashboard</a>
+                <a href="/discover" class="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Discover</a>
+                <a href="/stats" class="text-xs font-black uppercase tracking-widest transition-colors {% if active_nav == 'stats' %}text-indigo-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Stats</a>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            {% if user %}
+            <div class="h-10 w-px bg-slate-100 mx-2"></div>
+            <div class="flex items-center gap-3 pl-2 group cursor-pointer">
+                <div class="text-right hidden lg:block">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Học viên</p>
+                    <p class="text-xs font-bold text-slate-900 leading-none">{{ user.username }}</p>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
+                    <i data-lucide="user" class="w-5 h-5"></i>
+                </div>
+            </div>
+            <button class="p-2.5 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+            {% else %}
+            <a href="/login" class="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:shadow-lg hover:shadow-indigo-100 transition-all active:scale-95">
+                Đăng nhập
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {% if show_bottom_nav %}
+    <!-- Mobile Bottom Navbar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-[110] bg-white/90 backdrop-blur-3xl border-t border-slate-100 px-6 py-4 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] md:hidden">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <a href="/" class="flex flex-col items-center gap-1.5 group relative {% if not is_home %}opacity-40{% endif %}">
+                <div class="p-2.5 rounded-2xl {% if is_home %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
+                    <i data-lucide="home" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-black uppercase tracking-widest {% if is_home %}text-indigo-600{% else %}text-slate-400{% endif %}">Home</span>
+                {% if is_home %}<div class="active-nav-dot"></div>{% endif %}
+            </a>
+            <a href="/discover" class="flex flex-col items-center gap-1.5 group opacity-40">
+                <div class="p-2.5 rounded-2xl text-slate-400 group-active:scale-90 transition-all">
+                    <i data-lucide="compass" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Explore</span>
+            </a>
+            <a href="/stats" class="flex flex-col items-center gap-1.5 group relative {% if active_nav != 'stats' %}opacity-40{% endif %}">
+                <div class="p-2.5 rounded-2xl {% if active_nav == 'stats' %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'stats' %}text-indigo-600{% else %}text-slate-400{% endif %}">Stats</span>
+                {% if active_nav == 'stats' %}<div class="active-nav-dot"></div>{% endif %}
+            </a>
+            <a href="/profile" class="flex flex-col items-center gap-1.5 group relative {% if active_nav != 'profile' %}opacity-40{% endif %}">
+                <div class="p-2.5 rounded-2xl {% if active_nav == 'profile' %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
+                    <i data-lucide="user" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'profile' %}text-indigo-600{% else %}text-slate-400{% endif %}">Profile</span>
+                {% if active_nav == 'profile' %}<div class="active-nav-dot"></div>{% endif %}
+            </a>
+        </div>
+    </nav>
+    {% endif %}
+    {% endif %}
+
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

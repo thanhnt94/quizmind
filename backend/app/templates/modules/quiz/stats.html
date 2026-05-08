@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="pt-32 px-6 max-w-6xl mx-auto pb-20">
+    <div class="flex items-center justify-between mb-12">
+        <div>
+            <h1 class="text-5xl font-black text-gradient mb-2">Member Dashboard</h1>
+            <p class="text-slate-500 font-medium">Tracking your journey to mastery.</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <button onclick="window.location.reload()" class="p-4 glass rounded-2xl hover:bg-white/5 transition-all">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-purple-400"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+        <div class="glass p-10 rounded-[3rem] border-white/10 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all">
+                <i data-lucide="zap" class="w-20 h-20 text-yellow-400"></i>
+            </div>
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Overall Accuracy</p>
+            <h2 class="text-6xl font-black text-white mb-2" id="accuracyText">0%</h2>
+            <div class="h-2 w-full bg-white/5 rounded-full mt-6 overflow-hidden">
+                <div id="accuracyBar" class="h-full premium-gradient transition-all duration-1000" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="glass p-10 rounded-[3rem] border-white/10 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all">
+                <i data-lucide="check-circle" class="w-20 h-20 text-emerald-400"></i>
+            </div>
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Questions Solved</p>
+            <h2 class="text-6xl font-black text-white" id="solvedText">0</h2>
+            <p class="text-slate-500 text-sm mt-4 font-medium" id="correctText">0 Correct answers</p>
+        </div>
+
+        <div class="glass p-10 rounded-[3rem] border-white/10 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all">
+                <i data-lucide="target" class="w-20 h-20 text-rose-400"></i>
+            </div>
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Mistakes to Fix</p>
+            <h2 class="text-6xl font-black text-rose-400" id="mistakesText">0</h2>
+            <p class="text-slate-500 text-sm mt-4 font-medium">Ready for Mastery Mode</p>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="glass p-10 rounded-[3.5rem] border-white/10">
+            <h3 class="text-xl font-bold mb-8 flex items-center gap-3">
+                <i data-lucide="trending-up" class="w-5 h-5 text-purple-400"></i> Activity Trend
+            </h3>
+            <canvas id="activityChart" height="250"></canvas>
+        </div>
+        
+        <div class="glass p-10 rounded-[3.5rem] border-white/10 flex flex-col items-center justify-center text-center">
+            <div class="w-20 h-20 rounded-[1.5rem] bg-purple-500/20 flex items-center justify-center mb-6">
+                <i data-lucide="award" class="w-10 h-10 text-purple-400"></i>
+            </div>
+            <h3 class="text-2xl font-bold mb-4">Keep it up!</h3>
+            <p class="text-slate-500 max-w-xs leading-relaxed">Consistency is key to mastering any subject. AI is analyzing your progress.</p>
+            <a href="/" class="mt-8 px-10 py-4 premium-gradient rounded-2xl font-bold shadow-xl hover:scale-105 transition-all">Start New Quiz</a>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+async function loadStats() {
+    try {
+        const res = await fetch('/api/v1/quiz/stats');
+        const data = await res.json();
+        
+        document.getElementById('accuracyText').innerText = Math.round(data.overall_accuracy) + '%';
+        document.getElementById('accuracyBar').style.width = data.overall_accuracy + '%';
+        document.getElementById('solvedText').innerText = data.total_answers;
+        document.getElementById('correctText').innerText = data.correct_answers + ' Correct answers';
+        
+        // Activity Chart
+        const ctx = document.getElementById('activityChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.activity_data.map(d => d[0]),
+                datasets: [{
+                    label: 'Questions Answered',
+                    data: data.activity_data.map(d => d[1]),
+                    borderColor: '#a855f7',
+                    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#a855f7'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    } catch (e) { console.error('Stats load failed', e); }
+}
+document.addEventListener('DOMContentLoaded', loadStats);
+</script>
+{% endblock %}
