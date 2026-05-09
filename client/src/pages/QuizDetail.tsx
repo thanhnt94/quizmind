@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, Award, BookOpen, Search, StickyNote, BarChart2 } from 'lucide-react'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
@@ -15,6 +15,7 @@ interface Question {
 export default function QuizDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'list' | 'stats'>('list')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -36,6 +37,14 @@ export default function QuizDetail() {
     queryKey: ['quiz-notes', id],
     queryFn: async () => {
       const res = await axios.get(`/api/v1/quiz/${id}/notes`)
+      return res.data
+    }
+  })
+
+  const { data: sessionData } = useQuery({
+    queryKey: ['quiz-session', id],
+    queryFn: async () => {
+      const res = await axios.get(`/api/v1/quiz/${id}/session`)
       return res.data
     }
   })
@@ -191,10 +200,35 @@ export default function QuizDetail() {
 
       {/* Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 md:p-8 bg-white/80 backdrop-blur-2xl border-t border-slate-100 z-[130] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        <div className="max-w-5xl mx-auto">
-          <Link to={`/quiz/${id}/play`} className="w-full flex items-center justify-center py-5 bg-indigo-600 text-white font-black text-sm md:text-base rounded-2xl shadow-xl shadow-indigo-500/30 active:scale-95 transition-all tracking-widest uppercase">
-            BẮT ĐẦU LUYỆN TẬP
-          </Link>
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row gap-3">
+          {sessionData && (Object.keys(sessionData.state || {}).length > 0 || sessionData.current_index > 0) ? (
+            <>
+              <button 
+                onClick={async () => {
+                  await axios.delete(`/api/v1/quiz/${id}/session`)
+                  // Refresh the query to update UI
+                  queryClient.invalidateQueries({ queryKey: ['quiz-session', id] })
+                  navigate(`/quiz/${id}/play`)
+                }}
+                className="flex-1 py-5 bg-white border-2 border-indigo-100 text-indigo-600 font-black text-sm md:text-base rounded-2xl active:scale-95 transition-all tracking-widest uppercase"
+              >
+                BẮT ĐẦU MỚI (RESET)
+              </button>
+              <button 
+                onClick={() => navigate(`/quiz/${id}/play`)}
+                className="flex-[2] py-5 bg-indigo-600 text-white font-black text-sm md:text-base rounded-2xl shadow-xl shadow-indigo-500/30 active:scale-95 transition-all tracking-widest uppercase"
+              >
+                TIẾP TỤC LUYỆN TẬP
+              </button>
+            </>
+          ) : (
+            <button 
+              onClick={() => navigate(`/quiz/${id}/play`)}
+              className="w-full py-5 bg-indigo-600 text-white font-black text-sm md:text-base rounded-2xl shadow-xl shadow-indigo-500/30 active:scale-95 transition-all tracking-widest uppercase"
+            >
+              BẮT ĐẦU LUYỆN TẬP
+            </button>
+          )}
         </div>
       </div>
     </div>

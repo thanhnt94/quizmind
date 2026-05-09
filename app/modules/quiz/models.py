@@ -82,6 +82,7 @@ class UserAnswer(Base):
 class QuizSession(Base):
     __tablename__ = "quiz_sessions"
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
     quiz_id = Column(Integer, ForeignKey("quizzes.id"))
     mode = Column(String) # classic, chaos, mastery, batch
     current_index = Column(Integer, default=0)

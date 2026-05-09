@@ -167,7 +167,8 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
     user_id = int(request.cookies.get("user_id", 1)) # Default to 1 for demo
     is_correct = data.get("is_correct", False)
     time_spent = int(data.get("time_spent", 0))
-    question_id = data.get("question_id")
+    question_id = int(data.get("question_id"))
+    selected_option_id = int(data.get("option_id")) if data.get("option_id") else None
 
     q_res = await db.execute(select(Question).filter(Question.id == question_id))
     question = q_res.scalar_one_or_none()
@@ -183,7 +184,7 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
         db_answer = UserAnswer(
             attempt_id=attempt.id,
             question_id=question_id,
-            selected_option_id=data.get("selected_option_id"),
+            selected_option_id=selected_option_id,
             is_correct=is_correct,
             active_time=float(time_spent)
         )
@@ -265,9 +266,10 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
     }
 
 @router.get("/{quiz_id}/session")
-async def get_quiz_session(quiz_id: int, db: AsyncSession = Depends(get_db)):
+async def get_quiz_session(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import QuizSession
-    result = await db.execute(select(QuizSession).filter(QuizSession.quiz_id == quiz_id))
+    user_id = int(request.cookies.get("user_id", 1))
+    result = await db.execute(select(QuizSession).filter(QuizSession.quiz_id == quiz_id, QuizSession.user_id == user_id))
     session = result.scalar_one_or_none()
     if not session: return None
     return {
@@ -277,17 +279,26 @@ async def get_quiz_session(quiz_id: int, db: AsyncSession = Depends(get_db)):
     }
 
 @router.post("/{quiz_id}/session")
-async def save_quiz_session(quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+async def save_quiz_session(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import QuizSession
-    result = await db.execute(select(QuizSession).filter(QuizSession.quiz_id == quiz_id))
+    user_id = int(request.cookies.get("user_id", 1))
+    result = await db.execute(select(QuizSession).filter(QuizSession.quiz_id == quiz_id, QuizSession.user_id == user_id))
     session = result.scalar_one_or_none()
     if not session:
-        session = QuizSession(quiz_id=quiz_id)
+        session = QuizSession(quiz_id=quiz_id, user_id=user_id)
         db.add(session)
     
     session.mode = data.get("mode")
     session.current_index = data.get("current_index", 0)
     session.state_json = json.dumps(data.get("state", {}))
+    await db.commit()
+    return {"status": "ok"}
+
+@router.delete("/{quiz_id}/session")
+async def reset_quiz_session(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import QuizSession
+    user_id = int(request.cookies.get("user_id", 1))
+    await db.execute(delete(QuizSession).where(QuizSession.quiz_id == quiz_id, QuizSession.user_id == user_id))
     await db.commit()
     return {"status": "ok"}
 

@@ -86,6 +86,7 @@ export default function QuizPlay() {
   const [aiInput, setAiInput] = useState('')
   const [isMapOpen, setIsMapOpen] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+  const [isQuitModalOpen, setIsQuitModalOpen] = useState(false)
   const [activeFeedbackTab, setActiveFeedbackTab] = useState<'insight' | 'ai' | 'note'>('insight')
   const [sessionAnswers, setSessionAnswers] = useState<Record<number, number>>({})
 
@@ -110,27 +111,7 @@ export default function QuizPlay() {
   const fetchSession = async () => {
     try {
       const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
-      let questions = quizRes.data.questions || []
-      
-      // Apply Learning Algorithm from Settings
-      const mode = localStorage.getItem('quiz_learning_mode') || 'sequential'
-      
-      if (mode === 'random') {
-        questions = [...questions].sort(() => Math.random() - 0.5)
-      } else if (mode === 'unseen') {
-        // Questions with 0 total attempts first
-        questions = [...questions].sort((a, b) => (a.stats?.total || 0) - (b.stats?.total || 0))
-      } else if (mode === 'review') {
-        // Questions with attempts but low accuracy (or just any attempt) first
-        questions = [...questions].sort((a, b) => {
-          const aTotal = a.stats?.total || 0
-          const bTotal = b.stats?.total || 0
-          if (aTotal === 0 && bTotal > 0) return 1
-          if (aTotal > 0 && bTotal === 0) return -1
-          return (a.stats?.correct || 0) - (b.stats?.correct || 0) // Fewer correct first
-        })
-      }
-
+      const questions = quizRes.data.questions || []
       setSession({ ...quizRes.data, questions })
       
       try {
@@ -142,6 +123,24 @@ export default function QuizPlay() {
           const curIdx = sessionRes.data.current_index || 0
           setCurrentIndex(curIdx)
           
+          // Update local stats for restored answers
+          setSession((prev: any) => {
+            if (!prev) return prev
+            const newQs = [...prev.questions]
+            Object.entries(restoredAnswers).forEach(([idx, optIdx]: [any, any]) => {
+              const q = { ...newQs[idx] }
+              const isCorrect = q.options[optIdx]?.is_correct
+              const currentStats = q.stats || { total: 0, correct: 0, avg_time: 0 }
+              q.stats = {
+                total: currentStats.total + 1,
+                correct: currentStats.correct + (isCorrect ? 1 : 0),
+                avg_time: currentStats.avg_time // Don't have time info here easily
+              }
+              newQs[idx] = q
+            })
+            return { ...prev, questions: newQs }
+          })
+
           if (typeof restoredAnswers[curIdx] === 'number') {
             setSelectedOption(restoredAnswers[curIdx])
             setShowFeedback(true)
@@ -251,6 +250,48 @@ export default function QuizPlay() {
     setIsEditingNote(false)
     setIsEditingAI(false)
     saveSession(sessionAnswers, idx)
+  }
+
+  const handleNext = () => {
+    if (!session || !session.questions) return
+
+    const mode = localStorage.getItem('quiz_learning_mode') || 'sequential'
+    const questions = session.questions
+    const total = questions.length
+
+    if (mode === 'sequential') {
+      navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+    } else if (mode === 'random') {
+      // Find a random index not answered in THIS session
+      const pool = questions.map((_: any, i: number) => i).filter((i: number) => sessionAnswers[i] === undefined)
+      if (pool.length > 0) {
+        const rand = pool[Math.floor(Math.random() * pool.length)]
+        navigateToQuestion(rand)
+      } else {
+        navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+      }
+    } else if (mode === 'unseen') {
+      // Find next question with 0 historical attempts
+      const nextUnseen = questions.findIndex((q: any, i: number) => i > currentIndex && (q.stats?.total || 0) === 0)
+      if (nextUnseen !== -1) {
+        navigateToQuestion(nextUnseen)
+      } else {
+        // Loop back to find any unseen
+        const anyUnseen = questions.findIndex((q: any) => (q.stats?.total || 0) === 0)
+        if (anyUnseen !== -1) navigateToQuestion(anyUnseen)
+        else navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+      }
+    } else if (mode === 'review') {
+      // Find next question with some errors in history
+      const nextReview = questions.findIndex((q: any, i: number) => i > currentIndex && (q.stats?.wrong || 0) > 0)
+      if (nextReview !== -1) {
+        navigateToQuestion(nextReview)
+      } else {
+        navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+      }
+    } else {
+      navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+    }
   }
 
   const askAI = async (manualText?: string) => {
@@ -611,23 +652,24 @@ export default function QuizPlay() {
             className={cn(
               "relative aspect-square rounded-lg border flex items-center justify-center font-black text-[11px] transition-all overflow-hidden",
               currentIndex === i 
-                ? "border-indigo-600 shadow-lg shadow-indigo-200 ring-2 ring-indigo-500 ring-offset-1" 
+                ? "border-indigo-600 ring-2 ring-indigo-500 ring-offset-1 z-10" 
                 : "border-slate-100 hover:border-indigo-200",
               totalStats === 0 ? "bg-white text-slate-400" : "text-slate-700"
             )}
             style={
               totalStats > 0 
-                ? { background: `linear-gradient(to top, #bbf7d0 ${ratio}%, #fecaca ${ratio}%)` } 
+                ? { background: `linear-gradient(to top, #DCFCE7 0%, #DCFCE7 ${ratio}%, #FEE2E2 ${ratio}%, #FEE2E2 100%)` } 
                 : {}
             }
           >
-            <span className="relative z-10">{i + 1}</span>
-            {hasAttemptedThisSession && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[1px] z-20">
+            {!hasAttemptedThisSession ? (
+              <span className="relative z-10">{i + 1}</span>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
                 {sessionCorrect ? (
-                  <Check className="w-5 h-5 text-emerald-600 stroke-[4]" />
+                  <Check className="w-6 h-6 text-emerald-700 stroke-[4] animate-in zoom-in-50 duration-300" />
                 ) : (
-                  <X className="w-5 h-5 text-red-600 stroke-[4]" />
+                  <X className="w-6 h-6 text-red-700 stroke-[4] animate-in zoom-in-50 duration-300" />
                 )}
               </div>
             )}
@@ -666,11 +708,7 @@ export default function QuizPlay() {
             <span className="text-[10px] font-black">{timeLeft}s</span>
           </div>
           <button 
-            onClick={() => {
-              if (window.confirm("Quit session? Progress is saved.")) {
-                navigate('/')
-              }
-            }}
+            onClick={() => setIsQuitModalOpen(true)}
             className="w-8 h-8 flex items-center justify-center bg-rose-50 border border-rose-100 rounded-lg text-rose-500 shadow-sm active:scale-90 transition-all"
           >
             <X className="w-4 h-4" />
@@ -810,10 +848,7 @@ export default function QuizPlay() {
             </button>
           ) : (
             <button 
-              onClick={() => {
-                const nextIdx = Math.min(currentIndex + 1, (session.questions?.length || 1) - 1)
-                navigateToQuestion(nextIdx)
-              }}
+              onClick={handleNext}
               className="flex-1 h-12 bg-indigo-600 text-white font-black text-xs rounded-2xl shadow-lg flex items-center justify-center gap-3 uppercase tracking-widest active:scale-95 transition-all"
             >
               NEXT QUESTION
@@ -864,6 +899,58 @@ export default function QuizPlay() {
                {renderFeedbackArea(true)}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Exit Confirmation Modal */}
+      <AnimatePresence>
+        {isQuitModalOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsQuitModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl border border-white/20 overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-400 via-rose-500 to-rose-400"></div>
+              
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6 border border-rose-100">
+                  <X className="w-8 h-8 text-rose-500" />
+                </div>
+                
+                <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tight">Kết Thúc Phiên Học?</h3>
+                <p className="text-slate-500 font-medium text-sm leading-relaxed mb-8">Thoát ngay bây giờ sẽ xóa trạng thái hiện tại của phiên học này. Bạn có chắc chắn muốn thoát không?</p>
+                
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <button 
+                    onClick={() => setIsQuitModalOpen(false)}
+                    className="py-4 bg-slate-50 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all"
+                  >
+                    Ở LẠI HỌC
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await axios.delete(`/api/v1/quiz/${id}/session`)
+                      } catch (e) {}
+                      navigate(`/quiz/${id}`)
+                    }}
+                    className="py-4 bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-200 active:scale-95 transition-all"
+                  >
+                    XÁC NHẬN THOÁT
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
