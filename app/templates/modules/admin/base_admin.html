@@ -14,12 +14,26 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900" x-data="{ sidebarOpen: true }">
+<body class="bg-slate-50 text-slate-900" x-data="{ sidebarOpen: window.innerWidth >= 1024 }">
     
+    <!-- Backdrop for mobile -->
+    <div x-show="sidebarOpen && window.innerWidth < 1024" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
+         @click="sidebarOpen = false"></div>
+
     <!-- Sidebar -->
-    <aside class="fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-slate-200 transition-all duration-300 overflow-y-auto no-scrollbar"
-           :class="sidebarOpen ? 'w-72' : 'w-20'">
-        <div class="p-6 flex items-center gap-4 border-b border-slate-50 mb-4">
+    <aside class="fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-slate-200 transition-all duration-300 overflow-y-auto no-scrollbar shadow-2xl lg:shadow-none"
+           :class="{
+               'w-72': sidebarOpen,
+               'w-20': !sidebarOpen && window.innerWidth >= 1024,
+               '-translate-x-full': !sidebarOpen && window.innerWidth < 1024,
+               'translate-x-0': sidebarOpen || window.innerWidth >= 1024
+           }">
+        <div class="p-6 flex items-center gap-4 border-b border-slate-50 mb-4 h-20">
             <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white flex-shrink-0">
                 <i data-lucide="shield-check" class="w-6 h-6"></i>
             </div>
@@ -54,30 +68,39 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="transition-all duration-300" :class="sidebarOpen ? 'ml-72' : 'ml-20'">
+    <main class="transition-all duration-300 min-h-screen" 
+          :class="{
+              'lg:ml-72': sidebarOpen,
+              'lg:ml-20': !sidebarOpen
+          }">
         <!-- Top Header -->
-        <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-8 py-4 flex items-center justify-between">
-            <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+        <header class="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 lg:px-8 py-4 flex items-center justify-between h-20">
+            <button @click="sidebarOpen = !sidebarOpen" class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors">
                 <i data-lucide="menu" class="w-5 h-5"></i>
             </button>
-            <div class="flex items-center gap-4">
-                <div class="text-right">
-                    <p class="text-sm font-black">{{ user.full_name or user.username }}</p>
+            
+            <div class="flex items-center gap-3 lg:gap-4">
+                <div class="text-right hidden sm:block">
+                    <p class="text-sm font-black truncate max-w-[150px]">{{ user.full_name or user.username }}</p>
                     <p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">System Administrator</p>
                 </div>
-                <div class="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm overflow-hidden">
+                <div class="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm overflow-hidden flex-shrink-0">
                     <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" alt="avatar">
                 </div>
             </div>
         </header>
 
-        <div class="p-8">
+        <div class="p-4 lg:p-8">
             {% block admin_content %}{% endblock %}
         </div>
     </main>
 
     <script>
         lucide.createIcons();
+        window.addEventListener('resize', () => {
+            // Optional: Close sidebar on mobile when resizing if needed
+            // if (window.innerWidth < 1024) sidebarOpen = false;
+        });
     </script>
 </body>
 </html>

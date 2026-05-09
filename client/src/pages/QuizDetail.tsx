@@ -142,10 +142,10 @@ export default function QuizDetail() {
                         <h3 className="text-sm font-bold text-slate-700 leading-relaxed md:line-clamp-2">{q.content}</h3>
                       </div>
                       <div className="flex items-center gap-5 md:ml-auto flex-shrink-0 pt-2 md:pt-0">
-                        <StatItem label="LẦN LÀM" value={q.stats.total} color="slate" />
+                        <StatItem label="LẦN LÀM" value={q.stats?.total || 0} color="slate" />
                         <div className="w-px h-6 bg-slate-100" />
-                        <StatItem label="ĐÚNG" value={q.stats.correct} color="emerald" />
-                        <StatItem label="SAI" value={q.stats.wrong} color="rose" />
+                        <StatItem label="ĐÚNG" value={q.stats?.correct || 0} color="emerald" />
+                        <StatItem label="SAI" value={q.stats?.wrong || 0} color="rose" />
                         {notes?.[q.id] && (
                           <>
                             <div className="w-px h-6 bg-slate-100" />

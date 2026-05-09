@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, Request
 from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, Integer, or_
 from sqlalchemy.orm import selectinload
 from app.core.db import get_db
 from app.modules.quiz.services.excel_service import ExcelQuizService
@@ -364,7 +364,6 @@ async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depe
 @router.get("/{quiz_id}/questions")
 async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search: str = "", db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Question, Option
-    from sqlalchemy import or_
     
     query = select(Question).where(Question.quiz_id == quiz_id).options(selectinload(Question.options))
     if search:
@@ -379,15 +378,28 @@ async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search
     result = await db.execute(query)
     qs = result.scalars().all()
     
+    # Fetch stats for these questions
+    from app.modules.quiz.models import UserAnswer
+    q_ids = [q.id for q in qs]
+    stats_query = select(
+        UserAnswer.question_id,
+        func.count(UserAnswer.id).label("total"),
+        func.sum(func.cast(UserAnswer.is_correct, Integer)).label("correct")
+    ).where(UserAnswer.question_id.in_(q_ids)).group_by(UserAnswer.question_id)
+    stats_res = await db.execute(stats_query)
+    stats_map = {r.question_id: {"total": r.total, "correct": r.correct, "wrong": r.total - r.correct} for r in stats_res}
+    
     return {
         "questions": [
             {
                 "id": q.id,
+                "orig_index": (page - 1) * size + i + 1,
                 "content": q.content,
                 "explanation": q.explanation,
                 "points": q.points,
                 "image": q.image,
                 "audio": q.audio,
+                "stats": stats_map.get(q.id, {"total": 0, "correct": 0, "wrong": 0}),
                 "options": [
                     {
                         "id": o.id,
@@ -395,7 +407,7 @@ async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search
                         "is_correct": o.is_correct
                     } for o in q.options
                 ]
-            } for q in qs
+            } for i, q in enumerate(qs)
         ],
         "total": total,
         "page": page,
