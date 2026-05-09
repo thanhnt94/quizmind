@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash } from 'lucide-react'
+import { ChevronLeft, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -97,10 +97,14 @@ export default function QuizPlay() {
   useEffect(() => {
     fetchSession()
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => prev + 1)
+      setTimeLeft(prev => {
+        // Only increment if feedback is NOT shown
+        if (showFeedback) return prev
+        return prev + 1
+      })
     }, 1000)
     return () => clearInterval(timerRef.current)
-  }, [id])
+  }, [id, showFeedback])
 
   useEffect(() => {
     if (currentQuestion) {
@@ -317,6 +321,14 @@ export default function QuizPlay() {
     }
   }
 
+  const copyQuestionToClipboard = () => {
+    if (!currentQuestion) return
+    const text = `Question: ${currentQuestion.content}\n` + 
+                 currentQuestion.options.map((opt, i) => `${String.fromCharCode(65 + i)}: ${opt.content}`).join('\n')
+    navigator.clipboard.writeText(text)
+    alert("Copied to clipboard!")
+  }
+
   const renderFeedbackArea = (isMobile = false) => {
     if (!showFeedback) return null
     
@@ -331,17 +343,17 @@ export default function QuizPlay() {
         case 'insight':
           return (
             <div className="p-6 rounded-[2rem] bg-indigo-50/30 border border-indigo-100 shadow-sm animate-in fade-in slide-in-from-bottom-2">
-               <div className="flex items-center gap-2 mb-3">
-                 <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                    <Lightbulb className="w-3.5 h-3.5 fill-amber-500" />
+                 <div className="flex items-center gap-2 mb-3">
+                   <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                      <Lightbulb className="w-3.5 h-3.5 fill-amber-500" />
+                   </div>
+                   <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">INSIGHT</span>
                  </div>
-                 <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">INSIGHT</span>
-               </div>
-               <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content break-words max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                   {currentQuestion?.explanation || 'No detail.'}
-                 </ReactMarkdown>
-               </div>
+                 <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                     {currentQuestion?.explanation || 'No detail.'}
+                   </ReactMarkdown>
+                 </div>
             </div>
           )
         case 'ai':
@@ -486,7 +498,7 @@ export default function QuizPlay() {
               </div>
               <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">INSIGHT</span>
             </div>
-            <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content break-words max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
+            <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                 {currentQuestion?.explanation || 'No detail.'}
               </ReactMarkdown>
@@ -704,9 +716,31 @@ export default function QuizPlay() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 rounded-lg text-white shadow-sm border border-slate-800">
-            <Timer className="w-3 h-3 text-indigo-400" />
+            <Timer className={cn("w-3 h-3 text-indigo-400", !showFeedback && "animate-pulse")} />
             <span className="text-[10px] font-black">{timeLeft}s</span>
           </div>
+          
+          <AnimatePresence>
+            {showFeedback && (
+              <motion.button 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={copyQuestionToClipboard}
+                className="w-8 h-8 flex items-center justify-center bg-amber-50 border border-amber-100 rounded-lg text-amber-500 shadow-sm active:scale-90 transition-all"
+                title="Copy câu hỏi"
+              >
+                <Copy className="w-4 h-4" />
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          <button 
+            onClick={() => navigate(`/manage/edit/${id}/questions`)}
+            className="w-8 h-8 flex items-center justify-center bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 shadow-sm active:scale-90 transition-all"
+            title="Sửa câu hỏi"
+          >
+            <Edit3 className="w-4 h-4" />
+          </button>
           <button 
             onClick={() => setIsQuitModalOpen(true)}
             className="w-8 h-8 flex items-center justify-center bg-rose-50 border border-rose-100 rounded-lg text-rose-500 shadow-sm active:scale-90 transition-all"
