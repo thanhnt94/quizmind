@@ -243,6 +243,9 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
     quiz = await QuizService.get_quiz_with_stats(db, quiz_id, user_id=user_id)
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
+    from app.modules.gamification.interface import GamificationInterface
+    user_stats = await GamificationInterface.get_user_stats(db, user_id)
+    
     # Format for frontend
     return {
         "id": quiz.id,
@@ -250,6 +253,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
         "description": quiz.description,
         "ai_prompt": quiz.ai_prompt,
         "category_id": quiz.category_id,
+        "user_total_xp": user_stats.get("xp", 0),
         "questions": [
             {
                 "id": q.id,

@@ -77,7 +77,8 @@ export default function QuizPlay() {
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
   const [streak, setStreak] = useState(0)
-  const [totalXP, setTotalXP] = useState(0)
+  const [sessionXP, setSessionXP] = useState(0)
+  const [initialTotalXP, setInitialTotalXP] = useState(0)
   const [timeLeft, setTimeLeft] = useState(0)
   const [isAskingAI, setIsAskingAI] = useState(false)
   const [personalNote, setPersonalNote] = useState('')
@@ -120,6 +121,7 @@ export default function QuizPlay() {
       const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
       const questions = quizRes.data.questions || []
       setSession({ ...quizRes.data, questions })
+      setInitialTotalXP(quizRes.data.user_total_xp || 0)
       
       try {
         const sessionRes = await axios.get(`/api/v1/quiz/${id}/session`)
@@ -135,6 +137,10 @@ export default function QuizPlay() {
           if (typeof restoredAnswers[curIdx] === 'number') {
             setSelectedOption(restoredAnswers[curIdx])
             setShowFeedback(true)
+          }
+
+          if (sessionRes.data.state?.sessionXP) {
+            setSessionXP(sessionRes.data.state.sessionXP)
           }
         }
       } catch (e) {}
@@ -163,12 +169,15 @@ export default function QuizPlay() {
     }
   }
 
-  const saveSession = async (newAnswers: Record<number, number>, newIndex: number) => {
+  const saveSession = async (newAnswers: Record<number, number>, newIndex: number, currentXP: number = sessionXP) => {
     try {
       await axios.post(`/api/v1/quiz/${id}/session`, {
         mode: "sequential",
         current_index: newIndex,
-        state: { sessionAnswers: newAnswers }
+        state: { 
+          sessionAnswers: newAnswers,
+          sessionXP: currentXP
+        }
       })
     } catch (e) {}
   }
@@ -181,8 +190,20 @@ export default function QuizPlay() {
     
     const newAnswers = { ...sessionAnswers, [currentIndex]: optIdx }
     setSessionAnswers(newAnswers)
-    saveSession(newAnswers, currentIndex)
     
+    let updatedXP = sessionXP
+    if (correct) {
+      setStreak(s => s + 1)
+      const gained = 10
+      updatedXP = sessionXP + gained
+      setSessionXP(updatedXP)
+      setInitialTotalXP(prev => prev + gained)
+    } else {
+      setStreak(0)
+    }
+
+    saveSession(newAnswers, currentIndex, updatedXP)
+
     // Immediately update local stats for real-time UI reflection
     setSession((prev: any) => {
       if (!prev) return prev
@@ -195,7 +216,7 @@ export default function QuizPlay() {
       const newCorrect = currentStats.correct + (correct ? 1 : 0)
       
       // Calculate new moving average for time
-      const oldTotalTime = currentStats.avg_time * currentStats.total
+      const oldTotalTime = (currentStats.avg_time || 0) * currentStats.total
       const newAvgTime = Math.round((oldTotalTime + timeLeft) / newTotal)
       
       q.stats = {
@@ -207,13 +228,6 @@ export default function QuizPlay() {
       newSession.questions = newQs
       return newSession
     })
-    
-    if (correct) {
-      setStreak(s => s + 1)
-      setTotalXP(x => x + 10)
-    } else {
-      setStreak(0)
-    }
 
     try {
       await axios.post('/api/v1/quiz/record_answer', {
@@ -727,7 +741,10 @@ export default function QuizPlay() {
           <div className="flex flex-col">
             <h1 className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate max-w-[200px] md:max-w-md">{session.title}</h1>
             <div className="flex items-center gap-1.5">
-              <span className="text-[12px] font-black text-indigo-600">{totalXP} XP</span>
+              <span className="text-[12px] font-black text-indigo-600">{initialTotalXP} XP</span>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[8px] font-bold">
+                 <span>+{sessionXP} SES</span>
+              </div>
               {streak >= 2 && (
                 <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-orange-500 text-white text-[8px] font-black">
                   <Flame className="w-3 h-3 fill-white" />
