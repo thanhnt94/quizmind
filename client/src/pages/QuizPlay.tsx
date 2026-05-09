@@ -110,7 +110,29 @@ export default function QuizPlay() {
   const fetchSession = async () => {
     try {
       const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
-      setSession(quizRes.data)
+      let questions = quizRes.data.questions || []
+      
+      // Apply Learning Algorithm from Settings
+      const mode = localStorage.getItem('quiz_learning_mode') || 'sequential'
+      
+      if (mode === 'random') {
+        questions = [...questions].sort(() => Math.random() - 0.5)
+      } else if (mode === 'unseen') {
+        // Questions with 0 total attempts first
+        questions = [...questions].sort((a, b) => (a.stats?.total || 0) - (b.stats?.total || 0))
+      } else if (mode === 'review') {
+        // Questions with attempts but low accuracy (or just any attempt) first
+        questions = [...questions].sort((a, b) => {
+          const aTotal = a.stats?.total || 0
+          const bTotal = b.stats?.total || 0
+          if (aTotal === 0 && bTotal > 0) return 1
+          if (aTotal > 0 && bTotal === 0) return -1
+          return (a.stats?.correct || 0) - (b.stats?.correct || 0) // Fewer correct first
+        })
+      }
+
+      setSession({ ...quizRes.data, questions })
+      
       try {
         const sessionRes = await axios.get(`/api/v1/quiz/${id}/session`)
         if (sessionRes.data) {
@@ -639,10 +661,20 @@ export default function QuizPlay() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 rounded-lg text-white">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 rounded-lg text-white shadow-sm border border-slate-800">
             <Timer className="w-3 h-3 text-indigo-400" />
             <span className="text-[10px] font-black">{timeLeft}s</span>
           </div>
+          <button 
+            onClick={() => {
+              if (window.confirm("Quit session? Progress is saved.")) {
+                navigate('/')
+              }
+            }}
+            className="w-8 h-8 flex items-center justify-center bg-rose-50 border border-rose-100 rounded-lg text-rose-500 shadow-sm active:scale-90 transition-all"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </header>
 

@@ -18,12 +18,15 @@ class Quiz(Base):
     title = Column(String(255), index=True)
     description = Column(Text, nullable=True)
     category_id = Column(Integer, ForeignKey("categories.id"))
+    creator_id = Column(Integer, nullable=True) # ID of the user who created/uploaded it
+    ai_prompt = Column(Text, nullable=True) # System prompt for AI generation related to this quiz
     time_limit = Column(Integer, default=0) # in minutes, 0 means no limit
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     category = relationship("Category", back_populates="quizzes")
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
+    tags = relationship("Tag", secondary="quiz_tags", back_populates="quizzes")
 
 class Question(Base):
     __tablename__ = "questions"
@@ -94,3 +97,16 @@ class UserQuestionNote(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     question = relationship("Question")
+
+class Tag(Base):
+    __tablename__ = "tags"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    quizzes = relationship("Quiz", secondary="quiz_tags", back_populates="tags")
+
+class QuizTag(Base):
+    __tablename__ = "quiz_tags"
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), primary_key=True)
+    tag_id = Column(Integer, ForeignKey("tags.id"), primary_key=True)

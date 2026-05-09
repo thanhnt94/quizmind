@@ -11,6 +11,7 @@ class QuizService:
             title=quiz_data.title,
             description=quiz_data.description,
             category_id=quiz_data.category_id,
+            creator_id=quiz_data.creator_id,
             time_limit=quiz_data.time_limit,
             is_active=quiz_data.is_active
         )
@@ -51,21 +52,48 @@ class QuizService:
     @staticmethod
     async def get_quizzes(db: AsyncSession, skip: int = 0, limit: int = 100):
         from sqlalchemy import func
-        from app.modules.quiz.models import Question
+        from app.modules.quiz.models import Question, Tag
         
         # Select Quiz and its question count in a single efficient query
         stmt = select(
             Quiz,
             select(func.count(Question.id)).where(Question.quiz_id == Quiz.id).scalar_subquery().label("q_count")
-        ).offset(skip).limit(limit)
+        ).options(selectinload(Quiz.tags)).offset(skip).limit(limit)
         
         result = await db.execute(stmt)
         return result.all()
 
     @staticmethod
+    async def set_quiz_tags(db: AsyncSession, quiz_id: int, tag_names: list[str]):
+        from app.modules.quiz.models import Tag
+        
+        # 1. Get or create tags
+        tags = []
+        for name in tag_names:
+            name = name.strip().upper()
+            if not name: continue
+            
+            result = await db.execute(select(Tag).where(Tag.name == name))
+            tag = result.scalar_one_or_none()
+            if not tag:
+                tag = Tag(name=name)
+                db.add(tag)
+                await db.flush()
+            tags.append(tag)
+            
+        # 2. Assign to quiz
+        result = await db.execute(select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.tags)))
+        quiz = result.scalar_one_or_none()
+        if quiz:
+            quiz.tags = tags
+            await db.commit()
+            return True
+        return False
+
+    @staticmethod
     async def get_quiz_by_id(db: AsyncSession, quiz_id: int):
         result = await db.execute(
-            select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions).selectinload(Question.options))
+            select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions).selectinload(Question.options), selectinload(Quiz.tags))
         )
         return result.scalar_one_or_none()
 
@@ -74,7 +102,7 @@ class QuizService:
         from app.modules.quiz.models import UserAnswer, Question, QuizAttempt
         
         result = await db.execute(
-            select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions).selectinload(Question.options))
+            select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions).selectinload(Question.options), selectinload(Quiz.tags))
         )
         quiz = result.scalar_one_or_none()
         if not quiz:

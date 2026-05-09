@@ -30,6 +30,8 @@ class QuizSchema(BaseModel):
     title: str
     description: Optional[str] = None
     category_id: int
+    creator_id: Optional[int] = None
+    ai_prompt: Optional[str] = None
     time_limit: int = 0
     is_active: bool = True
     questions: Optional[List[QuestionSchema]] = []

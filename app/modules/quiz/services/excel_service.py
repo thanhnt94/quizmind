@@ -10,9 +10,11 @@ class ExcelQuizService:
         Returns (metadata, questions)
         """
         try:
+            print(f"DEBUG: Loading Excel file into pandas...")
             excel_file = pd.ExcelFile(BytesIO(file_content))
+            print(f"DEBUG: Sheet names found: {excel_file.sheet_names}")
         except Exception as e:
-            print(f"Excel loading error: {e}")
+            print(f"CRITICAL: Excel loading error: {e}")
             return {}, []
 
         # 1. Parse 'Info' sheet for metadata
@@ -24,6 +26,7 @@ class ExcelQuizService:
         }
         
         if "Info" in excel_file.sheet_names:
+            print("DEBUG: Parsing 'Info' sheet...")
             df_info = excel_file.parse("Info")
             # Normalize Info sheet columns
             df_info.columns = [str(c).strip().lower() for c in df_info.columns]
@@ -32,12 +35,17 @@ class ExcelQuizService:
                 for _, row in df_info.iterrows():
                     key = str(row.get("key", "")).strip().lower()
                     value = str(row.get("value", "")).strip()
+                    if not value or value.lower() == "nan": continue
+                    
                     if key == "title": metadata["title"] = value
                     elif key == "description": metadata["description"] = value
                     elif key == "category": metadata["category"] = value
+                    elif key == "tags": metadata["tags"] = [t.strip() for t in value.split(",") if t.strip()]
                     elif key == "time_limit": 
                         try: metadata["time_limit"] = int(float(value))
                         except: pass
+        
+        print(f"DEBUG: Metadata extracted: {metadata['title']}")
 
         # 2. Parse 'Data' sheet for questions
         questions = []
@@ -45,12 +53,14 @@ class ExcelQuizService:
             return metadata, []
             
         sheet_name = "Data" if "Data" in excel_file.sheet_names else excel_file.sheet_names[0]
+        print(f"DEBUG: Parsing '{sheet_name}' sheet for questions...")
         df_data = excel_file.parse(sheet_name)
         
         # Normalize data columns
         df_data.columns = [str(c).strip().lower() for c in df_data.columns]
+        print(f"DEBUG: Found {len(df_data)} rows in data sheet.")
         
-        for _, row in df_data.iterrows():
+        for idx, row in df_data.iterrows():
             def get_val(col, default=""):
                 try:
                     val = row.get(col)
@@ -78,8 +88,8 @@ class ExcelQuizService:
                 "explanation": get_val("guidance") or get_val("explanation"),
                 "ai_explanation": get_val(ai_col) if ai_col else "",
                 "question_type": q_type,
-                "image": get_val("question_image_file"),
-                "audio": get_val("question_audio_file"),
+                "image": get_val("image") or get_val("question_image_file"),
+                "audio": get_val("audio") or get_val("question_audio_file"),
                 "options": [],
                 "others": {}
             }

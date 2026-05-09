@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Depends, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
+from sqlalchemy.orm import selectinload
 from app.core.db import get_db
 from app.modules.quiz.services.excel_service import ExcelQuizService
 from app.modules.quiz.services.quiz_service import QuizService
@@ -11,14 +12,51 @@ import json
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
-@router.post("/upload")
-async def upload_quiz(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+@router.get("/template/download")
+async def download_template():
+    import os
+    path = "app/static/QuizMind_Template.xlsx"
+    if os.path.exists(path):
+        return FileResponse(path, filename="QuizMind_Template.xlsx", media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return {"error": "Template not found"}
+
+@router.post("/preview")
+async def preview_quiz(file: UploadFile = File(...)):
     try:
+        import asyncio
         content = await file.read()
-        metadata, questions = ExcelQuizService.parse_quiz_excel(content)
+        metadata, questions = await asyncio.to_thread(ExcelQuizService.parse_quiz_excel, content)
+        return {
+            "metadata": metadata,
+            "questions": questions,
+            "count": len(questions)
+        }
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+@router.post("/upload")
+async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_override: str = None, db: AsyncSession = Depends(get_db)):
+    try:
+        import asyncio
+        content = await file.read()
+        print(f"DEBUG: Starting ingestion for {file.filename} ({len(content)} bytes)")
+        
+        # Run synchronous parsing in a thread to avoid blocking the event loop
+        file_metadata, questions = await asyncio.to_thread(ExcelQuizService.parse_quiz_excel, content)
+        
+        # Apply overrides if provided
+        metadata = file_metadata
+        if metadata_override:
+            try:
+                overrides = json.loads(metadata_override)
+                metadata.update(overrides)
+                print(f"DEBUG: Applied metadata overrides: {overrides}")
+            except Exception as e:
+                print(f"ERROR: Failed to parse metadata overrides: {e}")
         
         if not questions:
-            return RedirectResponse(url="/quiz/import?error=No valid questions found", status_code=303)
+            print("DEBUG: No valid questions extracted from file.")
+            return JSONResponse(status_code=400, content={"error": "No valid questions found in Excel file."})
 
         # Use category from metadata
         category_name = metadata.get("category", "General")
@@ -32,13 +70,17 @@ async def upload_quiz(file: UploadFile = File(...), db: AsyncSession = Depends(g
             await db.refresh(db_cat)
 
         # Create quiz using Info sheet metadata
+        user_id = int(request.cookies.get("user_id", 1))
         quiz_data = QuizSchema(
             title=metadata.get("title", f"Import: {file.filename.split('.')[0]}"),
             description=metadata.get("description", f"Batch import with {len(questions)} questions."),
             category_id=db_cat.id,
+            creator_id=user_id,
             is_active=True
         )
         db_quiz = await QuizService.create_quiz(db, quiz_data)
+        
+        print(f"DEBUG: Quiz created ID={db_quiz.id}. Adding {len(questions)} questions...")
         
         for q in questions:
             question_data = QuestionSchema(
@@ -51,11 +93,32 @@ async def upload_quiz(file: UploadFile = File(...), db: AsyncSession = Depends(g
             )
             await QuizService.add_question(db, db_quiz.id, question_data)
             
-        return RedirectResponse(url="/", status_code=303)
+        # Add tags if present
+        if metadata.get("tags"):
+            await QuizService.set_quiz_tags(db, db_quiz.id, metadata["tags"])
+
+        # Auto-enroll the creator so it shows in "My Collection" and "Creator Studio"
+        from app.modules.quiz.models import QuizAttempt
+        user_id = int(request.cookies.get("user_id", 1))
+        attempt = QuizAttempt(
+            user_id=user_id,
+            quiz_id=db_quiz.id,
+            mode="sequential",
+            score=0,
+            total_questions=0,
+            is_archived=False
+        )
+        db.add(attempt)
+        await db.commit()
+            
+        print(f"DEBUG: Neural ingestion successful for {file.filename}")
+        return {"status": "ok", "message": "Neural patterns stabilized successfully."}
+        
     except Exception as e:
         import traceback
-        print(f"Upload Error: {traceback.format_exc()}")
-        return RedirectResponse(url=f"/quiz/import?error={str(e)}", status_code=303)
+        err_trace = traceback.format_exc()
+        print(f"CRITICAL: Upload Error: {err_trace}")
+        return JSONResponse(status_code=500, content={"error": f"Internal matrix error: {str(e)}"})
 
 @router.post("/validate")
 async def validate_quiz(file: UploadFile = File(...)):
@@ -183,6 +246,9 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
     return {
         "id": quiz.id,
         "title": quiz.title,
+        "description": quiz.description,
+        "ai_prompt": quiz.ai_prompt,
+        "category_id": quiz.category_id,
         "questions": [
             {
                 "id": q.id,
@@ -296,25 +362,44 @@ async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depe
     return {n.question_id: n.content for n in notes}
 
 @router.get("/{quiz_id}/questions")
-async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.services.quiz_service import QuizService
-    quiz = await QuizService.get_quiz_with_stats(db, quiz_id)
-    if not quiz: return {"questions": []}
+async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search: str = "", db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Question, Option
+    from sqlalchemy import or_
     
-    start = (page - 1) * size
-    end = start + size
-    qs = quiz.questions[start:end]
+    query = select(Question).where(Question.quiz_id == quiz_id).options(selectinload(Question.options))
+    if search:
+        query = query.filter(Question.content.ilike(f"%{search}%"))
+    
+    # Count total for pagination
+    count_res = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_res.scalar()
+    
+    # Get paginated results
+    query = query.offset((page - 1) * size).limit(size)
+    result = await db.execute(query)
+    qs = result.scalars().all()
     
     return {
         "questions": [
             {
                 "id": q.id,
-                "orig_index": start + i + 1,
                 "content": q.content,
-                "stats": q.stats
-            } for i, q in enumerate(qs)
+                "explanation": q.explanation,
+                "points": q.points,
+                "image": q.image,
+                "audio": q.audio,
+                "options": [
+                    {
+                        "id": o.id,
+                        "content": o.content,
+                        "is_correct": o.is_correct
+                    } for o in q.options
+                ]
+            } for q in qs
         ],
-        "total": len(quiz.questions)
+        "total": total,
+        "page": page,
+        "size": size
     }
 
 @router.post("/{quiz_id}/enroll")
@@ -348,14 +433,58 @@ async def enroll_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends
 async def archive_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import QuizAttempt
     user_id = int(request.cookies.get("user_id", 1))
-    
-    result = await db.execute(
-        select(QuizAttempt).where(QuizAttempt.user_id == user_id, QuizAttempt.quiz_id == quiz_id)
-    )
+    result = await db.execute(select(QuizAttempt).where(QuizAttempt.user_id == user_id, QuizAttempt.quiz_id == quiz_id))
     attempt = result.scalar_one_or_none()
-    
     if attempt:
         attempt.is_archived = not attempt.is_archived
         await db.commit()
+    return {"status": "ok"}
+
+@router.delete("/{quiz_id}")
+async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz
+    await db.execute(delete(Quiz).where(Quiz.id == quiz_id))
+    await db.commit()
+    return {"status": "ok"}
+
+@router.patch("/{quiz_id}")
+async def update_quiz(quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz
+    result = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    quiz = result.scalar_one_or_none()
+    if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
+    if "title" in data: quiz.title = data["title"]
+    if "description" in data: quiz.description = data["description"]
+    if "category_id" in data: quiz.category_id = data["category_id"]
+    if "ai_prompt" in data: quiz.ai_prompt = data["ai_prompt"]
+    
+    await db.commit()
+    return {"status": "ok"}
+
+@router.patch("/question/{question_id}")
+async def update_question(question_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Question, Option
+    result = await db.execute(select(Question).where(Question.id == question_id))
+    question = result.scalar_one_or_none()
+    if not question: return JSONResponse(status_code=404, content={"error": "Question not found"})
+    
+    if "content" in data: question.content = data["content"]
+    if "explanation" in data: question.explanation = data["explanation"]
+    if "points" in data: question.points = data["points"]
+    if "image" in data: question.image = data["image"]
+    if "audio" in data: question.audio = data["audio"]
+    
+    # Update options if provided
+    if "options" in data:
+        for opt_data in data["options"]:
+            opt_id = opt_data.get("id")
+            if opt_id:
+                opt_res = await db.execute(select(Option).where(Option.id == opt_id, Option.question_id == question_id))
+                opt = opt_res.scalar_one_or_none()
+                if opt:
+                    if "content" in opt_data: opt.content = opt_data["content"]
+                    if "is_correct" in opt_data: opt.is_correct = opt_data["is_correct"]
+    
+    await db.commit()
     return {"status": "ok"}

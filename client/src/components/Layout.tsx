@@ -1,17 +1,32 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, Compass, BarChart3, User, BrainCircuit, Bell, Settings } from 'lucide-react'
+import { LayoutGrid, Compass, BarChart3, User, BrainCircuit, Bell, Settings, Plus } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 
 export default function Layout() {
-  const { user } = useAppStore()
+  const { user, gamify, setUser, setGamify } = useAppStore()
   const location = useLocation()
+
+  // Ensure data is loaded even if we land on subpages
+  const { data } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/dashboard/data')
+      setUser(res.data.user)
+      setGamify(res.data.gamify)
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000 // 5 mins
+  })
   
   const navItems = [
-    { label: 'Home', path: '/', icon: Home },
-    { label: 'Explore', path: '/discover', icon: Compass },
+    { label: 'Home', path: '/', icon: LayoutGrid },
     { label: 'Stats', path: '/stats', icon: BarChart3 },
-    { label: 'Profile', path: '/profile', icon: User },
+    { label: 'Settings', path: '/settings', icon: Settings },
+    { label: 'Manage', path: '/manage', icon: BrainCircuit },
   ]
 
   return (
@@ -26,12 +41,12 @@ export default function Layout() {
             <span className="text-xl font-black text-slate-900 tracking-tighter">QuizMind</span>
           </Link>
           <nav className="flex items-center gap-6">
-            {navItems.slice(0, 3).map((item) => (
+            {navItems.map((item) => (
               <Link 
                 key={item.path}
                 to={item.path} 
                 className={cn(
-                  "text-xs font-black uppercase tracking-widest transition-colors",
+                  "text-[10px] font-black uppercase tracking-widest transition-colors",
                   location.pathname === item.path ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
                 )}
               >
@@ -41,20 +56,27 @@ export default function Layout() {
           </nav>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="h-10 w-px bg-slate-100 mx-2" />
-          <div className="flex items-center gap-3 pl-2 group cursor-pointer">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 border-r border-slate-100 pr-6">
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-xl">
+                <LayoutGrid className="w-4 h-4" />
+                <span className="text-[10px] font-black">{gamify.streak}D STREAK</span>
+             </div>
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                <BrainCircuit className="w-4 h-4" />
+                <span className="text-[10px] font-black">LVL {gamify.level}</span>
+             </div>
+          </div>
+
+          <div className="flex items-center gap-3 group cursor-pointer">
             <div className="text-right hidden lg:block">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Học viên</p>
-              <p className="text-xs font-bold text-slate-900 leading-none">{user?.username || 'Guest'}</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Authenticated</p>
+              <p className="text-[11px] font-black text-slate-900 leading-none">{user?.username || 'GUEST'}</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
               <User className="w-5 h-5" />
             </div>
           </div>
-          <button className="p-2.5 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-all">
-            <Settings className="w-5 h-5" />
-          </button>
         </div>
       </header>
 
@@ -63,9 +85,9 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[110] bg-white/90 backdrop-blur-3xl border-t border-slate-100 px-6 py-4 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] md:hidden">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+      {/* RemiNote-Style Mobile Bottom Nav */}
+      <div className="fixed bottom-0 left-0 right-0 z-[120] md:hidden bg-white/80 backdrop-blur-2xl border-t border-slate-100 px-6 py-3">
+        <nav className="flex items-center justify-between max-w-md mx-auto h-16">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = location.pathname === item.path
@@ -73,29 +95,34 @@ export default function Layout() {
               <Link 
                 key={item.path}
                 to={item.path} 
-                className={cn(
-                  "flex flex-col items-center gap-1.5 group relative transition-all",
-                  !isActive && "opacity-40"
-                )}
+                className="relative flex items-center justify-center w-14 h-14"
               >
-                <div className={cn(
-                  "p-2.5 rounded-2xl transition-all group-active:scale-90",
-                  isActive ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-400"
-                )}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <span className={cn(
-                  "text-[9px] font-black uppercase tracking-widest",
-                  isActive ? "text-indigo-600" : "text-slate-400"
-                )}>
-                  {item.label}
-                </span>
-                {isActive && <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full" />}
+                {isActive && (
+                  <motion.div 
+                    layoutId="navActiveSquircle"
+                    className="absolute inset-0 bg-indigo-600 rounded-[1.5rem] shadow-lg shadow-indigo-200"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <Icon className={cn(
+                  "w-6 h-6 relative z-10 transition-all duration-300",
+                  isActive ? "text-white scale-110" : "text-slate-400"
+                )} />
               </Link>
             )
           })}
-        </div>
-      </nav>
+          
+          <Link 
+            to="/manage" 
+            className={cn(
+              "flex items-center justify-center w-14 h-14 rounded-[1.5rem] text-white shadow-xl active:scale-90 transition-all",
+              location.pathname === '/manage' ? "bg-indigo-600 shadow-indigo-200" : "bg-slate-900"
+            )}
+          >
+            <Plus className="w-6 h-6" />
+          </Link>
+        </nav>
+      </div>
     </div>
   )
 }

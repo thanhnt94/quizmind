@@ -18,6 +18,12 @@ export default function QuizDetail() {
   const [activeTab, setActiveTab] = useState<'list' | 'stats'>('list')
   const [searchQuery, setSearchQuery] = useState('')
 
+  useEffect(() => {
+    if (id === 'import') {
+      navigate('/manage', { replace: true })
+    }
+  }, [id, navigate])
+
   const { data: quiz } = useQuery({
     queryKey: ['quiz', id],
     queryFn: async () => {

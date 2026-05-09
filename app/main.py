@@ -8,6 +8,7 @@ from app.modules.auth.models import User
 from app.modules.auth.services.central_auth_client import CentralAuthClient
 from app.core.db import get_db, engine, Base
 from app.core.init_db import init_db
+from app.modules.stats.services.analytics_service import AnalyticsService
 from app.modules.quiz.services.quiz_service import QuizService
 from app.modules.auth.services.auth_service import AuthService
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,6 +119,9 @@ async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
 @app.get("/quiz/{path:path}")
 @app.get("/profile")
 @app.get("/stats")
+@app.get("/settings")
+@app.get("/manage")
+@app.get("/manage/{path:path}")
 async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
     # Check if we should serve SSR or SPA
     # For now, let's serve SPA if it exists, otherwise fallback to root SSR
@@ -139,10 +143,23 @@ async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
         request=request, name="landing.html", context=context
     )
 
+@app.get("/api/v1/stats/detailed")
+async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return await AnalyticsService.get_user_detailed_stats(db, user.id)
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/v1/dashboard/data")
 async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
-    if not user: return {"error": "Unauthorized"}
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Unauthorized")
     user_id_int = user.id
     
     # Use selectinload for quizzes and questions to avoid N+1
@@ -158,15 +175,21 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
     my_quizzes_data = []
     archived_quizzes_data = []
     discover_quizzes_data = []
+    created_quizzes_data = []
     
     for q, count in all_quizzes:
         quiz_dict = {
             "id": q.id,
             "title": q.title,
             "description": q.description,
-            "questions_count": count
+            "questions_count": count,
+            "tags": [t.name for t in q.tags],
+            "is_creator": q.creator_id == user_id_int
         }
         
+        if q.creator_id == user_id_int:
+            created_quizzes_data.append(quiz_dict)
+            
         is_archived = interaction_map.get(q.id)
         if q.id in interaction_map:
             if is_archived:
@@ -175,7 +198,7 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
                 my_quizzes_data.append(quiz_dict)
         else:
             discover_quizzes_data.append(quiz_dict)
-        
+            
     from app.modules.gamification.interface import GamificationInterface
     from app.modules.stats.interface import StatsInterface
     from app.modules.notification.interface import NotificationInterface
@@ -189,9 +212,15 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
     )
 
     return {
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        },
         "my_quizzes": my_quizzes_data,
         "archived_quizzes": archived_quizzes_data,
         "discover_quizzes": discover_quizzes_data,
+        "created_quizzes": created_quizzes_data,
         "gamify": gamify_data,
         "stats_summary": stats_summary,
         "notifications": notifications,
