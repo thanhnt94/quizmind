@@ -130,24 +130,8 @@ export default function QuizPlay() {
           const curIdx = sessionRes.data.current_index || 0
           setCurrentIndex(curIdx)
           
-          // Update local stats for restored answers
-          setSession((prev: any) => {
-            if (!prev) return prev
-            const newQs = [...prev.questions]
-            Object.entries(restoredAnswers).forEach(([idx, optIdx]: [any, any]) => {
-              const q = { ...newQs[idx] }
-              const isCorrect = q.options[optIdx]?.is_correct
-              const currentStats = q.stats || { total: 0, correct: 0, avg_time: 0 }
-              q.stats = {
-                total: currentStats.total + 1,
-                correct: currentStats.correct + (isCorrect ? 1 : 0),
-                avg_time: currentStats.avg_time // Don't have time info here easily
-              }
-              newQs[idx] = q
-            })
-            return { ...prev, questions: newQs }
-          })
-
+          // Update local state to reflect which questions are answered in this session
+          // but DO NOT manually increment stats, as the backend quiz play-data already includes them.
           if (typeof restoredAnswers[curIdx] === 'number') {
             setSelectedOption(restoredAnswers[curIdx])
             setShowFeedback(true)
