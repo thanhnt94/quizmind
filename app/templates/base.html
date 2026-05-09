@@ -10,15 +10,76 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-... (rest of style)
+        :root {
+            --primary: #4F46E5;
+            --primary-light: #818CF8;
+            --primary-dark: #3730A3;
+            --accent: #F472B6;
+            --bg-main: #F8FAFC;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-main);
+            color: #1E293B;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .premium-gradient {
+            background: linear-gradient(135deg, #6366F1 0%, #A855F7 100%);
+            color: white;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .active-nav-dot {
+            width: 4px;
+            height: 4px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            margin-top: 4px;
+        }
+
+        .mesh-gradient {
+            background-color: #ffffff;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
     </style>
 </head>
-<body class="bg-[#F8FAFC] min-h-screen flex flex-col transition-all duration-300 {% if not hide_navbar %}md:pt-20 pb-24 md:pb-0{% endif %}">
+<body class="min-h-screen flex flex-col transition-all duration-300 {% if not hide_navbar %}md:pt-20 pb-24 md:pb-0{% endif %}">
     
     {% if not hide_navbar %}
-    <!-- Desktop Top Navbar (Always shown on desktop if not hidden) -->
+    <!-- Desktop Top Navbar -->
     <nav class="fixed top-0 left-0 right-0 z-[110] bg-white/80 backdrop-blur-2xl border-b border-slate-100 px-8 py-4 hidden md:flex items-center justify-between">
         <div class="flex items-center gap-8">
             <a href="/" class="flex items-center gap-2 group">
@@ -29,14 +90,14 @@
             </a>
             <div class="flex items-center gap-6">
                 <a href="/" class="text-xs font-black uppercase tracking-widest transition-colors {% if is_home %}text-indigo-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Dashboard</a>
-                <a href="/discover" class="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Discover</a>
+                <a href="/manage" class="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Manage</a>
                 <a href="/stats" class="text-xs font-black uppercase tracking-widest transition-colors {% if active_nav == 'stats' %}text-indigo-600{% else %}text-slate-400 hover:text-slate-600{% endif %}">Stats</a>
             </div>
         </div>
         <div class="flex items-center gap-4">
             {% if user %}
             <div class="h-10 w-px bg-slate-100 mx-2"></div>
-            <div class="flex items-center gap-3 pl-2 group cursor-pointer">
+            <a href="/profile" class="flex items-center gap-3 pl-2 group cursor-pointer">
                 <div class="text-right hidden lg:block">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Học viên</p>
                     <p class="text-xs font-bold text-slate-900 leading-none">{{ user.username }}</p>
@@ -44,10 +105,10 @@
                 <div class="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
                     <i data-lucide="user" class="w-5 h-5"></i>
                 </div>
-            </div>
-            <button class="p-2.5 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-all">
-                <i data-lucide="settings" class="w-5 h-5"></i>
-            </button>
+            </a>
+            <a href="/logout" class="p-2.5 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all" title="Đăng xuất">
+                <i data-lucide="log-out" class="w-5 h-5"></i>
+            </a>
             {% else %}
             <a href="/login" class="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:shadow-lg hover:shadow-indigo-100 transition-all active:scale-95">
                 Đăng nhập
@@ -57,35 +118,38 @@
     </nav>
 
     {% if show_bottom_nav %}
-    <!-- Mobile Bottom Navbar -->
+    <!-- Mobile Bottom Navbar (5 Items) -->
     <nav class="fixed bottom-0 left-0 right-0 z-[110] bg-white/90 backdrop-blur-3xl border-t border-slate-100 px-6 py-4 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] md:hidden">
         <div class="max-w-md mx-auto flex items-center justify-between">
             <a href="/" class="flex flex-col items-center gap-1.5 group relative {% if not is_home %}opacity-40{% endif %}">
                 <div class="p-2.5 rounded-2xl {% if is_home %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
-                    <i data-lucide="home" class="w-5 h-5"></i>
+                    <i data-lucide="layout-grid" class="w-5 h-5"></i>
                 </div>
                 <span class="text-[9px] font-black uppercase tracking-widest {% if is_home %}text-indigo-600{% else %}text-slate-400{% endif %}">Home</span>
-                {% if is_home %}<div class="active-nav-dot"></div>{% endif %}
-            </a>
-            <a href="/discover" class="flex flex-col items-center gap-1.5 group opacity-40">
-                <div class="p-2.5 rounded-2xl text-slate-400 group-active:scale-90 transition-all">
-                    <i data-lucide="compass" class="w-5 h-5"></i>
-                </div>
-                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Explore</span>
             </a>
             <a href="/stats" class="flex flex-col items-center gap-1.5 group relative {% if active_nav != 'stats' %}opacity-40{% endif %}">
                 <div class="p-2.5 rounded-2xl {% if active_nav == 'stats' %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
                     <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
                 </div>
                 <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'stats' %}text-indigo-600{% else %}text-slate-400{% endif %}">Stats</span>
-                {% if active_nav == 'stats' %}<div class="active-nav-dot"></div>{% endif %}
+            </a>
+            <a href="/settings" class="flex flex-col items-center gap-1.5 group relative {% if active_nav != 'settings' %}opacity-40{% endif %}">
+                <div class="p-2.5 rounded-2xl {% if active_nav == 'settings' %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'settings' %}text-indigo-600{% else %}text-slate-400{% endif %}">Setup</span>
+            </a>
+            <a href="/manage" class="flex flex-col items-center gap-1.5 group relative {% if active_nav != 'manage' %}opacity-40{% endif %}">
+                <div class="p-2.5 rounded-2xl {% if active_nav == 'manage' %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
+                    <i data-lucide="library" class="w-5 h-5"></i>
+                </div>
+                <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'manage' %}text-indigo-600{% else %}text-slate-400{% endif %}">Quizzes</span>
             </a>
             <a href="/profile" class="flex flex-col items-center gap-1.5 group relative {% if active_nav != 'profile' %}opacity-40{% endif %}">
                 <div class="p-2.5 rounded-2xl {% if active_nav == 'profile' %}bg-indigo-600 text-white shadow-lg shadow-indigo-100{% else %}text-slate-400{% endif %} group-active:scale-90 transition-all">
                     <i data-lucide="user" class="w-5 h-5"></i>
                 </div>
-                <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'profile' %}text-indigo-600{% else %}text-slate-400{% endif %}">Profile</span>
-                {% if active_nav == 'profile' %}<div class="active-nav-dot"></div>{% endif %}
+                <span class="text-[9px] font-black uppercase tracking-widest {% if active_nav == 'profile' %}text-indigo-600{% else %}text-slate-400{% endif %}">Me</span>
             </a>
         </div>
     </nav>

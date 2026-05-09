@@ -73,11 +73,14 @@ class ExcelQuizService:
                 continue
 
             # Core fields mapping
-            known_cols = ["question", "option_a", "option_b", "option_c", "option_d", "answer", "question_image_file", "question_audio_file", "guidance", "explanation"]
+            known_cols = ["question", "option_a", "option_b", "option_c", "option_d", "answer", "correct_answer", "correct_answer_text", "question_image_file", "question_audio_file", "guidance", "explanation"]
             
             # Find AI column (any column with 'ai' in it that's not already known)
             ai_col = next((c for c in df_data.columns if "ai" in c and c not in known_cols), None)
             
+            # Find the answer column (it could be named 'answer', 'correct_answer', 'correct_answer_text', etc.)
+            ans_col = next((c for c in ["answer", "correct_answer", "correct_answer_text", "correct"] if c in df_data.columns), "answer")
+
             # Get question type
             q_type = get_val("type") or get_val("question_type") or "normal"
             q_type = q_type.lower().strip()
@@ -102,9 +105,10 @@ class ExcelQuizService:
                         question_data["others"][col] = val
 
             # Robust Answer Mapping
-            raw_answer = get_val("answer").lower().strip()
-            # Handle formats like "a.", "a)", "1."
-            clean_raw_answer = raw_answer.rstrip('.').rstrip(')').strip()
+            raw_answer = get_val(ans_col).strip()
+            # For index-based answers (A, B, C, D), we lowercase it. 
+            # For text-based answers, we keep it as is (or case-insensitive comparison later).
+            clean_raw_answer = raw_answer.lower().rstrip('.').rstrip(')').strip()
             
             answer_map = {
                 "a": "option_a", "b": "option_b", "c": "option_c", "d": "option_d",

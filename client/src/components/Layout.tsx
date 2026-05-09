@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutGrid, Compass, BarChart3, User, BrainCircuit, Bell, Settings, Plus } from 'lucide-react'
+import { LayoutGrid, Compass, BarChart3, User, BrainCircuit, Bell, Settings, Plus, Library } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
@@ -26,7 +26,7 @@ export default function Layout() {
     { label: 'Home', path: '/', icon: LayoutGrid },
     { label: 'Stats', path: '/stats', icon: BarChart3 },
     { label: 'Settings', path: '/settings', icon: Settings },
-    { label: 'Manage', path: '/manage', icon: BrainCircuit },
+    { label: 'Manage', path: '/manage', icon: Library },
   ]
 
   return (
@@ -68,7 +68,7 @@ export default function Layout() {
              </div>
           </div>
 
-          <div className="flex items-center gap-3 group cursor-pointer">
+          <Link to="/profile" className="flex items-center gap-3 group cursor-pointer">
             <div className="text-right hidden lg:block">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Authenticated</p>
               <p className="text-[11px] font-black text-slate-900 leading-none">{user?.username || 'GUEST'}</p>
@@ -76,7 +76,7 @@ export default function Layout() {
             <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
               <User className="w-5 h-5" />
             </div>
-          </div>
+          </Link>
         </div>
       </header>
 
@@ -113,13 +113,13 @@ export default function Layout() {
           })}
           
           <Link 
-            to="/manage" 
+            to="/profile" 
             className={cn(
               "flex items-center justify-center w-14 h-14 rounded-[1.5rem] text-white shadow-xl active:scale-90 transition-all",
-              location.pathname === '/manage' ? "bg-indigo-600 shadow-indigo-200" : "bg-slate-900"
+              location.pathname === '/profile' ? "bg-indigo-600 shadow-indigo-200" : "bg-slate-900"
             )}
           >
-            <Plus className="w-6 h-6" />
+            <User className="w-6 h-6" />
           </Link>
         </nav>
       </div>
