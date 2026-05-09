@@ -494,6 +494,7 @@ async def update_question(question_id: int, data: dict, db: AsyncSession = Depen
     
     if "content" in data: question.content = data["content"]
     if "explanation" in data: question.explanation = data["explanation"]
+    if "ai_explanation" in data: question.ai_explanation = data["ai_explanation"]
     if "points" in data: question.points = data["points"]
     if "image" in data: question.image = data["image"]
     if "audio" in data: question.audio = data["audio"]

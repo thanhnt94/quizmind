@@ -88,6 +88,9 @@ export default function QuizPlay() {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isQuitModalOpen, setIsQuitModalOpen] = useState(false)
   const [activeFeedbackTab, setActiveFeedbackTab] = useState<'insight' | 'ai' | 'note'>('insight')
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editFormData, setEditFormData] = useState<any>(null)
   const [sessionAnswers, setSessionAnswers] = useState<Record<number, number>>({})
 
   const timerRef = useRef<any>(null)
@@ -318,6 +321,42 @@ export default function QuizPlay() {
       alert("AI service unavailable.")
     } finally {
       setIsAskingAI(false)
+    }
+  }
+
+  const openEditModal = () => {
+    if (!currentQuestion) return
+    setEditFormData({
+      content: currentQuestion.content,
+      explanation: currentQuestion.explanation,
+      ai_explanation: currentQuestion.ai_explanation,
+      options: currentQuestion.options.map(o => ({ id: o.id, content: o.content, is_correct: o.is_correct }))
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!currentQuestion || !editFormData) return
+    setIsSavingEdit(true)
+    try {
+      await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, editFormData)
+      
+      // Update local state
+      setSession((prev: any) => {
+        const newQs = [...prev.questions]
+        newQs[currentIndex] = { 
+          ...newQs[currentIndex], 
+          ...editFormData,
+          options: editFormData.options 
+        }
+        return { ...prev, questions: newQs }
+      })
+      
+      setIsEditModalOpen(false)
+    } catch (e) {
+      alert("Failed to save changes.")
+    } finally {
+      setIsSavingEdit(false)
     }
   }
 
@@ -735,7 +774,7 @@ export default function QuizPlay() {
           </AnimatePresence>
 
           <button 
-            onClick={() => navigate(`/manage/edit/${id}/questions`)}
+            onClick={openEditModal}
             className="w-8 h-8 flex items-center justify-center bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 shadow-sm active:scale-90 transition-all"
             title="Sửa câu hỏi"
           >
@@ -984,6 +1023,122 @@ export default function QuizPlay() {
                 </div>
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Edit Question Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && editFormData && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+             <motion.div 
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setIsEditModalOpen(false)}
+               className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+             />
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.95, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.95, y: 20 }}
+               className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+             >
+                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                   <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                     <Edit3 className="w-5 h-5 text-indigo-600" />
+                     SỬA CÂU HỎI #{currentIndex + 1}
+                   </h2>
+                   <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-all">
+                      <X className="w-5 h-5 text-slate-400" />
+                   </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                   {/* Content */}
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NỘI DUNG CÂU HỎI</label>
+                      <textarea 
+                        value={editFormData.content}
+                        onChange={(e) => setEditFormData({...editFormData, content: e.target.value})}
+                        className="w-full h-24 p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 transition-all resize-none"
+                      />
+                   </div>
+                   
+                   {/* Options */}
+                   <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CÁC LỰA CHỌN</label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {editFormData.options.map((opt: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-3 group">
+                             <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-slate-100 rounded-lg font-black text-[10px] text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                               {String.fromCharCode(65 + idx)}
+                             </div>
+                             <input 
+                               value={opt.content}
+                               onChange={(e) => {
+                                 const newOpts = [...editFormData.options]
+                                 newOpts[idx].content = e.target.value
+                                 setEditFormData({...editFormData, options: newOpts})
+                               }}
+                               className="flex-1 p-3 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700"
+                             />
+                             <button 
+                               onClick={() => {
+                                 const newOpts = editFormData.options.map((o: any, i: number) => ({...o, is_correct: i === idx}))
+                                 setEditFormData({...editFormData, options: newOpts})
+                               }}
+                               className={cn(
+                                 "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
+                                 opt.is_correct ? "bg-emerald-500 text-white shadow-lg shadow-emerald-100" : "bg-slate-100 text-slate-300 hover:bg-emerald-50 hover:text-emerald-500"
+                               )}
+                             >
+                               <Check className="w-4 h-4 stroke-[3]" />
+                             </button>
+                          </div>
+                        ))}
+                      </div>
+                   </div>
+                   
+                   {/* Insights */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">INSIGHT (GIẢI THÍCH)</label>
+                        <textarea 
+                          value={editFormData.explanation}
+                          onChange={(e) => setEditFormData({...editFormData, explanation: e.target.value})}
+                          className="w-full h-32 p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 transition-all resize-none text-xs"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3" />
+                          AI DEEP ANALYSIS
+                        </label>
+                        <textarea 
+                          value={editFormData.ai_explanation}
+                          onChange={(e) => setEditFormData({...editFormData, ai_explanation: e.target.value})}
+                          className="w-full h-32 p-4 bg-indigo-50/50 rounded-2xl border-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 transition-all resize-none text-xs"
+                        />
+                      </div>
+                   </div>
+                </div>
+                
+                <div className="p-8 border-t border-slate-100 flex items-center justify-end gap-4 bg-slate-50/50">
+                   <button 
+                     onClick={() => setIsEditModalOpen(false)}
+                     className="px-6 py-3 text-sm font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-all"
+                   >
+                     HỦY BỎ
+                   </button>
+                   <button 
+                     onClick={handleSaveEdit}
+                     disabled={isSavingEdit}
+                     className="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+                   >
+                     {isSavingEdit ? 'ĐANG LƯU...' : 'LƯU THAY ĐỔI'}
+                   </button>
+                </div>
+             </motion.div>
           </div>
         )}
       </AnimatePresence>
