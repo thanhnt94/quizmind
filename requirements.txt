@@ -1,0 +1,21 @@
+# QuizMind Backend Requirements
+# Core
+fastapi
+uvicorn[standard]
+gunicorn
+python-multipart
+jinja2
+python-dotenv
+httpx
+
+# Database
+sqlalchemy[asyncio]
+aiosqlite
+alembic
+
+# Data Validation & Config
+pydantic>=2.0.0
+pydantic-settings
+
+# AI Integration
+google-generativeai
