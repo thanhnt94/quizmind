@@ -161,9 +161,57 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('user_id')
     )
 
+    # 10. Admin & Logs
+    op.create_table('system_configs',
+        sa.Column('id', sa.String(length=50), nullable=False),
+        sa.Column('value', sa.JSON(), nullable=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('admin_logs',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('admin_id', sa.Integer(), nullable=True),
+        sa.Column('action', sa.String(length=100), nullable=True),
+        sa.Column('details', sa.String(length=255), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+    )
+
+    # 11. Notifications
+    op.create_table('notifications',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.Integer(), nullable=True),
+        sa.Column('title', sa.String(length=100), nullable=True),
+        sa.Column('message', sa.String(length=255), nullable=True),
+        sa.Column('type', sa.String(length=50), nullable=True),
+        sa.Column('is_read', sa.Boolean(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
+
+    # 12. Stats
+    op.create_table('user_daily_stats',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.Integer(), nullable=True),
+        sa.Column('date', sa.DateTime(), nullable=True),
+        sa.Column('questions_attempted', sa.Integer(), nullable=True),
+        sa.Column('correct_answers', sa.Integer(), nullable=True),
+        sa.Column('total_time_seconds', sa.Integer(), nullable=True),
+        sa.Column('accuracy', sa.Float(), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_user_daily_stats_user_id'), 'user_daily_stats', ['user_id'], unique=False)
+
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index(op.f('ix_user_daily_stats_user_id'), table_name='user_daily_stats')
+    op.drop_table('user_daily_stats')
+    op.drop_index(op.f('ix_notifications_user_id'), table_name='notifications')
+    op.drop_table('notifications')
+    op.drop_table('admin_logs')
+    op.drop_table('system_configs')
     op.drop_table('user_gamification')
     op.drop_table('badges')
     op.drop_index(op.f('ix_quiz_sessions_user_id'), table_name='quiz_sessions')
