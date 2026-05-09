@@ -7,11 +7,16 @@ python-multipart
 jinja2
 python-dotenv
 httpx
+requests
 
 # Database
 sqlalchemy[asyncio]
 aiosqlite
 alembic
+
+# Data Processing (Excel/CSV)
+pandas
+openpyxl
 
 # Data Validation & Config
 pydantic>=2.0.0
