@@ -4,17 +4,16 @@ import sys
 import time
 
 def run_backend():
-    print("Starting QuizMind (SSR via FastAPI)...")
+    print("Starting QuizMind (Standalone via FastAPI)...")
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    backend_dir = os.path.join(script_dir, "backend")
     
-    # 1. Run migrations
+    # 1. Run migrations (if any)
     print("[MIGRATE] Running database migrations...")
-    subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=backend_dir)
+    subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=script_dir)
     
     # 2. Run uvicorn
     cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--reload", "--port", "5080", "--host", "0.0.0.0"]
-    return subprocess.Popen(cmd, cwd=backend_dir)
+    return subprocess.Popen(cmd, cwd=script_dir)
 
 if __name__ == "__main__":
     print("[INIT] Initializing QuizMind SSR Ecosystem...")
