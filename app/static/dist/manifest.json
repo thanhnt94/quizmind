@@ -1,0 +1,17 @@
+{
+  "name": "QuizMind",
+  "short_name": "QuizMind",
+  "description": "Mastery Through Practice",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4F46E5",
+  "icons": [
+    {
+      "src": "/static/dist/favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
