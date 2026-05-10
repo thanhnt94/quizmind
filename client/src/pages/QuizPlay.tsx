@@ -731,7 +731,7 @@ export default function QuizPlay() {
   if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900 font-sans" style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}>
+    <div className="min-h-screen flex flex-col pb-24 bg-[#F8FAFC] text-slate-900 font-sans">
       {/* Header */}
       <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 py-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
@@ -899,9 +899,9 @@ export default function QuizPlay() {
         </aside>
       </main>
 
-      {/* Bottom Controls - Fixed to bottom */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] bg-white/70 backdrop-blur-2xl border-t border-slate-100 z-[100]">
-        <div className="max-w-2xl mx-auto w-full flex items-center gap-3">
+      {/* Bottom Controls - Fixed to bottom (same pattern as Layout bottom nav) */}
+      <footer className="fixed bottom-0 left-0 right-0 z-[120] bg-white/80 backdrop-blur-2xl border-t border-slate-100 px-4 py-3">
+        <div className="max-w-2xl mx-auto w-full flex items-center gap-3 h-12">
           <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-500 shadow-sm active:scale-95 transition-all">
             <LayoutGrid className="w-5 h-5" />
           </button>
@@ -930,6 +930,7 @@ export default function QuizPlay() {
           )}
         </div>
       </footer>
+
 
       {/* Mobile Question Map Modal */}
       <AnimatePresence>
