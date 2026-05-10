@@ -708,9 +708,9 @@ export default function QuizPlay() {
               setIsMapOpen(false)
             }}
             className={cn(
-              "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-300",
+              "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
               isActive 
-                ? "border-indigo-500 bg-white shadow-[0_0_15px_rgba(79,70,229,0.3)] z-10 scale-110 ring-2 ring-indigo-500/20" 
+                ? "border-indigo-400 bg-indigo-50/30 z-10 scale-105 shadow-sm" 
                 : "border-slate-100 hover:border-indigo-200 bg-white",
               totalStats === 0 ? "text-slate-400" : "text-slate-700"
             )}
@@ -720,8 +720,6 @@ export default function QuizPlay() {
                 : {}
             }
           >
-            {isActive && <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-indigo-600 rounded-full shadow-[0_0_10px_#4F46E5]" />}
-            
             {!hasAttemptedThisSession ? (
               <span className="relative z-10">{i + 1}</span>
             ) : (
