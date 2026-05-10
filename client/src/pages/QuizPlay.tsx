@@ -731,7 +731,7 @@ export default function QuizPlay() {
   if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col bg-[#F8FAFC] text-slate-900 font-sans">
+    <div className="h-screen h-[100dvh] overflow-hidden flex flex-col bg-[#F8FAFC] text-slate-900 font-sans overscroll-none">
       {/* Header */}
       <header className="flex-shrink-0 z-[120] bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 py-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
@@ -900,7 +900,7 @@ export default function QuizPlay() {
       </main>
 
       {/* Bottom Controls */}
-      <footer className="flex-shrink-0 p-4 bg-white/70 backdrop-blur-2xl border-t border-slate-100 z-[100]">
+      <footer className="flex-shrink-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white/70 backdrop-blur-2xl border-t border-slate-100 z-[100]">
         <div className="max-w-2xl mx-auto w-full flex items-center gap-3">
           <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-500 shadow-sm active:scale-95 transition-all">
             <LayoutGrid className="w-5 h-5" />
