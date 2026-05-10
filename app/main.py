@@ -437,6 +437,7 @@ async def local_login(
     response: Response,
     username: str = Form(...),
     password: str = Form(...),
+    remember: bool = Form(False),
     db: AsyncSession = Depends(get_db)
 ):
     user = await AuthService.authenticate_user(db, username, password)
@@ -445,7 +446,17 @@ async def local_login(
     
     # Mock session
     response = RedirectResponse(url="/", status_code=303)
-    response.set_cookie(key="user_id", value=str(user.id), httponly=True, samesite="lax")
+    
+    # Calculate max_age (30 days if remember is true, else None for session cookie)
+    max_age = 30 * 24 * 60 * 60 if remember else None
+    
+    response.set_cookie(
+        key="user_id", 
+        value=str(user.id), 
+        httponly=True, 
+        samesite="lax",
+        max_age=max_age
+    )
     return response
 
 @app.get("/api/v1/quiz/{quiz_id}/data")
