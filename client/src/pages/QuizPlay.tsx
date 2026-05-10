@@ -731,7 +731,7 @@ export default function QuizPlay() {
   if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
 
   return (
-    <div className="h-screen h-[100dvh] overflow-hidden flex flex-col bg-[#F8FAFC] text-slate-900 font-sans overscroll-none">
+    <div className="h-screen h-[100svh] h-[100dvh] overflow-hidden flex flex-col bg-[#F8FAFC] text-slate-900 font-sans overscroll-none">
       {/* Header */}
       <header className="flex-shrink-0 z-[120] bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 py-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
