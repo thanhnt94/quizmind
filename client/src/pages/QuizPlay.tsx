@@ -142,6 +142,9 @@ export default function QuizPlay() {
           if (sessionRes.data.state?.sessionXP) {
             setSessionXP(sessionRes.data.state.sessionXP)
           }
+          if (sessionRes.data.state?.streak) {
+            setStreak(sessionRes.data.state.streak)
+          }
         }
       } catch (e) {}
     } catch (e) {
@@ -169,14 +172,15 @@ export default function QuizPlay() {
     }
   }
 
-  const saveSession = async (newAnswers: Record<number, number>, newIndex: number, currentXP: number = sessionXP) => {
+  const saveSession = async (newAnswers: Record<number, number>, newIndex: number, currentXP: number = sessionXP, currentStreak: number = streak) => {
     try {
       await axios.post(`/api/v1/quiz/${id}/session`, {
         mode: "sequential",
         current_index: newIndex,
         state: { 
           sessionAnswers: newAnswers,
-          sessionXP: currentXP
+          sessionXP: currentXP,
+          streak: currentStreak
         }
       })
     } catch (e) {}
@@ -192,17 +196,20 @@ export default function QuizPlay() {
     setSessionAnswers(newAnswers)
     
     let updatedXP = sessionXP
+    let updatedStreak = streak
     if (correct) {
-      setStreak(s => s + 1)
+      updatedStreak = streak + 1
+      setStreak(updatedStreak)
       const gained = 10
       updatedXP = sessionXP + gained
       setSessionXP(updatedXP)
       setInitialTotalXP(prev => prev + gained)
     } else {
+      updatedStreak = 0
       setStreak(0)
     }
 
-    saveSession(newAnswers, currentIndex, updatedXP)
+    saveSession(newAnswers, currentIndex, updatedXP, updatedStreak)
 
     // Immediately update local stats for real-time UI reflection
     setSession((prev: any) => {
@@ -699,9 +706,9 @@ export default function QuizPlay() {
               setIsMapOpen(false)
             }}
             className={cn(
-              "relative aspect-square rounded-lg border flex items-center justify-center font-black text-[11px] transition-all overflow-hidden",
+              "relative aspect-square rounded-lg border flex items-center justify-center font-black text-[11px] transition-all",
               currentIndex === i 
-                ? "border-indigo-600 ring-2 ring-indigo-500 ring-offset-1 z-10" 
+                ? "border-indigo-600 bg-indigo-50/30 ring-2 ring-indigo-500/20 z-10 scale-105 shadow-sm" 
                 : "border-slate-100 hover:border-indigo-200",
               totalStats === 0 ? "bg-white text-slate-400" : "text-slate-700"
             )}
@@ -742,8 +749,8 @@ export default function QuizPlay() {
             <h1 className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate max-w-[200px] md:max-w-md">{session.title}</h1>
             <div className="flex items-center gap-1.5">
               <span className="text-[12px] font-black text-indigo-600">{initialTotalXP} XP</span>
-              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[8px] font-bold">
-                 <span>+{sessionXP} SES</span>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[8px] font-bold" title="Points earned in this session">
+                 <span>+{sessionXP} SESSION</span>
               </div>
               {streak >= 2 && (
                 <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-orange-500 text-white text-[8px] font-black">
