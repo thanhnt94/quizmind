@@ -51,7 +51,12 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_quiz_room_participants_id'), 'quiz_room_participants', ['id'], unique=False)
-    op.create_index(op.f('ix_quiz_sessions_user_id'), 'quiz_sessions', ['user_id'], unique=False)
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    indexes = [idx['name'] for idx in inspector.get_indexes('quiz_sessions')]
+    if 'ix_quiz_sessions_user_id' not in indexes:
+        op.create_index(op.f('ix_quiz_sessions_user_id'), 'quiz_sessions', ['user_id'], unique=False)
     # ### end Alembic commands ###
 
 
