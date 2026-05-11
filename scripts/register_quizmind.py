@@ -17,7 +17,7 @@ def register_quizmind():
                 name="QuizMind",
                 client_id="quizmind-v1",
                 client_secret="quizmind_secret_123",
-                redirect_uri="http://localhost:5173/auth/callback", # Vite default port
+                redirect_uri="http://localhost:5173/auth-center/callback", # Vite default port
                 app_icon="brain",
                 app_color_theme="purple",
                 is_active=True,

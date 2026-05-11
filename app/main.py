@@ -90,7 +90,7 @@ async def get_common_context(request: Request, db: AsyncSession):
     
     # Dynamic callback calculation
     base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
-    callback_url = f"{base_url}/auth/callback"
+    callback_url = f"{base_url}/auth-center/callback"
 
     if is_ca_alive:
         signin_url = f"{active_ca_url}/api/auth/login?client_id={active_client_id}&return_to={callback_url}"
@@ -552,7 +552,7 @@ async def play_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends(g
 async def legacy_admin_upload(request: Request):
     return RedirectResponse(url="/quiz/import", status_code=301)
 
-@app.get("/auth/callback")
+@app.get("/auth-center/callback")
 async def auth_callback(request: Request, response: Response, code: str, db: AsyncSession = Depends(get_db)):
     # 1. Load active config
     from app.modules.admin.interface import AdminInterface
@@ -566,7 +566,7 @@ async def auth_callback(request: Request, response: Response, code: str, db: Asy
         ca_client.client_secret = sso_config.get("client_secret", ca_client.client_secret)
 
     base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
-    callback_url = f"{base_url}/auth/callback"
+    callback_url = f"{base_url}/auth-center/callback"
     
     # 2. Exchange code for tokens
     token_data = await ca_client.get_token(code, callback_url)
