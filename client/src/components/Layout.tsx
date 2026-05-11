@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutGrid, Compass, BarChart3, User, BrainCircuit, Bell, Settings, Plus, Library } from 'lucide-react'
+import { LayoutGrid, Compass, BarChart3, User, BrainCircuit, Bell, Settings, Plus, Library, Users } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
@@ -25,8 +25,9 @@ export default function Layout() {
   const navItems = [
     { label: 'Home', path: '/', icon: LayoutGrid },
     { label: 'Stats', path: '/stats', icon: BarChart3 },
-    { label: 'Settings', path: '/settings', icon: Settings },
     { label: 'Manage', path: '/manage', icon: Library },
+    { label: 'Room', path: '/room/join', icon: Users },
+    { label: 'Settings', path: '/profile', icon: Settings },
   ]
 
   return (
@@ -88,9 +89,13 @@ export default function Layout() {
       {/* RemiNote-Style Mobile Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 z-[120] md:hidden bg-white/80 backdrop-blur-2xl border-t border-slate-100 px-6 py-3">
         <nav className="flex items-center justify-between max-w-md mx-auto h-16">
-          {navItems.map((item) => {
+          {navItems.map((item, idx) => {
             const Icon = item.icon
             const isActive = location.pathname === item.path
+            
+            // Special styling for the 5th item (Settings/Profile) as requested previously
+            const isLast = idx === navItems.length - 1
+            
             return (
               <Link 
                 key={item.path}
@@ -111,16 +116,6 @@ export default function Layout() {
               </Link>
             )
           })}
-          
-          <Link 
-            to="/profile" 
-            className={cn(
-              "flex items-center justify-center w-14 h-14 rounded-[1.5rem] text-white shadow-xl active:scale-90 transition-all",
-              location.pathname === '/profile' ? "bg-indigo-600 shadow-indigo-200" : "bg-slate-900"
-            )}
-          >
-            <User className="w-6 h-6" />
-          </Link>
         </nav>
       </div>
     </div>

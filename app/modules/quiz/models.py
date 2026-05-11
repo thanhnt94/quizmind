@@ -20,6 +20,7 @@ class Quiz(Base):
     category_id = Column(Integer, ForeignKey("categories.id"))
     creator_id = Column(Integer, nullable=True) # ID of the user who created/uploaded it
     ai_prompt = Column(Text, nullable=True) # System prompt for AI generation related to this quiz
+    instruction = Column(Text, nullable=True) # General instruction for the entire quiz (e.g. JLPT problem description)
     time_limit = Column(Integer, default=0) # in minutes, 0 means no limit
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -111,3 +112,33 @@ class QuizTag(Base):
     __tablename__ = "quiz_tags"
     quiz_id = Column(Integer, ForeignKey("quizzes.id"), primary_key=True)
     tag_id = Column(Integer, ForeignKey("tags.id"), primary_key=True)
+
+class QuizRoom(Base):
+    __tablename__ = "quiz_rooms"
+    id = Column(Integer, primary_key=True, index=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    room_code = Column(String(20), unique=True, index=True)
+    host_id = Column(Integer, ForeignKey("users.id"))
+    status = Column(String(50), default="waiting") # waiting, active, finished
+    settings = Column(JSON, nullable=True) # { "show_leaderboard": true, "auto_start": false }
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    
+    quiz = relationship("Quiz")
+    host = relationship("User")
+    participants = relationship("QuizRoomParticipant", back_populates="room", cascade="all, delete-orphan")
+
+class QuizRoomParticipant(Base):
+    __tablename__ = "quiz_room_participants"
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(Integer, ForeignKey("quiz_rooms.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    is_ready = Column(Boolean, default=False)
+    score = Column(Integer, default=0)
+    total_answered = Column(Integer, default=0)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    room = relationship("QuizRoom", back_populates="participants")
+    user = relationship("User")

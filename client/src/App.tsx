@@ -10,6 +10,8 @@ import ManageQuizzes from './pages/ManageQuizzes'
 import ImportQuiz from './pages/ImportQuiz'
 import EditQuiz from './pages/EditQuiz'
 import EditQuestions from './pages/EditQuestions'
+import QuizRoom from './pages/QuizRoom'
+import RoomJoin from './pages/RoomJoin'
 import Layout from './components/Layout'
 
 const queryClient = new QueryClient({
@@ -37,8 +39,10 @@ function App() {
             <Route path="/manage/import" element={<ImportQuiz />} />
             <Route path="/manage/edit/:id" element={<EditQuiz />} />
             <Route path="/manage/edit/:id/questions" element={<EditQuestions />} />
+            <Route path="/room/join" element={<RoomJoin />} />
           </Route>
           <Route path="/quiz/:id/play" element={<QuizPlay />} />
+          <Route path="/room/:code" element={<QuizRoom />} />
         </Routes>
       </Router>
     </QueryClientProvider>

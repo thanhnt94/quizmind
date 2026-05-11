@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/useAppStore'
 
 interface Option {
   id: number
@@ -72,6 +73,7 @@ const TypewriterText = ({ text }: { text: string }) => {
 export default function QuizPlay() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user, setUser, setGamify } = useAppStore()
   const [session, setSession] = useState<any>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
@@ -84,7 +86,11 @@ export default function QuizPlay() {
   const [personalNote, setPersonalNote] = useState('')
   const [isEditingNote, setIsEditingNote] = useState(false)
   const [isEditingAI, setIsEditingAI] = useState(false)
+  const [isEditingInsight, setIsEditingInsight] = useState(false)
+  const [insightInput, setInsightInput] = useState('')
   const [aiInput, setAiInput] = useState('')
+  const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
   const [isMapOpen, setIsMapOpen] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isQuitModalOpen, setIsQuitModalOpen] = useState(false)
@@ -115,6 +121,19 @@ export default function QuizPlay() {
       fetchNote()
     }
   }, [currentIndex, currentQuestion])
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (!user) {
+        try {
+          const res = await axios.get('/api/v1/dashboard/data')
+          setUser(res.data.user)
+          setGamify(res.data.gamify)
+        } catch (e) {}
+      }
+    }
+    fetchUser()
+  }, [user, setUser, setGamify])
 
   const fetchSession = async () => {
     try {
@@ -329,6 +348,23 @@ export default function QuizPlay() {
     }
   }
 
+  const saveInsight = async () => {
+    if (!currentQuestion) return
+    try {
+      await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, { 
+        explanation: insightInput 
+      })
+      setSession((prev: any) => {
+        const newQs = [...prev.questions]
+        newQs[currentIndex].explanation = insightInput
+        return { ...prev, questions: newQs }
+      })
+      setIsEditingInsight(false)
+    } catch (e) {
+      alert("Failed to save insight.")
+    }
+  }
+
   const openEditModal = () => {
     if (!currentQuestion) return
     setEditFormData({
@@ -365,6 +401,59 @@ export default function QuizPlay() {
     }
   }
 
+  const copyCurrentTabContent = (type: 'default' | 'prompt' = 'default') => {
+    let content = ''
+    if (activeFeedbackTab === 'insight') content = currentQuestion?.explanation || ''
+    else if (activeFeedbackTab === 'ai') {
+      if (type === 'prompt' && session.ai_prompt) {
+        const optionsText = currentQuestion?.options.map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.content}`).join('\n')
+        const correctOpt = currentQuestion?.options.find(o => o.is_correct)
+        const correctAnswerText = correctOpt ? `${String.fromCharCode(65 + (currentQuestion?.options?.indexOf(correctOpt) ?? 0))}. ${correctOpt.content}` : 'Unknown'
+        
+        content = session.ai_prompt
+          .replace(/{{question}}/g, currentQuestion?.content || '')
+          .replace(/{{options}}/g, optionsText)
+          .replace(/{{correct_answer}}/g, correctAnswerText)
+          .replace(/{{global_instruction}}/g, session.instruction || '')
+          .replace(/{{quiz_title}}/g, session.title || '')
+          .replace(/{{quiz_description}}/g, session.description || '')
+          .replace(/{{option_a}}/g, currentQuestion?.options[0]?.content || '')
+          .replace(/{{option_b}}/g, currentQuestion?.options[1]?.content || '')
+          .replace(/{{option_c}}/g, currentQuestion?.options[2]?.content || '')
+          .replace(/{{option_d}}/g, currentQuestion?.options[3]?.content || '')
+      } else {
+        content = currentQuestion?.ai_explanation || ''
+      }
+    }
+    else if (activeFeedbackTab === 'note') content = personalNote || ''
+    
+    if (content) {
+      navigator.clipboard.writeText(content)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 1500)
+      setIsCopyMenuOpen(false)
+    }
+  }
+
+  const handleEditCurrentTab = () => {
+    if (activeFeedbackTab === 'insight') {
+      if (isEditingInsight) saveInsight()
+      else {
+        setInsightInput(currentQuestion?.explanation || '')
+        setIsEditingInsight(true)
+      }
+    } else if (activeFeedbackTab === 'ai') {
+      if (isEditingAI) askAI(aiInput)
+      else {
+        setAiInput(currentQuestion?.ai_explanation || '')
+        setIsEditingAI(true)
+      }
+    } else if (activeFeedbackTab === 'note') {
+      if (isEditingNote) saveNote()
+      setIsEditingNote(!isEditingNote)
+    }
+  }
+
   const copyQuestionToClipboard = () => {
     if (!currentQuestion) return
     const text = `Question: ${currentQuestion.content}\n` + 
@@ -393,10 +482,19 @@ export default function QuizPlay() {
                    </div>
                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">INSIGHT</span>
                  </div>
-                 <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                     {currentQuestion?.explanation || 'No detail.'}
-                   </ReactMarkdown>
+                 <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words pr-2">
+                    {isEditingInsight ? (
+                      <textarea
+                        value={insightInput}
+                        onChange={(e) => setInsightInput(e.target.value)}
+                        className="w-full h-80 p-3 bg-white border border-indigo-100 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
+                        placeholder="Nhập giải thích cho câu hỏi..."
+                      />
+                    ) : (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                        {currentQuestion?.explanation || 'No detail.'}
+                      </ReactMarkdown>
+                    )}
                  </div>
             </div>
           )
@@ -444,14 +542,14 @@ export default function QuizPlay() {
                      value={aiInput}
                      onChange={(e) => setAiInput(e.target.value)}
                      placeholder="Nhập nội dung AI Analysis thủ công..."
-                     className="w-full h-32 bg-white/50 rounded-xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border-none resize-none transition-all"
+                     className="w-full h-80 bg-white/50 rounded-xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border-none resize-none transition-all"
                      autoFocus
                    />
                    <p className="text-[8px] font-medium text-slate-400 italic">Click 'SAVE AI' để lưu thay đổi cho tất cả mọi người.</p>
                  </div>
                ) : (
                  currentQuestion?.ai_explanation && (
-                   <div className="text-slate-700 font-medium text-sm leading-relaxed markdown-content italic break-words max-h-[400px] overflow-y-auto custom-scrollbar pr-2 mt-2">
+                   <div className="text-slate-700 font-medium text-sm leading-relaxed markdown-content italic break-words pr-2 mt-2">
                      <TypewriterText text={currentQuestion.ai_explanation} />
                    </div>
                  )
@@ -483,7 +581,7 @@ export default function QuizPlay() {
                </div>
                
                {!isEditingNote ? (
-                 <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content min-h-[100px] break-words max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                 <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content min-h-[100px] break-words pr-2">
                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                      {personalNote || '*Ghi chú trống.*'}
                    </ReactMarkdown>
@@ -494,7 +592,7 @@ export default function QuizPlay() {
                      value={personalNote}
                      onChange={(e) => setPersonalNote(e.target.value)}
                      placeholder="Ghi lại kiến thức của bạn ở đây... (Hỗ trợ Markdown)"
-                     className="w-full h-32 bg-slate-50 rounded-xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border-none resize-none transition-all"
+                     className="w-full h-80 bg-slate-50 rounded-xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border-none resize-none transition-all"
                      autoFocus
                    />
                    <p className="text-[8px] font-medium text-slate-300 italic">Hỗ trợ Markdown syntax. Click 'SAVE & CLOSE' để hoàn tất.</p>
@@ -508,25 +606,109 @@ export default function QuizPlay() {
     if (isMobile) {
       return (
         <div className="flex flex-col h-full">
-           <div className="flex-1 overflow-y-auto pb-4">
+           <div className="flex-1 overflow-y-auto p-4 pb-4">
               {renderTabContent()}
            </div>
-           <div className="flex items-center justify-around gap-1 pt-4 pb-2 border-t border-slate-100 bg-white -mx-4 px-4 sticky bottom-0">
-              {tabs.map((tab: any) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveFeedbackTab(tab.id)}
+           
+           {/* 7-icon compact bottom bar */}
+           <div className="flex items-center justify-between gap-1.5 py-2 border-t border-slate-100 bg-white/95 backdrop-blur-xl sticky bottom-0 z-50 px-3">
+              {/* Left Edge: Close */}
+              <button 
+                onClick={() => setIsFeedbackOpen(false)}
+                className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-100 rounded-xl text-slate-400 active:scale-90 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Edit/Save Current Tab */}
+              <button 
+                onClick={handleEditCurrentTab}
+                className={cn(
+                  "w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl border transition-all active:scale-90",
+                  ((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight))
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100"
+                    : "bg-white border-slate-100 text-slate-400 hover:text-indigo-600"
+                )}
+              >
+                {((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight)) ? (
+                  <Check className="w-5 h-5 stroke-[3]" />
+                ) : (
+                  <Edit3 className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Middle Tabs Pill */}
+              <div className="flex items-center bg-slate-100/50 p-1 rounded-[1.25rem] h-11 border border-slate-100/50">
+                {tabs.map((tab: any) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveFeedbackTab(tab.id)}
+                    className={cn(
+                      "w-10 h-9 flex items-center justify-center rounded-[0.9rem] transition-all",
+                      activeFeedbackTab === tab.id 
+                        ? "text-indigo-600 bg-white shadow-sm ring-1 ring-slate-100" 
+                        : "text-slate-400"
+                    )}
+                  >
+                    <tab.icon className="w-4 h-4" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Copy Current Tab */}
+              <div className="relative">
+                <AnimatePresence>
+                  {isCopyMenuOpen && activeFeedbackTab === 'ai' && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                      className="absolute bottom-14 right-0 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[100]"
+                    >
+                      <button 
+                        onClick={() => copyCurrentTabContent('default')}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 rounded-xl transition-all text-left"
+                      >
+                        <FileText className="w-4 h-4 text-slate-400" />
+                        <span className="text-[10px] font-black text-slate-600 uppercase">Copy Result</span>
+                      </button>
+                      {(session.creator_id === user?.id || user?.id === 1) && (
+                        <button 
+                          onClick={() => copyCurrentTabContent('prompt')}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 rounded-xl transition-all text-left"
+                        >
+                          <Brain className="w-4 h-4 text-indigo-500" />
+                          <span className="text-[10px] font-black text-indigo-600 uppercase">Copy Prompt</span>
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button 
+                  onClick={() => {
+                    if (activeFeedbackTab === 'ai') setIsCopyMenuOpen(!isCopyMenuOpen)
+                    else copyCurrentTabContent()
+                  }}
                   className={cn(
-                    "flex flex-col items-center gap-1.5 py-2 px-3 rounded-xl transition-all",
-                    activeFeedbackTab === tab.id 
-                      ? "text-indigo-600 bg-indigo-50/50" 
-                      : "text-slate-400"
+                    "w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl border transition-all active:scale-90",
+                    isCopied ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-100 text-slate-400 hover:text-amber-500"
                   )}
                 >
-                  <tab.icon className={cn("w-5 h-5", activeFeedbackTab === tab.id ? "text-indigo-600" : "text-slate-300")} />
-                  <span className="text-[8px] font-black tracking-tighter uppercase">{tab.label.split(' ')[0]}</span>
+                  {isCopied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
                 </button>
-              ))}
+              </div>
+
+              {/* Right Edge: Next */}
+              <button 
+                onClick={() => {
+                  handleNext()
+                  setIsFeedbackOpen(false)
+                }}
+                className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-100 active:scale-90 transition-all"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
            </div>
         </div>
       )
@@ -542,10 +724,19 @@ export default function QuizPlay() {
               </div>
               <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">INSIGHT</span>
             </div>
-            <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                {currentQuestion?.explanation || 'No detail.'}
-              </ReactMarkdown>
+            <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words pr-2">
+              {isEditingInsight ? (
+                <textarea
+                  value={insightInput}
+                  onChange={(e) => setInsightInput(e.target.value)}
+                  className="w-full h-80 p-3 bg-white border border-indigo-100 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
+                  placeholder="Nhập giải thích cho câu hỏi..."
+                />
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                  {currentQuestion?.explanation || 'No detail.'}
+                </ReactMarkdown>
+              )}
             </div>
          </div>
 
@@ -859,6 +1050,15 @@ export default function QuizPlay() {
                   </div>
                  </div>
 
+                 {session.instruction && (
+                    <div className="mb-6 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 shadow-sm animate-in fade-in slide-in-from-top-2">
+                       <div className="flex items-center gap-2 mb-2">
+                          <Brain className="w-3.5 h-3.5 text-indigo-500" />
+                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Global Instruction</span>
+                       </div>
+                       <p className="text-[13px] font-bold text-slate-600 italic leading-relaxed">{session.instruction}</p>
+                    </div>
+                 )}
                  <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 mb-8">{currentQuestion?.content}</h2>
                  
                  <div className="grid grid-cols-1 gap-3">
@@ -973,13 +1173,12 @@ export default function QuizPlay() {
             exit={{ opacity: 0, y: 50 }} 
             className="fixed inset-0 z-[200] bg-[#F8FAFC] xl:hidden flex flex-col h-screen"
           >
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-white shadow-sm flex-shrink-0">
-              <h4 className="text-[12px] font-black text-indigo-600 uppercase tracking-[0.3em]">LEARNING INSIGHTS</h4>
-              <button onClick={() => setIsFeedbackOpen(false)} className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 active:scale-95 transition-all">
-                <X className="w-5 h-5" />
-              </button>
+            <div className="flex items-center justify-center p-3 border-b border-slate-100 bg-white shadow-sm flex-shrink-0">
+              <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.4em]">
+                {activeFeedbackTab === 'insight' ? 'LEARNING INSIGHTS' : activeFeedbackTab === 'ai' ? 'AI DEEP ANALYSIS' : 'PERSONAL NOTES'}
+              </h4>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
                {renderFeedbackArea(true)}
             </div>
           </motion.div>

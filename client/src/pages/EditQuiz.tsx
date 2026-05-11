@@ -11,7 +11,9 @@ import {
   CheckCircle2,
   Brain,
   Plus,
-  Edit2
+  Edit2,
+  HelpCircle,
+  X
 } from 'lucide-react'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
@@ -28,12 +30,14 @@ const EditQuiz = () => {
     title: '',
     description: '',
     ai_prompt: '',
+    instruction: '',
     category_name: '',
     tags: ''
   })
   
   const [questions, setQuestions] = useState<any[]>([])
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
+  const [showHelpModal, setShowHelpModal] = useState(false)
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -43,6 +47,7 @@ const EditQuiz = () => {
           title: res.data.title,
           description: res.data.description || '',
           ai_prompt: res.data.ai_prompt || '',
+          instruction: res.data.instruction || '',
           category_name: res.data.category_name || 'General',
           tags: res.data.tags?.join(', ') || ''
         })
@@ -64,6 +69,7 @@ const EditQuiz = () => {
         title: formData.title,
         description: formData.description,
         ai_prompt: formData.ai_prompt,
+        instruction: formData.instruction,
         tags: formData.tags.split(',').map(t => t.trim())
       })
       setSuccess(true)
@@ -164,13 +170,31 @@ const EditQuiz = () => {
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none"
                   />
                 </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-2">Global Instruction (Problem Set Header)</label>
+                  <textarea 
+                    rows={4}
+                    placeholder="E.g. Choose the correct answer for the following questions..."
+                    value={formData.instruction}
+                    onChange={(e) => setFormData({ ...formData, instruction: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none"
+                  />
+                </div>
               </div>
 
               <div className="space-y-6">
                 <div className="bg-slate-900 rounded-3xl p-6 text-white space-y-4 shadow-xl shadow-slate-200">
-                   <div className="flex items-center gap-2">
-                      <Brain className="w-5 h-5 text-indigo-400" />
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em]">AI System Prompt</label>
+                   <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                         <Brain className="w-5 h-5 text-indigo-400" />
+                         <label className="text-[10px] font-black uppercase tracking-[0.2em]">AI System Prompt</label>
+                      </div>
+                      <button 
+                        onClick={() => setShowHelpModal(true)}
+                        className="text-white/40 hover:text-white transition-all"
+                      >
+                         <HelpCircle className="w-4 h-4" />
+                      </button>
                    </div>
                    <textarea 
                     rows={6}
@@ -226,6 +250,65 @@ const EditQuiz = () => {
            </div>
         </div>
       </div>
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowHelpModal(false)} />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-10 shadow-2xl border border-slate-100 overflow-hidden"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Prompting Guide</h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Sử dụng các thẻ để cá nhân hóa prompt</p>
+                </div>
+              </div>
+              <button onClick={() => setShowHelpModal(false)} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
+                Bạn có thể chèn các thẻ dưới đây vào nội dung AI System Prompt. Khi nhấn nút <strong>Copy</strong> trong tab AI, hệ thống sẽ tự động thay thế chúng bằng dữ liệu thực tế:
+              </p>
+              
+              <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {[
+                  { tag: '{{question}}', desc: 'Nội dung câu hỏi hiện tại' },
+                  { tag: '{{options}}', desc: 'Danh sách đáp án (A. nội dung, B. nội dung...)' },
+                  { tag: '{{correct_answer}}', desc: 'Đáp án đúng (bao gồm chữ cái A/B/C/D)' },
+                  { tag: '{{global_instruction}}', desc: 'Yêu cầu chung của bộ đề' },
+                  { tag: '{{quiz_title}}', desc: 'Tiêu đề của bộ đề' },
+                  { tag: '{{quiz_description}}', desc: 'Mô tả của bộ đề' },
+                  { tag: '{{option_a}}', desc: 'Chỉ lấy nội dung đáp án A' },
+                  { tag: '{{option_b}}', desc: 'Chỉ lấy nội dung đáp án B' },
+                  { tag: '{{option_c}}', desc: 'Chỉ lấy nội dung đáp án C' },
+                  { tag: '{{option_d}}', desc: 'Chỉ lấy nội dung đáp án D' },
+                ].map((item) => (
+                  <div key={item.tag} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all group">
+                    <code className="text-xs font-black text-indigo-600 group-hover:scale-105 transition-transform">{item.tag}</code>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{item.desc}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 p-4 bg-amber-50 rounded-2xl border border-amber-100 border-dashed">
+                <p className="text-[10px] font-bold text-amber-700 leading-relaxed italic">
+                  * Mẹo: Bạn có thể viết một prompt chuẩn chỉnh và dùng các thẻ này để AI bên ngoài có đủ thông tin nhất để giải đáp.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

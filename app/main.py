@@ -56,7 +56,9 @@ app.add_middleware(
 )
 
 from app.modules.quiz.routes.api import router as quiz_api_router
+from app.modules.quiz.routes.room import router as room_router
 app.include_router(quiz_api_router, prefix=settings.API_V1_STR)
+app.include_router(room_router, prefix=settings.API_V1_STR)
 
 # Helper for common context
 async def get_common_context(request: Request, db: AsyncSession):
@@ -122,6 +124,7 @@ async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
 @app.get("/settings")
 @app.get("/manage")
 @app.get("/manage/{path:path}")
+@app.get("/room/{path:path}")
 async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
     # Check if we should serve SSR or SPA
     # For now, let's serve SPA if it exists, otherwise fallback to root SSR

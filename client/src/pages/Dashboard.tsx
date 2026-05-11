@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Bell, Flame, Target, Clock, Award, LayoutGrid, Compass, BarChart3, User, ChevronRight, Hash, Zap, BrainCircuit, Filter, Layers, TrendingUp, X, Archive, PlusCircle, CheckCircle2, RotateCcw } from 'lucide-react'
+import { Search, Plus, Bell, Flame, Target, Clock, Award, LayoutGrid, Compass, BarChart3, User, ChevronRight, Hash, Zap, BrainCircuit, Filter, Layers, TrendingUp, X, Archive, PlusCircle, CheckCircle2, RotateCcw, Users } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,6 +16,7 @@ interface Quiz {
 }
 
 interface DashboardData {
+  user: { id: number, username: string, email: string }
   my_quizzes: Quiz[]
   archived_quizzes: Quiz[]
   discover_quizzes: Quiz[]
@@ -29,8 +30,12 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'my' | 'archived' | 'discover'>('my')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
+  const [roomCode, setRoomCode] = useState('')
+  const [isJoining, setIsJoining] = useState(false)
   const { setUser, setGamify } = useAppStore()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
@@ -53,6 +58,24 @@ export default function Dashboard() {
     mutationFn: (quizId: number) => axios.post(`/api/v1/quiz/${quizId}/enroll`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   })
+
+  const createRoomMutation = useMutation({
+    mutationFn: (quizId: number) => axios.post('/api/v1/quiz/room/create', { quiz_id: quizId }),
+    onSuccess: (res) => navigate(`/room/${res.data.room_code}`)
+  })
+
+  const handleJoinRoom = async () => {
+    if (!roomCode) return
+    setIsJoining(true)
+    try {
+      await axios.post('/api/v1/quiz/room/join', { room_code: roomCode })
+      navigate(`/room/${roomCode.toUpperCase()}`)
+    } catch (e) {
+      alert("Room not found or expired")
+    } finally {
+      setIsJoining(false)
+    }
+  }
 
   const allAvailableTags = useMemo(() => {
     if (!data) return []
@@ -97,9 +120,12 @@ export default function Dashboard() {
                  className="w-full h-10 bg-slate-200/50 border border-slate-100/50 rounded-[1.1rem] pl-10 pr-4 text-[11px] font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 transition-all"
                />
             </div>
-            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 shadow-sm flex-shrink-0">
-               <User className="w-4.5 h-4.5" />
-            </div>
+            <button 
+              onClick={() => setIsJoinModalOpen(true)}
+              className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm flex-shrink-0"
+            >
+               <Users className="w-4.5 h-4.5" />
+            </button>
          </div>
 
          {/* Mobile Shared Tabs Row */}
@@ -143,15 +169,24 @@ export default function Dashboard() {
                </div>
             </div>
             
-            <div className="relative w-96">
-               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-               <input 
-                 type="text" 
-                 placeholder="Quick search nodes..." 
-                 value={searchQuery}
-                 onChange={(e) => setSearchQuery(e.target.value)}
-                 className="w-full pl-14 pr-6 h-14 bg-white border border-slate-100 rounded-2xl text-sm font-semibold outline-none focus:ring-8 focus:ring-indigo-500/5 shadow-sm transition-all"
-               />
+            <div className="flex items-center gap-4">
+               <button 
+                 onClick={() => setIsJoinModalOpen(true)}
+                 className="flex items-center gap-2 px-6 h-14 bg-indigo-50 border border-indigo-100 rounded-2xl text-indigo-600 text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-all shadow-sm"
+               >
+                  <Users className="w-5 h-5" />
+                  Join Room
+               </button>
+               <div className="relative w-96">
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
+                    type="text" 
+                    placeholder="Quick search nodes..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-14 pr-6 h-14 bg-white border border-slate-100 rounded-2xl text-sm font-semibold outline-none focus:ring-8 focus:ring-indigo-500/5 shadow-sm transition-all"
+                  />
+               </div>
             </div>
          </div>
 
@@ -202,9 +237,12 @@ export default function Dashboard() {
                         {activeTab === 'discover' ? (
                           <button onClick={() => enrollMutation.mutate(quiz.id)} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><PlusCircle className="w-4 h-4" /></button>
                         ) : (
-                          <button onClick={() => archiveMutation.mutate(quiz.id)} className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", activeTab === 'archived' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400")}>
-                             {activeTab === 'archived' ? <RotateCcw className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                          </button>
+                          <>
+                             <button onClick={() => createRoomMutation.mutate(quiz.id)} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center" title="Host Room"><Users className="w-4 h-4" /></button>
+                             <button onClick={() => archiveMutation.mutate(quiz.id)} className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", activeTab === 'archived' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400")}>
+                                {activeTab === 'archived' ? <RotateCcw className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                             </button>
+                          </>
                         )}
                         <ChevronRight className="w-4 h-4 text-slate-200" />
                      </div>
@@ -222,12 +260,20 @@ export default function Dashboard() {
                         </div>
                         <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">{quiz.questions_count} Questions</p>
                      </div>
-                     <div className="mt-10 flex items-center justify-between">
+                     <div className="mt-10 flex items-center justify-between relative z-10">
                         <div className="flex items-center gap-2">
                            {activeTab === 'discover' ? (
                              <button onClick={() => enrollMutation.mutate(quiz.id)} className="px-6 py-3 bg-indigo-600 text-white text-[10px] font-black rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">ADD TO MINE</button>
                            ) : (
-                             <button onClick={() => archiveMutation.mutate(quiz.id)} className="px-6 py-3 bg-slate-100 text-slate-400 text-[10px] font-black rounded-xl hover:bg-slate-200 transition-all uppercase tracking-widest">{activeTab === 'archived' ? 'RESTORE' : 'ARCHIVE'}</button>
+                             <>
+                               <button 
+                                 onClick={() => createRoomMutation.mutate(quiz.id)}
+                                 className="px-4 py-3 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-xl hover:bg-indigo-100 transition-all uppercase flex items-center gap-2"
+                               >
+                                 <Users className="w-4 h-4" /> Host
+                               </button>
+                               <button onClick={() => archiveMutation.mutate(quiz.id)} className="px-6 py-3 bg-slate-100 text-slate-400 text-[10px] font-black rounded-xl hover:bg-slate-200 transition-all uppercase tracking-widest">{activeTab === 'archived' ? 'RESTORE' : 'ARCHIVE'}</button>
+                             </>
                            )}
                            <Link to={`/quiz/${quiz.id}`} className="px-6 py-3 bg-white border border-slate-100 text-slate-900 text-[10px] font-black rounded-xl hover:bg-slate-50 transition-all uppercase tracking-widest">Details</Link>
                         </div>
@@ -240,6 +286,55 @@ export default function Dashboard() {
            </AnimatePresence>
         </div>
       </div>
+
+      {/* JOIN ROOM MODAL */}
+      <AnimatePresence>
+        {isJoinModalOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsJoinModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl relative z-10 p-8 border border-slate-100"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest">Join Exam Room</h3>
+                <button onClick={() => setIsJoinModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">
+                   <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                <div>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Enter Room Code</label>
+                   <input 
+                     type="text" 
+                     placeholder="E.G. AZ78K"
+                     value={roomCode}
+                     onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                     className="w-full h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 text-2xl font-black tracking-[0.3em] text-center text-indigo-600 focus:border-indigo-500 focus:bg-white outline-none transition-all placeholder:text-slate-200 placeholder:tracking-normal placeholder:text-sm"
+                   />
+                </div>
+                
+                <button 
+                  onClick={handleJoinRoom}
+                  disabled={!roomCode || isJoining}
+                  className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-200 disabled:shadow-none"
+                >
+                  {isJoining ? 'JOINING...' : 'JOIN NOW'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

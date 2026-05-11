@@ -252,7 +252,9 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
         "title": quiz.title,
         "description": quiz.description,
         "ai_prompt": quiz.ai_prompt,
+        "instruction": quiz.instruction,
         "category_id": quiz.category_id,
+        "creator_id": quiz.creator_id,
         "user_total_xp": user_stats.get("xp", 0),
         "questions": [
             {
@@ -485,6 +487,7 @@ async def update_quiz(quiz_id: int, data: dict, db: AsyncSession = Depends(get_d
     if "description" in data: quiz.description = data["description"]
     if "category_id" in data: quiz.category_id = data["category_id"]
     if "ai_prompt" in data: quiz.ai_prompt = data["ai_prompt"]
+    if "instruction" in data: quiz.instruction = data["instruction"]
     
     await db.commit()
     return {"status": "ok"}
