@@ -49,7 +49,7 @@
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                 <div>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">CentralAuth URL</p>
-                    <p class="text-sm font-black text-slate-700">{{ settings.CENTRAL_AUTH_URL }}</p>
+                    <p class="text-sm font-black text-slate-700">{{ sso_config.central_auth_url or settings.CENTRAL_AUTH_URL }}</p>
                 </div>
                 <i data-lucide="external-link" class="w-4 h-4 text-slate-300"></i>
             </div>

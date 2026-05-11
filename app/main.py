@@ -65,13 +65,17 @@ async def get_common_context(request: Request, db: AsyncSession):
     user_id = request.cookies.get("user_id")
     
     # Optimize CentralAuth Health Check with Cache
+    from app.modules.admin.interface import AdminInterface
+    sso_config = await AdminInterface.get_sso_config(db)
+    active_ca_url = sso_config.get("central_auth_url", settings.CENTRAL_AUTH_URL).rstrip('/')
+
     global CA_HEALTH_CACHE
     now = time.time()
     if now - CA_HEALTH_CACHE["last_check"] > CA_CHECK_INTERVAL:
         try:
             async with httpx.AsyncClient() as client:
                 # Use a very short timeout for health check to avoid lagging
-                resp = await client.get(f"{settings.CENTRAL_AUTH_URL}/api/auth/health", timeout=0.2)
+                resp = await client.get(f"{active_ca_url}/api/auth/health", timeout=0.2)
                 CA_HEALTH_CACHE["status"] = (resp.status_code == 200)
         except Exception as e:
             # If CentralAuth is down or slow, don't lag the app
@@ -81,10 +85,15 @@ async def get_common_context(request: Request, db: AsyncSession):
     is_ca_alive = CA_HEALTH_CACHE["status"]
 
     # Sign-in URL logic
+    # Use config from DB if enabled, otherwise fallback to settings
+    active_client_id = sso_config.get("client_id", settings.CLIENT_ID)
+    
+    # Dynamic callback calculation
+    base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
+    callback_url = f"{base_url}/auth/callback"
+
     if is_ca_alive:
-        # Use dynamic base URL
-        callback_url = f"{request.base_url}auth/callback".replace("127.0.0.1", "localhost")
-        signin_url = f"{settings.CENTRAL_AUTH_URL}/api/auth/login?client_id={settings.CLIENT_ID}&return_to={callback_url}"
+        signin_url = f"{active_ca_url}/api/auth/login?client_id={active_client_id}&return_to={callback_url}"
     else:
         signin_url = "/login"
 
@@ -293,11 +302,15 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     quiz_count_result = await db.execute(select(func.count(Quiz.id)))
     total_answers_result = await db.execute(select(func.count(UserAnswer.id)))
     
+    from app.modules.admin.interface import AdminInterface
+    sso_config = await AdminInterface.get_sso_config(db)
+    
     context.update({
         "user_count": user_count_result.scalar(),
         "quiz_count": quiz_count_result.scalar(),
         "total_answers": total_answers_result.scalar(),
         "active_page": "dashboard",
+        "sso_config": sso_config,
         "settings": settings
     })
     return templates.TemplateResponse(
@@ -541,11 +554,21 @@ async def legacy_admin_upload(request: Request):
 
 @app.get("/auth/callback")
 async def auth_callback(request: Request, response: Response, code: str, db: AsyncSession = Depends(get_db)):
-    """Handle CentralAuth SSO callback — exchange code for token and verify user."""
-    ca_client = CentralAuthClient()
-    callback_url = "http://localhost:5080/auth/callback"
+    # 1. Load active config
+    from app.modules.admin.interface import AdminInterface
+    sso_config = await AdminInterface.get_sso_config(db)
     
-    # 1. Exchange code for tokens
+    ca_client = CentralAuthClient()
+    # Override client config with DB values if present
+    if sso_config:
+        ca_client.api_url = sso_config.get("central_auth_url", ca_client.api_url).rstrip('/')
+        ca_client.client_id = sso_config.get("client_id", ca_client.client_id)
+        ca_client.client_secret = sso_config.get("client_secret", ca_client.client_secret)
+
+    base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
+    callback_url = f"{base_url}/auth/callback"
+    
+    # 2. Exchange code for tokens
     token_data = await ca_client.get_token(code, callback_url)
     if not token_data:
         return RedirectResponse(url="/login?error=SSO token exchange failed", status_code=303)
