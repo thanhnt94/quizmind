@@ -42,6 +42,65 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
 }
 
-.markdown-content ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-.markdown-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-.markdown-content p { margin-bottom: 0.5rem; }
+.markdown-content ul { list-style-type: none; margin-left: 0.5rem; margin-top: 1rem; margin-bottom: 1rem; }
+.markdown-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-top: 1rem; margin-bottom: 1rem; }
+.markdown-content li { 
+  @apply relative mb-4 text-slate-700 leading-relaxed;
+}
+.markdown-content ul li::before {
+  content: "•";
+  @apply absolute -left-4 text-indigo-400 font-black;
+}
+.markdown-content p { margin-bottom: 1.25rem; line-height: 1.8; @apply text-slate-600 font-medium; }
+
+.markdown-content h1, .markdown-content h2, .markdown-content h3 { 
+  @apply font-black text-slate-900 tracking-tight mt-10 mb-5 flex items-center gap-3;
+}
+.markdown-content h1 { @apply text-2xl text-indigo-600; }
+.markdown-content h2 { @apply text-xl text-slate-800; }
+.markdown-content h3 { @apply text-lg text-slate-800; }
+
+.markdown-content h1::before, .markdown-content h2::before {
+  content: "";
+  @apply w-2 h-6 bg-indigo-500 rounded-sm inline-block;
+}
+
+/* Table Styling - PodLearn Style */
+.markdown-content table {
+  @apply w-full border-separate border-spacing-0 border border-slate-200 rounded-[1.5rem] overflow-hidden my-8 shadow-sm bg-white;
+  display: table;
+}
+.markdown-content th {
+  @apply bg-slate-50 text-slate-400 font-black uppercase tracking-[0.15em] px-5 py-4 text-left border-b border-slate-100 text-[10px];
+}
+.markdown-content td {
+  @apply px-5 py-4 border-b border-slate-50 text-slate-700 font-bold align-middle text-xs;
+}
+.markdown-content tr:last-child td { border-bottom: none; }
+.markdown-content tr:hover td { @apply bg-indigo-50/30; }
+
+/* Furigana (Ruby) Support - Enhanced */
+.markdown-content ruby {
+  @apply inline-flex flex-col-reverse items-center align-bottom mx-0.5 pt-4;
+}
+.markdown-content rt {
+  @apply text-[10px] font-black text-indigo-500 uppercase tracking-tighter block leading-none mb-1 absolute -top-4 w-full text-center;
+  font-family: var(--font-sans);
+}
+
+/* Blockquote & Code */
+.markdown-content blockquote {
+  @apply pl-6 border-l-4 border-indigo-500 bg-indigo-50/50 py-4 pr-4 rounded-r-2xl text-indigo-900 font-bold italic my-6;
+}
+.markdown-content code {
+  @apply px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold text-[0.9em] border border-indigo-100;
+}
+
+/* Strong & Emphasis */
+.markdown-content strong { @apply font-black text-indigo-600; }
+.markdown-content em { @apply italic text-slate-400 font-medium; }
+
+/* AI Specific spacing */
+.ai-glow {
+  @apply bg-white border border-slate-100 shadow-2xl shadow-indigo-100/20;
+}

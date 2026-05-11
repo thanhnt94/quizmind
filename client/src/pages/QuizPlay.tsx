@@ -61,9 +61,28 @@ const TypewriterText = ({ text }: { text: string }) => {
     }
   }, [displayedText, isTyping])
 
+  const formatLatex = (t: string) => {
+    return t
+      .replace(/\$\\rightarrow\$/g, '→')
+      .replace(/\$\\Rightarrow\$/g, '⇒')
+      .replace(/\$\\leftarrow\$/g, '←')
+      .replace(/\$\\Leftarrow\$/g, '⇐')
+      .replace(/\$\\leftrightarrow\$/g, '↔')
+      .replace(/\$\\Leftrightarrow\$/g, '⇔')
+      .replace(/\$\\times\$/g, '×')
+      .replace(/\$\\div\$/g, '÷')
+      .replace(/\$\\le\$/g, '≤')
+      .replace(/\$\\ge\$/g, '≥')
+      .replace(/\$\\neq\$/g, '≠')
+      .replace(/\$\\approx\$/g, '≈')
+      .replace(/\$\\pm\$/g, '±')
+  }
+
   return (
     <>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{displayedText}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+        {formatLatex(displayedText)}
+      </ReactMarkdown>
       {isTyping && <span className="inline-block w-1.5 h-3.5 ml-1 bg-indigo-500 animate-pulse align-middle" />}
       <div ref={bottomRef} />
     </>
@@ -549,7 +568,7 @@ export default function QuizPlay() {
                  </div>
                ) : (
                  currentQuestion?.ai_explanation && (
-                   <div className="text-slate-700 font-medium text-sm leading-relaxed markdown-content italic break-words pr-2 mt-2">
+                   <div className="text-slate-700 font-medium text-sm leading-relaxed markdown-content break-words pr-2 mt-2">
                      <TypewriterText text={currentQuestion.ai_explanation} />
                    </div>
                  )
