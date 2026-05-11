@@ -42,14 +42,14 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
 }
 
-.markdown-content ul { list-style-type: none; margin-left: 0.5rem; margin-top: 1rem; margin-bottom: 1rem; }
+.markdown-content ul { list-style-type: none; margin-left: 1.5rem; margin-top: 1rem; margin-bottom: 1rem; }
 .markdown-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-top: 1rem; margin-bottom: 1rem; }
 .markdown-content li { 
   @apply relative mb-4 text-slate-700 leading-relaxed;
 }
 .markdown-content ul li::before {
   content: "•";
-  @apply absolute -left-4 text-indigo-400 font-black;
+  @apply absolute -left-5 text-indigo-500 font-black;
 }
 .markdown-content p { margin-bottom: 1.25rem; line-height: 1.8; @apply text-slate-600 font-medium; }
 
@@ -62,7 +62,7 @@
 
 .markdown-content h1::before, .markdown-content h2::before {
   content: "";
-  @apply w-2 h-6 bg-indigo-500 rounded-sm inline-block;
+  @apply w-1.5 h-6 bg-indigo-500 rounded-full inline-block;
 }
 
 /* Table Styling - PodLearn Style */
@@ -79,18 +79,19 @@
 .markdown-content tr:last-child td { border-bottom: none; }
 .markdown-content tr:hover td { @apply bg-indigo-50/30; }
 
-/* Furigana (Ruby) Support - Enhanced */
+/* Furigana (Ruby) Support - Simple & Stable */
 .markdown-content ruby {
-  @apply inline-flex flex-col-reverse items-center align-bottom mx-0.5 pt-4;
+  @apply inline-flex flex-col-reverse items-center align-bottom mx-0.5;
+  line-height: 1 !important;
 }
 .markdown-content rt {
-  @apply text-[10px] font-black text-indigo-500 uppercase tracking-tighter block leading-none mb-1 absolute -top-4 w-full text-center;
+  @apply text-[9px] font-black text-indigo-500 uppercase tracking-tighter block leading-none mb-1;
   font-family: var(--font-sans);
 }
 
 /* Blockquote & Code */
 .markdown-content blockquote {
-  @apply pl-6 border-l-4 border-indigo-500 bg-indigo-50/50 py-4 pr-4 rounded-r-2xl text-indigo-900 font-bold italic my-6;
+  @apply pl-6 border-l-4 border-indigo-500 bg-indigo-50/30 py-4 pr-4 rounded-r-2xl text-indigo-900 font-bold italic my-6;
 }
 .markdown-content code {
   @apply px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold text-[0.9em] border border-indigo-100;
@@ -102,5 +103,5 @@
 
 /* AI Specific spacing */
 .ai-glow {
-  @apply bg-white border border-slate-100 shadow-2xl shadow-indigo-100/20;
+  @apply bg-white border border-slate-100 shadow-2xl shadow-indigo-100/10;
 }
