@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Award, BookOpen, Search, StickyNote, BarChart2 } from 'lucide-react'
+import { ChevronLeft, Award, BookOpen, Search, StickyNote, BarChart2, Settings, Edit2, X, Save, Brain, HelpCircle, Plus } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/useAppStore'
 
 interface Question {
   id: number
@@ -16,8 +18,13 @@ export default function QuizDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user } = useAppStore()
   const [activeTab, setActiveTab] = useState<'list' | 'stats'>('list')
   const [searchQuery, setSearchQuery] = useState('')
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editFormData, setEditFormData] = useState<any>(null)
+  const [showHelpModal, setShowHelpModal] = useState(false)
 
   useEffect(() => {
     if (id === 'import') {
@@ -74,14 +81,25 @@ export default function QuizDetail() {
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       {/* Mobile Header */}
-      <nav className="fixed top-0 left-0 right-0 z-[120] bg-white/80 backdrop-blur-2xl border-b border-slate-100 px-4 py-3 flex items-center gap-4 md:hidden">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-indigo-600 shadow-sm active:scale-90 transition-all">
+      <nav className="fixed top-0 left-0 right-0 z-[120] bg-white/80 backdrop-blur-2xl border-b border-slate-100 px-4 py-3 flex items-center gap-4">
+        <button onClick={() => navigate(-1)} className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-indigo-600 shadow-sm active:scale-90 transition-all">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">QUIZ DETAIL</p>
           <h2 className="text-sm font-black text-slate-900 truncate tracking-tight">{quiz?.title}</h2>
         </div>
+        {(quiz?.creator_id === user?.id || user?.id === 1) && (
+          <button 
+            onClick={() => {
+              setEditFormData({ ...quiz, tags: quiz.tags?.join(', ') })
+              setIsEditModalOpen(true)
+            }}
+            className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-indigo-600 transition-all active:scale-90"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        )}
       </nav>
 
       <div className="pt-20 md:pt-12 pb-40">
@@ -231,6 +249,194 @@ export default function QuizDetail() {
           )}
         </div>
       </div>
+      
+      {/* Edit Quiz Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
+              onClick={() => !isSavingEdit && setIsEditModalOpen(false)} 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-slate-100 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-10">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                      <Settings className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Quiz Properties</h3>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Sửa đổi thông số bộ thẻ và AI</p>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setIsEditModalOpen(false)} 
+                   className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all"
+                 >
+                   <X className="w-5 h-5" />
+                 </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
+                <div className="space-y-6">
+                  <div>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Quiz Title</label>
+                     <input 
+                      type="text"
+                      value={editFormData?.title}
+                      onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                     />
+                  </div>
+                  <div>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Description</label>
+                     <textarea 
+                      rows={4}
+                      value={editFormData?.description}
+                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                     />
+                  </div>
+                  <div>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Global Instruction</label>
+                     <textarea 
+                      rows={4}
+                      value={editFormData?.instruction}
+                      onChange={(e) => setEditFormData({ ...editFormData, instruction: e.target.value })}
+                      className="w-full px-5 py-4 bg-indigo-50/30 border border-indigo-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-indigo-900"
+                     />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="bg-slate-900 rounded-3xl p-6 text-white space-y-4 shadow-xl">
+                     <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                           <Brain className="w-5 h-5 text-indigo-400" />
+                           <label className="text-[10px] font-black uppercase tracking-[0.2em]">AI System Prompt</label>
+                        </div>
+                        <button onClick={() => setShowHelpModal(true)} className="text-white/40 hover:text-white transition-all"><HelpCircle className="w-4 h-4" /></button>
+                     </div>
+                     <textarea 
+                      rows={8}
+                      value={editFormData?.ai_prompt}
+                      onChange={(e) => setEditFormData({ ...editFormData, ai_prompt: e.target.value })}
+                      className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-medium outline-none focus:border-indigo-400 transition-all custom-scrollbar"
+                     />
+                  </div>
+                  <div>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Tags (comma separated)</label>
+                     <input 
+                      type="text"
+                      value={editFormData?.tags}
+                      onChange={(e) => setEditFormData({ ...editFormData, tags: e.target.value })}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                     />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10 flex gap-4">
+                 <button 
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+                 >
+                   Hủy bỏ
+                 </button>
+                 <button 
+                  disabled={isSavingEdit}
+                  onClick={async () => {
+                     setIsSavingEdit(true)
+                     try {
+                       await axios.patch(`/api/v1/quiz/${id}`, {
+                         ...editFormData,
+                         tags: editFormData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+                       })
+                       queryClient.invalidateQueries({ queryKey: ['quiz', id] })
+                       setIsEditModalOpen(false)
+                     } catch (e) {
+                       alert("Lỗi khi lưu!")
+                     } finally {
+                       setIsSavingEdit(false)
+                     }
+                  }}
+                  className="flex-[2] py-4 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                 >
+                   {isSavingEdit ? (
+                     <>Đang lưu...</>
+                   ) : (
+                     <>
+                       <Save className="w-4 h-4" />
+                       Lưu thay đổi
+                     </>
+                   )}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowHelpModal(false)} />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-10 shadow-2xl border border-slate-100 overflow-hidden"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Prompting Guide</h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Sử dụng các thẻ để cá nhân hóa prompt</p>
+                </div>
+              </div>
+              <button onClick={() => setShowHelpModal(false)} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
+                Bạn có thể chèn các thẻ dưới đây vào nội dung AI System Prompt. Hệ thống sẽ tự động thay thế chúng bằng dữ liệu thực tế:
+              </p>
+              
+              <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {[
+                  { tag: '{{question}}', desc: 'Nội dung câu hỏi hiện tại' },
+                  { tag: '{{options}}', desc: 'Danh sách đáp án (A. nội dung, B. nội dung...)' },
+                  { tag: '{{correct_answer}}', desc: 'Đáp án đúng (bao gồm chữ cái A/B/C/D)' },
+                  { tag: '{{global_instruction}}', desc: 'Yêu cầu chung của bộ đề' },
+                  { tag: '{{quiz_title}}', desc: 'Tiêu đề của bộ đề' },
+                  { tag: '{{quiz_description}}', desc: 'Mô tả của bộ đề' },
+                  { tag: '{{option_a}}', desc: 'Chỉ lấy nội dung đáp án A' },
+                  { tag: '{{option_b}}', desc: 'Chỉ lấy nội dung đáp án B' },
+                  { tag: '{{option_c}}', desc: 'Chỉ lấy nội dung đáp án C' },
+                  { tag: '{{option_d}}', desc: 'Chỉ lấy nội dung đáp án D' },
+                ].map((item) => (
+                  <div key={item.tag} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all group">
+                    <code className="text-xs font-black text-indigo-600 group-hover:scale-105 transition-transform">{item.tag}</code>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{item.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

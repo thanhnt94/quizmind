@@ -237,6 +237,26 @@ async def get_quiz_stats(db: AsyncSession = Depends(get_db)):
         "activity_data": activity
     }
 
+@router.get("/{quiz_id}/data")
+async def get_quiz_data(quiz_id: int, db: AsyncSession = Depends(get_db)):
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+    
+    from app.modules.quiz.models import Question
+    q_count_res = await db.execute(select(func.count(Question.id)).where(Question.quiz_id == quiz_id))
+    q_count = q_count_res.scalar()
+    
+    return {
+        "id": quiz.id,
+        "title": quiz.title,
+        "description": quiz.description,
+        "instruction": quiz.instruction,
+        "ai_prompt": quiz.ai_prompt,
+        "creator_id": quiz.creator_id,
+        "questions_count": q_count,
+        "tags": [t.name for t in quiz.tags]
+    }
+
 @router.get("/{quiz_id}/play-data")
 async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     user_id = int(request.cookies.get("user_id", 1))
