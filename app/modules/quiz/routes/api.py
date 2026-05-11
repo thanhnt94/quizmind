@@ -238,13 +238,20 @@ async def get_quiz_stats(db: AsyncSession = Depends(get_db)):
     }
 
 @router.get("/{quiz_id}/data")
-async def get_quiz_data(quiz_id: int, db: AsyncSession = Depends(get_db)):
+async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
+    from app.modules.quiz.models import QuizCollaborator
+    
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
     from app.modules.quiz.models import Question
     q_count_res = await db.execute(select(func.count(Question.id)).where(Question.quiz_id == quiz_id))
     q_count = q_count_res.scalar()
+    
+    # Check if user is collaborator
+    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+    is_collaborator = collab_res.scalar() is not None
     
     return {
         "id": quiz.id,
@@ -253,6 +260,7 @@ async def get_quiz_data(quiz_id: int, db: AsyncSession = Depends(get_db)):
         "instruction": quiz.instruction,
         "ai_prompt": quiz.ai_prompt,
         "creator_id": quiz.creator_id,
+        "is_collaborator": is_collaborator,
         "questions_count": q_count,
         "tags": [t.name for t in quiz.tags]
     }
@@ -497,11 +505,19 @@ async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
     return {"status": "ok"}
 
 @router.patch("/{quiz_id}")
-async def update_quiz(quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import Quiz
+async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
+    from app.modules.quiz.models import Quiz, QuizCollaborator
+    
     result = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
     quiz = result.scalar_one_or_none()
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+    
+    # Permission Check: Creator, Admin (1), or Collaborator
+    if quiz.creator_id != user_id and user_id != 1:
+        collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+        if not collab_res.scalar():
+            return JSONResponse(status_code=403, content={"error": "Permission denied"})
     
     if "title" in data: quiz.title = data["title"]
     if "description" in data: quiz.description = data["description"]
@@ -509,6 +525,66 @@ async def update_quiz(quiz_id: int, data: dict, db: AsyncSession = Depends(get_d
     if "ai_prompt" in data: quiz.ai_prompt = data["ai_prompt"]
     if "instruction" in data: quiz.instruction = data["instruction"]
     
+    if "tags" in data:
+        await QuizService.set_quiz_tags(db, quiz_id, data["tags"])
+    
+    await db.commit()
+    return {"status": "ok"}
+
+# --- Collaborator Endpoints ---
+
+@router.get("/users/search")
+async def search_users(q: str, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.models import User
+    result = await db.execute(
+        select(User).filter(or_(User.username.ilike(f"%{q}%"), User.full_name.ilike(f"%{q}%"))).limit(10)
+    )
+    users = result.scalars().all()
+    return [{"id": u.id, "username": u.username, "full_name": u.full_name} for u in users]
+
+@router.get("/{quiz_id}/collaborators")
+async def get_collaborators(quiz_id: int, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import QuizCollaborator
+    from app.modules.auth.models import User
+    result = await db.execute(
+        select(User).join(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id)
+    )
+    collabs = result.scalars().all()
+    return [{"id": u.id, "username": u.username, "full_name": u.full_name} for u in collabs]
+
+@router.post("/{quiz_id}/collaborators")
+async def add_collaborator(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
+    target_user_id = data.get("user_id")
+    
+    from app.modules.quiz.models import Quiz, QuizCollaborator
+    quiz_res = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    quiz = quiz_res.scalar_one_or_none()
+    
+    if not quiz or (quiz.creator_id != user_id and user_id != 1):
+        return JSONResponse(status_code=403, content={"error": "Only creator can add collaborators"})
+        
+    existing = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == target_user_id))
+    if existing.scalar():
+        return {"status": "ok", "message": "Already a collaborator"}
+        
+    new_collab = QuizCollaborator(quiz_id=quiz_id, user_id=target_user_id)
+    db.add(new_collab)
+    await db.commit()
+    return {"status": "ok"}
+
+@router.delete("/{quiz_id}/collaborators/{collab_user_id}")
+async def remove_collaborator(request: Request, quiz_id: int, collab_user_id: int, db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
+    
+    from app.modules.quiz.models import Quiz, QuizCollaborator
+    quiz_res = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    quiz = quiz_res.scalar_one_or_none()
+    
+    if not quiz or (quiz.creator_id != user_id and user_id != 1):
+        return JSONResponse(status_code=403, content={"error": "Only creator can remove collaborators"})
+        
+    await db.execute(delete(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == collab_user_id))
     await db.commit()
     return {"status": "ok"}
 

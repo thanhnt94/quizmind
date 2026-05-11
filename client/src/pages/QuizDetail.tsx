@@ -25,12 +25,61 @@ export default function QuizDetail() {
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editFormData, setEditFormData] = useState<any>(null)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [editTab, setEditTab] = useState<'props' | 'collabs'>('props')
+  const [userSearch, setUserSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [collaborators, setCollaborators] = useState<any[]>([])
 
   useEffect(() => {
     if (id === 'import') {
       navigate('/manage', { replace: true })
     }
   }, [id, navigate])
+
+  useEffect(() => {
+    if (isEditModalOpen && editTab === 'collabs') {
+      fetchCollaborators()
+    }
+  }, [isEditModalOpen, editTab])
+
+  const fetchCollaborators = async () => {
+    try {
+      const res = await axios.get(`/api/v1/quiz/${id}/collaborators`)
+      setCollaborators(res.data)
+    } catch (e) {}
+  }
+
+  const handleSearchUsers = async (q: string) => {
+    setUserSearch(q)
+    if (q.length < 2) {
+      setSearchResults([])
+      return
+    }
+    try {
+      const res = await axios.get(`/api/v1/quiz/users/search`, { params: { q } })
+      setSearchResults(res.data)
+    } catch (e) {}
+  }
+
+  const addCollaborator = async (userId: number) => {
+    try {
+      await axios.post(`/api/v1/quiz/${id}/collaborators`, { user_id: userId })
+      fetchCollaborators()
+      setUserSearch('')
+      setSearchResults([])
+    } catch (e) {
+      alert("Lỗi khi thêm!")
+    }
+  }
+
+  const removeCollaborator = async (userId: number) => {
+    try {
+      await axios.delete(`/api/v1/quiz/${id}/collaborators/${userId}`)
+      fetchCollaborators()
+    } catch (e) {
+      alert("Lỗi khi xóa!")
+    }
+  }
 
   const { data: quiz } = useQuery({
     queryKey: ['quiz', id],
@@ -89,10 +138,11 @@ export default function QuizDetail() {
           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">QUIZ DETAIL</p>
           <h2 className="text-sm font-black text-slate-900 truncate tracking-tight">{quiz?.title}</h2>
         </div>
-        {(quiz?.creator_id === user?.id || user?.id === 1) && (
+        {(quiz?.creator_id === user?.id || user?.id === 1 || quiz?.is_collaborator) && (
           <button 
             onClick={() => {
               setEditFormData({ ...quiz, tags: quiz.tags?.join(', ') })
+              setEditTab('props')
               setIsEditModalOpen(true)
             }}
             className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-indigo-600 transition-all active:scale-90"
@@ -268,118 +318,205 @@ export default function QuizDetail() {
               className="relative w-full max-w-2xl bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-slate-100 overflow-hidden"
             >
               <div className="flex items-center justify-between mb-10">
-                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                      <Settings className="w-6 h-6" />
+                <div className="flex items-center gap-6">
+                   <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 flex-shrink-0">
+                     <Settings className="w-6 h-6" />
+                   </div>
+                   <div className="flex items-center gap-2 border-l border-slate-100 pl-6">
+                     <button 
+                       onClick={() => setEditTab('props')}
+                       className={cn(
+                         "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                         editTab === 'props' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "text-slate-400 hover:text-slate-600"
+                       )}
+                     >
+                       PROPERTIES
+                     </button>
+                     <button 
+                       onClick={() => setEditTab('collabs')}
+                       className={cn(
+                         "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                         editTab === 'collabs' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "text-slate-400 hover:text-slate-600"
+                       )}
+                     >
+                       COLLABORATORS
+                     </button>
+                   </div>
+                </div>
+                <button 
+                  onClick={() => setIsEditModalOpen(false)} 
+                  className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
+                {editTab === 'props' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Quiz Title</label>
+                         <input 
+                          type="text"
+                          value={editFormData?.title}
+                          onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                          className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                         />
+                      </div>
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Description</label>
+                         <textarea 
+                          rows={4}
+                          value={editFormData?.description}
+                          onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                          className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                         />
+                      </div>
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Global Instruction</label>
+                         <textarea 
+                          rows={4}
+                          value={editFormData?.instruction}
+                          onChange={(e) => setEditFormData({ ...editFormData, instruction: e.target.value })}
+                          className="w-full px-5 py-4 bg-indigo-50/30 border border-indigo-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-indigo-900"
+                         />
+                      </div>
                     </div>
+
+                    <div className="space-y-6">
+                      <div className="bg-slate-900 rounded-3xl p-6 text-white space-y-4 shadow-xl">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                               <Brain className="w-5 h-5 text-indigo-400" />
+                               <label className="text-[10px] font-black uppercase tracking-[0.2em]">AI System Prompt</label>
+                            </div>
+                            <button onClick={() => setShowHelpModal(true)} className="text-white/40 hover:text-white transition-all"><HelpCircle className="w-4 h-4" /></button>
+                         </div>
+                         <textarea 
+                          rows={8}
+                          value={editFormData?.ai_prompt}
+                          onChange={(e) => setEditFormData({ ...editFormData, ai_prompt: e.target.value })}
+                          className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-medium outline-none focus:border-indigo-400 transition-all custom-scrollbar"
+                         />
+                      </div>
+                      <div>
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Tags (comma separated)</label>
+                         <input 
+                          type="text"
+                          value={editFormData?.tags}
+                          onChange={(e) => setEditFormData({ ...editFormData, tags: e.target.value })}
+                          className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                         />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
                     <div>
-                      <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Quiz Properties</h3>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Sửa đổi thông số bộ thẻ và AI</p>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Thêm cộng tác viên</label>
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                        <input 
+                          type="text"
+                          value={userSearch}
+                          onChange={(e) => handleSearchUsers(e.target.value)}
+                          placeholder="Tìm theo username hoặc tên..."
+                          className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                        />
+                        {searchResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-[10] overflow-hidden">
+                            {searchResults.map(u => (
+                              <button 
+                                key={u.id}
+                                onClick={() => addCollaborator(u.id)}
+                                className="w-full px-6 py-3 flex items-center justify-between hover:bg-indigo-50 transition-all text-left"
+                              >
+                                <div>
+                                  <p className="text-xs font-black text-slate-700">{u.username}</p>
+                                  <p className="text-[10px] text-slate-400">{u.full_name}</p>
+                                </div>
+                                <Plus className="w-4 h-4 text-indigo-400" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                 </div>
-                 <button 
-                   onClick={() => setIsEditModalOpen(false)} 
-                   className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all"
-                 >
-                   <X className="w-5 h-5" />
-                 </button>
+
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Danh sách cộng tác viên ({collaborators.length})</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {collaborators.map(c => (
+                          <div key={c.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-[10px] font-black text-indigo-600">
+                                {c.username[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-slate-700 leading-none mb-1">{c.username}</p>
+                                <p className="text-[9px] text-slate-400 font-medium">{c.full_name}</p>
+                              </div>
+                            </div>
+                            {(quiz?.creator_id === user?.id || user?.id === 1) && (
+                              <button 
+                                onClick={() => removeCollaborator(c.id)}
+                                className="p-2 text-slate-300 hover:text-rose-500 transition-all"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {collaborators.length === 0 && (
+                          <div className="col-span-2 py-10 text-center bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Chưa có cộng tác viên</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar">
-                <div className="space-y-6">
-                  <div>
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Quiz Title</label>
-                     <input 
-                      type="text"
-                      value={editFormData?.title}
-                      onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                     />
-                  </div>
-                  <div>
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Description</label>
-                     <textarea 
-                      rows={4}
-                      value={editFormData?.description}
-                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                     />
-                  </div>
-                  <div>
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Global Instruction</label>
-                     <textarea 
-                      rows={4}
-                      value={editFormData?.instruction}
-                      onChange={(e) => setEditFormData({ ...editFormData, instruction: e.target.value })}
-                      className="w-full px-5 py-4 bg-indigo-50/30 border border-indigo-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-indigo-900"
-                     />
-                  </div>
+              {editTab === 'props' && (
+                <div className="mt-10 flex gap-4">
+                   <button 
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
+                   >
+                     Hủy bỏ
+                   </button>
+                   <button 
+                    disabled={isSavingEdit}
+                    onClick={async () => {
+                       setIsSavingEdit(true)
+                       try {
+                         await axios.patch(`/api/v1/quiz/${id}`, {
+                           ...editFormData,
+                           tags: editFormData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+                         })
+                         queryClient.invalidateQueries({ queryKey: ['quiz', id] })
+                         setIsEditModalOpen(false)
+                       } catch (e) {
+                         alert("Lỗi khi lưu!")
+                       } finally {
+                         setIsSavingEdit(false)
+                       }
+                    }}
+                    className="flex-[2] py-4 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                   >
+                     {isSavingEdit ? (
+                       <>Đang lưu...</>
+                     ) : (
+                       <>
+                         <Save className="w-4 h-4" />
+                         Lưu thay đổi
+                       </>
+                     )}
+                   </button>
                 </div>
-
-                <div className="space-y-6">
-                  <div className="bg-slate-900 rounded-3xl p-6 text-white space-y-4 shadow-xl">
-                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                           <Brain className="w-5 h-5 text-indigo-400" />
-                           <label className="text-[10px] font-black uppercase tracking-[0.2em]">AI System Prompt</label>
-                        </div>
-                        <button onClick={() => setShowHelpModal(true)} className="text-white/40 hover:text-white transition-all"><HelpCircle className="w-4 h-4" /></button>
-                     </div>
-                     <textarea 
-                      rows={8}
-                      value={editFormData?.ai_prompt}
-                      onChange={(e) => setEditFormData({ ...editFormData, ai_prompt: e.target.value })}
-                      className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-medium outline-none focus:border-indigo-400 transition-all custom-scrollbar"
-                     />
-                  </div>
-                  <div>
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Tags (comma separated)</label>
-                     <input 
-                      type="text"
-                      value={editFormData?.tags}
-                      onChange={(e) => setEditFormData({ ...editFormData, tags: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                     />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-10 flex gap-4">
-                 <button 
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="flex-1 py-4 bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
-                 >
-                   Hủy bỏ
-                 </button>
-                 <button 
-                  disabled={isSavingEdit}
-                  onClick={async () => {
-                     setIsSavingEdit(true)
-                     try {
-                       await axios.patch(`/api/v1/quiz/${id}`, {
-                         ...editFormData,
-                         tags: editFormData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-                       })
-                       queryClient.invalidateQueries({ queryKey: ['quiz', id] })
-                       setIsEditModalOpen(false)
-                     } catch (e) {
-                       alert("Lỗi khi lưu!")
-                     } finally {
-                       setIsSavingEdit(false)
-                     }
-                  }}
-                  className="flex-[2] py-4 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
-                 >
-                   {isSavingEdit ? (
-                     <>Đang lưu...</>
-                   ) : (
-                     <>
-                       <Save className="w-4 h-4" />
-                       Lưu thay đổi
-                     </>
-                   )}
-                 </button>
-              </div>
+              )}
             </motion.div>
           </div>
         )}
