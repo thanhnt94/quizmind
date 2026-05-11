@@ -51,7 +51,7 @@
   content: "•";
   @apply absolute -left-5 text-indigo-500 font-black;
 }
-.markdown-content p { margin-bottom: 1.25rem; line-height: 1.8; @apply text-slate-600 font-medium; }
+.markdown-content p { margin-bottom: 1.5rem; line-height: 2.2; @apply text-slate-600 font-medium; }
 
 .markdown-content h1, .markdown-content h2, .markdown-content h3 { 
   @apply font-black text-slate-900 tracking-tight mt-10 mb-5 flex items-center gap-3;
@@ -79,13 +79,15 @@
 .markdown-content tr:last-child td { border-bottom: none; }
 .markdown-content tr:hover td { @apply bg-indigo-50/30; }
 
-/* Furigana (Ruby) Support - Simple & Stable */
+/* Furigana (Ruby) Support - Professional Baseline Alignment */
 .markdown-content ruby {
-  @apply inline-flex flex-col-reverse items-center align-bottom mx-0.5;
-  line-height: 1 !important;
+  display: inline-ruby;
+  ruby-position: over;
+  vertical-align: baseline;
 }
 .markdown-content rt {
-  @apply text-[9px] font-black text-indigo-500 uppercase tracking-tighter block leading-none mb-1;
+  display: ruby-text;
+  @apply text-[9px] font-black text-indigo-500 uppercase tracking-tighter;
   font-family: var(--font-sans);
 }
 
