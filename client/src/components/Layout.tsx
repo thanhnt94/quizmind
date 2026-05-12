@@ -93,9 +93,6 @@ export default function Layout() {
             const Icon = item.icon
             const isActive = location.pathname === item.path
             
-            // Special styling for the 5th item (Settings/Profile) as requested previously
-            const isLast = idx === navItems.length - 1
-            
             return (
               <Link 
                 key={item.path}

@@ -885,7 +885,7 @@ export default function QuizPlay() {
         </div>
       </header>
 
-      <main className="flex-1 flex w-full max-w-none justify-center gap-4 lg:gap-8 px-2 lg:px-6 xl:px-10 py-6 overflow-hidden">
+      <main className="flex-1 flex w-full max-w-none justify-center gap-4 lg:gap-8 px-2 lg:px-6 xl:px-10 md:py-6 py-2 overflow-hidden">
         <aside className="hidden xl:flex w-[340px] 2xl:w-[440px] flex-shrink-0 flex-col overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
           {renderFeedbackArea(false)}
         </aside>
@@ -903,9 +903,9 @@ export default function QuizPlay() {
               className="space-y-6"
             >
               {/* Question Content */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/20">
+              <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/20">
                  {/* Question Stats Banner */}
-                                   <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                                   <div className="flex flex-wrap items-center justify-between gap-4 md:mb-8 mb-4">
                      <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-xl text-white font-black text-base shadow-lg shadow-indigo-100 animate-in zoom-in-50 duration-300">
                         {currentIndex + 1}
                      </div>
@@ -943,7 +943,7 @@ export default function QuizPlay() {
                  </div>
 
                  {session.instruction && (
-                    <div className="mb-6 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="md:mb-6 mb-4 md:p-5 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 shadow-sm animate-in fade-in slide-in-from-top-2">
                        <div className="flex items-center gap-2 mb-2">
                           <Brain className="w-3.5 h-3.5 text-indigo-500" />
                           <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Global Instruction</span>
@@ -951,7 +951,7 @@ export default function QuizPlay() {
                        <p className="text-[13px] font-bold text-slate-600 italic leading-relaxed">{session.instruction}</p>
                     </div>
                  )}
-                 <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 mb-8">{currentQuestion?.content}</h2>
+                 <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-4">{currentQuestion?.content}</h2>
                  
                  <div className="grid grid-cols-1 gap-3">
                     {currentQuestion?.options.map((opt, idx) => (
@@ -960,7 +960,7 @@ export default function QuizPlay() {
                         onClick={() => handleAnswer(idx)}
                         disabled={showFeedback}
                         className={cn(
-                          "group p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden",
+                          "group md:p-5 p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden",
                           selectedOption === idx 
                             ? (opt.is_correct ? "border-emerald-500 bg-emerald-50/50" : "border-rose-500 bg-rose-50/50")
                             : (showFeedback && opt.is_correct ? "border-emerald-500 bg-emerald-50/50" : "border-slate-50 bg-white hover:border-indigo-200 hover:bg-slate-50")

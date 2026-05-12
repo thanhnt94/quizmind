@@ -89,8 +89,48 @@ class AnalyticsService:
             "global_accuracy": round((total_correct / total_q * 100), 1) if total_q > 0 else 0
         }
 
+        # 4. Hourly Distribution (Study Hours)
+        hour_stmt = select(
+            extract('hour', UserAnswer.created_at).label("hour"),
+            func.count(UserAnswer.id).label("count")
+        ).select_from(UserAnswer)\
+         .join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)\
+         .where(QuizAttempt.user_id == user_id)\
+         .group_by("hour")
+        
+        hour_results = await db.execute(hour_stmt)
+        hourly_data = {i: 0 for i in range(24)}
+        for row in hour_results.all():
+            h = int(row[0]) if row[0] is not None else 0
+            hourly_data[h] = row[1]
+        
+        hourly_formatted = [{"hour": f"{h:02d}:00", "count": count} for h, count in hourly_data.items()]
+
+        # 5. Recent Sessions
+        recent_stmt = select(
+            Quiz.title,
+            QuizAttempt.score,
+            QuizAttempt.total_questions,
+            QuizAttempt.completed_at
+        ).join(Quiz, QuizAttempt.quiz_id == Quiz.id)\
+         .where(QuizAttempt.user_id == user_id, QuizAttempt.completed_at != None)\
+         .order_by(desc(QuizAttempt.completed_at))\
+         .limit(5)
+        
+        recent_results = await db.execute(recent_stmt)
+        recent_sessions = []
+        for row in recent_results.all():
+            recent_sessions.append({
+                "title": row[0],
+                "score": row[1],
+                "total": row[2],
+                "date": row[3].strftime("%Y-%m-%d %H:%M") if row[3] else ""
+            })
+
         return {
             "daily_activity": daily_data,
             "category_performance": category_stats,
+            "hourly_distribution": hourly_formatted,
+            "recent_sessions": recent_sessions,
             "summary": summary
         }

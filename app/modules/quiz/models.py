@@ -21,6 +21,7 @@ class Quiz(Base):
     creator_id = Column(Integer, nullable=True) # ID of the user who created/uploaded it
     ai_prompt = Column(Text, nullable=True) # System prompt for AI generation related to this quiz
     instruction = Column(Text, nullable=True) # General instruction for the entire quiz (e.g. JLPT problem description)
+    cover_image = Column(String(512), nullable=True) # URL to the cover image
     time_limit = Column(Integer, default=0) # in minutes, 0 means no limit
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

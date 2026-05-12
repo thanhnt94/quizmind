@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Bell, Flame, Target, Clock, Award, LayoutGrid, Compass, BarChart3, User, ChevronRight, Hash, Zap, BrainCircuit, Filter, Layers, TrendingUp, X, Archive, PlusCircle, CheckCircle2, RotateCcw, Users } from 'lucide-react'
+import { Search, Plus, Bell, Flame, Target, Clock, Award, LayoutGrid, Compass, BarChart3, User, ChevronRight, Hash, Zap, BrainCircuit, Filter, Layers, TrendingUp, X, Archive, PlusCircle, CheckCircle2, RotateCcw, Users, Play } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,6 +11,7 @@ interface Quiz {
   id: number
   title: string
   description: string
+  cover_image: string | null
   questions_count: number
   tags: string[]
 }
@@ -104,54 +105,69 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col bg-[#F8FAFC] min-h-screen">
-      {/* 1. MOBILE HEADER - Focused Input Row */}
-      <div className="sticky top-0 z-[150] bg-[#F8FAFC]/95 backdrop-blur-xl border-b border-slate-100 md:hidden">
-         <div className="px-4 py-3 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-100 flex-shrink-0">
-               <BrainCircuit className="w-5 h-5" />
+      {/* 1. MOBILE HEADER - Premium Dynamic Style */}
+      <div className="sticky top-0 z-[150] bg-white/80 backdrop-blur-xl border-b border-slate-100 md:hidden">
+         <div className="px-4 py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+               <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200 flex-shrink-0 animate-in zoom-in duration-500">
+                  <BrainCircuit className="w-6 h-6" />
+               </div>
+               <div>
+                  <h1 className="text-[14px] font-black text-slate-900 leading-none mb-1">Hello, {data.user?.username}</h1>
+                  <div className="flex items-center gap-2">
+                     <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded">LVL {data.gamify?.level}</span>
+                     <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest bg-orange-50 px-1.5 py-0.5 rounded flex items-center gap-1"><Flame className="w-2.5 h-2.5 fill-orange-500" /> {data.gamify?.streak}D</span>
+                  </div>
+               </div>
             </div>
-            <div className="flex-1 relative">
+            <div className="flex items-center gap-2">
+               <button 
+                  onClick={() => setIsJoinModalOpen(true)}
+                  className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 shadow-sm transition-all active:scale-90"
+               >
+                  <Users className="w-5 h-5" />
+               </button>
+               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+                  <Bell className="w-5 h-5" />
+               </div>
+            </div>
+         </div>
+
+         {/* Search & Tabs Mixed Row */}
+         <div className="px-4 pb-4 space-y-3">
+            <div className="relative">
                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                <input 
                  type="text" 
-                 placeholder="Search neural patterns..." 
+                 placeholder="Search your knowledge base..." 
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
-                 className="w-full h-10 bg-slate-200/50 border border-slate-100/50 rounded-[1.1rem] pl-10 pr-4 text-[11px] font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 transition-all"
+                 className="w-full h-11 bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 text-xs font-semibold outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/5 transition-all"
                />
             </div>
-            <button 
-              onClick={() => setIsJoinModalOpen(true)}
-              className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm flex-shrink-0"
-            >
-               <Users className="w-4.5 h-4.5" />
-            </button>
-         </div>
-
-         {/* Mobile Shared Tabs Row */}
-         <div className="px-4 pb-2">
-            <div className="bg-slate-200/40 p-1 rounded-xl flex items-center border border-slate-100/50 shadow-inner">
-               {['my', 'discover', 'archived'].map((tab) => (
-                 <button key={tab} onClick={() => setActiveTab(tab as any)} className={cn("flex-1 py-2 rounded-lg text-[9px] font-black tracking-widest relative transition-all", activeTab === tab ? "text-indigo-600" : "text-slate-400")}>
-                   {activeTab === tab && <motion.div layoutId="tabMarkerMob" className="absolute inset-0 bg-white shadow-sm rounded-lg" />}
-                   <span className="relative z-10 uppercase">{tab === 'my' ? 'Mine' : (tab === 'discover' ? 'Explore' : 'Archive')}</span>
-                 </button>
-               ))}
+            
+            <div className="flex items-center gap-2">
+               <div className="flex-1 bg-slate-100/50 p-1 rounded-xl flex items-center border border-slate-100/50">
+                  {['my', 'discover', 'archived'].map((tab) => (
+                    <button key={tab} onClick={() => setActiveTab(tab as any)} className={cn("flex-1 py-2 rounded-lg text-[9px] font-black tracking-widest relative transition-all", activeTab === tab ? "text-indigo-600" : "text-slate-400")}>
+                      {activeTab === tab && <motion.div layoutId="tabMarkerMob" className="absolute inset-0 bg-white shadow-sm rounded-lg" />}
+                      <span className="relative z-10 uppercase">{tab === 'my' ? 'Mine' : (tab === 'discover' ? 'Explore' : 'Archive')}</span>
+                    </button>
+                  ))}
+               </div>
+               <button className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 shadow-sm">
+                  <Filter className="w-4 h-4" />
+               </button>
             </div>
          </div>
 
          {/* Mobile Shared Tag Row */}
-         <div className="px-4 pb-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
-               <Filter className="w-3 h-3" />
-            </div>
-            <div className="flex items-center gap-1.5">
-               {allAvailableTags.map(t => (
-                 <button key={t} onClick={() => setActiveTag(activeTag === t ? null : t)} className={cn("px-3 py-1 border rounded-lg text-[9px] font-black uppercase transition-all whitespace-nowrap", activeTag === t ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100" : "bg-white border-slate-100 text-slate-400")}>
-                   #{t}
-                 </button>
-               ))}
-            </div>
+         <div className="px-4 pb-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {allAvailableTags.map(t => (
+               <button key={t} onClick={() => setActiveTag(activeTag === t ? null : t)} className={cn("px-4 py-1.5 border rounded-full text-[9px] font-black uppercase transition-all whitespace-nowrap", activeTag === t ? "bg-slate-900 border-slate-900 text-white shadow-md" : "bg-white border-slate-100 text-slate-400")}>
+                 #{t}
+               </button>
+            ))}
          </div>
       </div>
 
@@ -219,39 +235,87 @@ export default function Dashboard() {
            <AnimatePresence mode="popLayout">
               {filteredData.map((quiz, idx) => (
                 <motion.div key={quiz.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.01 }}>
-                  {/* MOBILE COMPACT CARD */}
-                  <div className="md:hidden flex items-center gap-3 bg-white rounded-2xl border border-slate-100 p-2.5 shadow-sm active:scale-98 transition-all overflow-hidden relative w-full">
-                     <Link to={`/quiz/${quiz.id}`} className="flex-1 flex items-center gap-3 min-w-0 z-10">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0 shadow-inner">
-                           <LayoutGrid className="w-5 h-5" />
-                        </div>
+                  {/* MOBILE PREMIUM LIST ITEM */}
+                  <div className="md:hidden bg-white rounded-3xl border border-slate-100 p-4 shadow-sm active:scale-[0.97] transition-all relative overflow-hidden group">
+                     <div className="flex items-center gap-4">
+                        <Link to={`/quiz/${quiz.id}`} className="w-14 h-14 rounded-2xl flex-shrink-0 overflow-hidden shadow-lg transition-all relative">
+                           {quiz.cover_image ? (
+                             <img src={quiz.cover_image} alt="" className="w-full h-full object-cover" />
+                           ) : (
+                             <div className={cn(
+                                "w-full h-full flex items-center justify-center text-white",
+                                idx % 5 === 0 ? "bg-gradient-to-br from-indigo-500 to-purple-600" :
+                                idx % 5 === 1 ? "bg-gradient-to-br from-rose-500 to-orange-600" :
+                                idx % 5 === 2 ? "bg-gradient-to-br from-emerald-500 to-teal-600" :
+                                idx % 5 === 3 ? "bg-gradient-to-br from-blue-500 to-cyan-600" :
+                                "bg-gradient-to-br from-amber-500 to-yellow-600"
+                             )}>
+                                <LayoutGrid className="w-7 h-7" />
+                             </div>
+                           )}
+                        </Link>
                         <div className="flex-1 min-w-0">
-                           <h3 className="text-[11px] font-black text-slate-900 truncate leading-tight">{quiz.title}</h3>
-                           <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[8px] font-black text-slate-300 uppercase">{quiz.questions_count} Qs</span>
-                              {quiz.tags?.[0] && <span className="text-[8px] font-black text-indigo-400 uppercase truncate max-w-[100px]">#{quiz.tags[0]}</span>}
+                           <Link to={`/quiz/${quiz.id}`}>
+                              <h3 className="text-[13px] font-black text-slate-900 leading-tight mb-1 truncate">{quiz.title}</h3>
+                           </Link>
+                           <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                 <BrainCircuit className="w-2.5 h-2.5 text-slate-400" />
+                                 <span className="text-[8px] font-black text-slate-500 uppercase">{quiz.questions_count} QS</span>
+                              </div>
+                              {quiz.tags?.[0] && <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">#{quiz.tags[0]}</span>}
                            </div>
                         </div>
-                     </Link>
-                     <div className="flex items-center gap-1.5 z-10">
-                        {activeTab === 'discover' ? (
-                          <button onClick={() => enrollMutation.mutate(quiz.id)} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><PlusCircle className="w-4 h-4" /></button>
-                        ) : (
-                          <>
-                             <button onClick={() => createRoomMutation.mutate(quiz.id)} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center" title="Host Room"><Users className="w-4 h-4" /></button>
-                             <button onClick={() => archiveMutation.mutate(quiz.id)} className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", activeTab === 'archived' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400")}>
-                                {activeTab === 'archived' ? <RotateCcw className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                             </button>
-                          </>
-                        )}
-                        <ChevronRight className="w-4 h-4 text-slate-200" />
+                        <Link to={`/quiz/${quiz.id}/play`} className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-100 active:scale-90 transition-all">
+                           <Play className="w-5 h-5 fill-white" />
+                        </Link>
+                     </div>
+                     
+                     <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between gap-2">
+                        <div className="flex gap-2">
+                           {activeTab === 'discover' ? (
+                             <button onClick={() => enrollMutation.mutate(quiz.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100"><PlusCircle className="w-3 h-3" /> ADD</button>
+                           ) : (
+                             <>
+                                <button onClick={() => createRoomMutation.mutate(quiz.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest"><Users className="w-3 h-3" /> HOST</button>
+                                <button onClick={() => archiveMutation.mutate(quiz.id)} className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-400">
+                                   {activeTab === 'archived' ? <RotateCcw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                                </button>
+                             </>
+                           )}
+                        </div>
+                        <Link to={`/quiz/${quiz.id}`} className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] hover:text-indigo-500 transition-colors">Details</Link>
                      </div>
                   </div>
 
                   {/* DESKTOP PREMIUM CARD */}
                   <div className="hidden md:block group h-full flex flex-col bg-white rounded-[2.5rem] border border-slate-100 p-9 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all relative overflow-hidden">
-                     <div className="w-16 h-16 rounded-[1.5rem] bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner mb-7">
-                        <LayoutGrid className="w-8 h-8" />
+                     <div className="flex items-start justify-between mb-7">
+                        <div className={cn(
+                           "w-16 h-16 rounded-[1.5rem] overflow-hidden flex-shrink-0 shadow-lg transition-all",
+                           !quiz.cover_image && (
+                              idx % 5 === 0 ? "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-100" :
+                              idx % 5 === 1 ? "bg-gradient-to-br from-rose-500 to-orange-600 shadow-rose-100" :
+                              idx % 5 === 2 ? "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-100" :
+                              idx % 5 === 3 ? "bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-100" :
+                              "bg-gradient-to-br from-amber-500 to-yellow-600 shadow-amber-100"
+                           )
+                        )}>
+                           {quiz.cover_image ? (
+                             <img src={quiz.cover_image} alt="" className="w-full h-full object-cover" />
+                           ) : (
+                             <div className="w-full h-full flex items-center justify-center text-white">
+                               <LayoutGrid className="w-8 h-8" />
+                             </div>
+                           )}
+                        </div>
+                        <Link 
+                           to={`/quiz/${quiz.id}/play`}
+                           className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-100 hover:scale-110 active:scale-95 transition-all opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0"
+                           title="Learn Now"
+                        >
+                           <Play className="w-6 h-6 fill-white" />
+                        </Link>
                      </div>
                      <div className="flex-1">
                         <h3 className="text-2xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight mb-3 truncate">{quiz.title}</h3>

@@ -261,6 +261,7 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
             "id": q.id,
             "title": q.title,
             "description": q.description,
+            "cover_image": q.cover_image,
             "questions_count": count,
             "tags": [t.name for t in q.tags],
             "is_creator": q.creator_id == user_id_int
