@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -420,11 +420,13 @@ export default function QuizPlay() {
     }
   }
 
-  const copyCurrentTabContent = (type: 'default' | 'prompt' = 'default') => {
+  const copyCurrentTabContent = (type: 'default' | 'prompt' | 'question' = 'default') => {
     let content = ''
     if (activeFeedbackTab === 'insight') content = currentQuestion?.explanation || ''
     else if (activeFeedbackTab === 'ai') {
-      if (type === 'prompt' && session.ai_prompt) {
+      if (type === 'question') {
+        content = currentQuestion?.content || ''
+      } else if (type === 'prompt' && session.ai_prompt) {
         const optionsText = currentQuestion?.options.map((opt, i) => `${String.fromCharCode(65 + i)}. ${opt.content}`).join('\n')
         const correctOpt = currentQuestion?.options.find(o => o.is_correct)
         const correctAnswerText = correctOpt ? `${String.fromCharCode(65 + (currentQuestion?.options?.indexOf(correctOpt) ?? 0))}. ${correctOpt.content}` : 'Unknown'
@@ -694,6 +696,13 @@ export default function QuizPlay() {
                     >
                       <FileText className="w-4 h-4 text-slate-400" />
                       <span className="text-[11px] font-black text-slate-600 uppercase">Copy Result</span>
+                    </button>
+                    <button 
+                      onClick={() => copyCurrentTabContent('question')}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 rounded-xl transition-all text-left"
+                    >
+                      <HelpCircle className="w-4 h-4 text-slate-400" />
+                      <span className="text-[11px] font-black text-slate-600 uppercase">Copy Question</span>
                     </button>
                     {(session.creator_id === user?.id || user?.id === 1) && (
                       <button 
