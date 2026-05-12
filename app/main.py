@@ -60,6 +60,73 @@ from app.modules.quiz.routes.room import router as room_router
 app.include_router(quiz_api_router, prefix=settings.API_V1_STR)
 app.include_router(room_router, prefix=settings.API_V1_STR)
 
+# --- Health Checks for Ecosystem ---
+@app.get("/api/health")
+@app.get("/auth-center/callback/health")
+async def health_check():
+    return {"status": "ok", "service": "QuizMind", "timestamp": time.time()}
+
+@app.post("/api/admin/ecosystem-sync")
+async def ecosystem_sync(
+    request: Request,
+    data: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.modules.admin.interface import AdminInterface
+    sso_config = await AdminInterface.get_sso_config(db)
+    
+    # CentralAuth sends client_secret as hub_secret for verification
+    hub_secret = data.get("hub_secret") or data.get("client_secret")
+    if not hub_secret or hub_secret != sso_config.get("client_secret"):
+        from fastapi import Response
+        return Response(content="Unauthorized: Invalid Secret", status_code=401)
+
+    # Sync users
+    users = data.get("users", [])
+    synced_count = 0
+    for u_data in users:
+        email = u_data.get("email")
+        username = u_data.get("username")
+        if not email or not username: continue
+        
+        # 1. Try to find by email first
+        user = await AuthService.get_user_by_email(db, email)
+        
+        # 2. If not found by email, try to find by username (to avoid UNIQUE constraint failure)
+        if not user:
+            user = await AuthService.get_user_by_username(db, username)
+        
+        if not user:
+            # 3. Create new user if not found by either email or username
+            user = User(
+                email=email,
+                username=username,
+                full_name=u_data.get("full_name") or username,
+                role="admin" if u_data.get("role") == "admin" else "user"
+            )
+            db.add(user)
+        else:
+            # 4. Update existing user (found by either email or username)
+            # hub is source of truth
+            user.email = email 
+            user.username = username
+            user.full_name = u_data.get("full_name", user.full_name)
+            if u_data.get("role"):
+                user.role = "admin" if u_data.get("role") == "admin" else "user"
+        synced_count += 1
+    
+    # Update CentralAuth URL if provided and changed
+    server_address = data.get("server_address")
+    if server_address:
+        server_address = server_address.rstrip('/')
+        if server_address != sso_config.get("central_auth_url"):
+            sso_config["central_auth_url"] = server_address
+            # Update config without requiring a real admin session (id=0)
+            await AdminInterface.update_sso_config(db, sso_config, 0)
+
+    await db.commit()
+    return {"status": "success", "message": f"Synced {synced_count} users successfully."}
+
 # Helper for common context
 async def get_common_context(request: Request, db: AsyncSession):
     user_id = request.cookies.get("user_id")
@@ -356,6 +423,33 @@ async def admin_sso_update(
     }
     await AdminInterface.update_sso_config(db, config_data, context["user"].id)
     return RedirectResponse(url="/admin/sso?success=1", status_code=303)
+
+@app.post("/api/v1/admin/sso/test")
+async def test_sso_connection(
+    request: Request,
+    data: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    ca_url = data.get("central_auth_url", "").rstrip('/')
+    if not ca_url:
+        return {"status": "error", "message": "Invalid URL"}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Try to hit CentralAuth health endpoint
+            resp = await client.get(f"{ca_url}/api/auth/health", timeout=5.0)
+            if resp.status_code == 200:
+                return {"status": "success", "message": "Connection Successful!"}
+            else:
+                return {"status": "error", "message": f"CentralAuth returned {resp.status_code}"}
+    except Exception as e:
+        return {"status": "error", "message": f"Connection Failed: {str(e)}"}
 
 @app.get("/admin/users")
 async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
