@@ -336,84 +336,122 @@ async def reset_quiz_session(request: Request, quiz_id: int, db: AsyncSession = 
     await db.commit()
     return {"status": "ok"}
 
-@router.post("/{quiz_id}/ask-ai")
-async def ask_ai(quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
-    question_id = payload.get("question_id")
-    from app.modules.quiz.models import Question
+async def _generate_ai_task(quiz_id: int, question_id: int, prompt_template: Optional[str] = None):
+    from app.core.db import AsyncSession, engine
+    from app.modules.quiz.models import Question, Quiz
+    from app.modules.ai.services.gemini_service import GeminiService
     from sqlalchemy.orm import selectinload
     
-    result = await db.execute(
-        select(Question)
-        .filter(Question.id == question_id)
-        .options(selectinload(Question.options))
-    )
-    q = result.scalar_one_or_none()
-    if not q: return {"error": "Not found"}
-    
-    # Accept manual AI explanation if provided by creator
-    if "ai_explanation" in payload:
-        ai_response = payload["ai_explanation"]
-    else:
-        from app.modules.ai.services.gemini_service import GeminiService
-        from app.modules.admin.interface import AdminInterface
-        from app.modules.quiz.models import Quiz
+    async with AsyncSession(engine) as db:
+        result = await db.execute(
+            select(Question)
+            .filter(Question.id == question_id)
+            .options(selectinload(Question.options))
+        )
+        q = result.scalar_one_or_none()
+        if not q: return
         
-        # Check if AI is enabled
-        ai_config = await AdminInterface.get_ai_config(db)
-        if not ai_config.get("enabled"):
-            return {"ai_explanation": "AI Analysis is currently disabled by Admin."}
-
-        # Fetch quiz for prompt templates
-        quiz_result = await db.execute(select(Quiz).filter(Quiz.id == quiz_id))
-        quiz = quiz_result.scalar_one_or_none()
-        if not quiz: return {"error": "Quiz not found"}
-
         gemini = await GeminiService.from_db(db)
-        
-        options_list = [o.content for o in q.options]
-        correct_opt_obj = next((o for o in q.options if o.is_correct), None)
-        
-        # Build prompt using template if available
-        if quiz.ai_prompt:
-            options_text = "\n".join([f"{chr(65+i)}. {o.content}" for i, o in enumerate(q.options)])
-            correct_answer_text = "Unknown"
-            if correct_opt_obj:
-                idx = q.options.index(correct_opt_obj)
-                correct_answer_text = f"{chr(65+idx)}. {correct_opt_obj.content}"
-            
-            prompt = quiz.ai_prompt \
-                .replace("{{question}}", q.content) \
-                .replace("{{options}}", options_text) \
-                .replace("{{correct_answer}}", correct_answer_text) \
-                .replace("{{global_instruction}}", quiz.instruction or "") \
-                .replace("{{quiz_title}}", quiz.title or "") \
-                .replace("{{quiz_description}}", quiz.description or "")
-            
-            # Individual options
-            for i in range(4):
-                val = q.options[i].content if len(q.options) > i else ""
-                prompt = prompt.replace(f"{{{{option_{chr(97+i)}}}}}", val)
-            
-            # Call gemini with custom prompt
-            if not gemini.client:
-                return {"ai_explanation": "AI Service not configured."}
-            
-            try:
-                response = gemini.client.models.generate_content(
+        if not gemini.client:
+            q.ai_explanation = "AI Service not configured."
+            await db.commit()
+            return
+
+        try:
+            if prompt_template:
+                # Same replacement logic as before
+                options_text = "\n".join([f"{chr(65+i)}. {o.content}" for i, o in enumerate(q.options)])
+                correct_opt = next((o for o in q.options if o.is_correct), None)
+                correct_answer_text = "Unknown"
+                if correct_opt:
+                    idx = q.options.index(correct_opt)
+                    correct_answer_text = f"{chr(65+idx)}. {correct_opt.content}"
+                
+                # Fetch quiz info for template
+                quiz_res = await db.execute(select(Quiz).filter(Quiz.id == quiz_id))
+                quiz = quiz_res.scalar_one_or_none()
+                
+                prompt = prompt_template \
+                    .replace("{{question}}", q.content) \
+                    .replace("{{options}}", options_text) \
+                    .replace("{{correct_answer}}", correct_answer_text) \
+                    .replace("{{global_instruction}}", quiz.instruction if quiz else "") \
+                    .replace("{{quiz_title}}", quiz.title if quiz else "") \
+                    .replace("{{quiz_description}}", quiz.description if quiz else "")
+                
+                for i in range(4):
+                    val = q.options[i].content if len(q.options) > i else ""
+                    prompt = prompt.replace(f"{{{{option_{chr(97+i)}}}}}", val)
+
+                response = await gemini.client.aio.models.generate_content(
                     model=gemini.model_id,
                     contents=prompt
                 )
                 ai_response = response.text
-            except Exception as e:
-                ai_response = f"Error: {str(e)}"
-        else:
-            # Fallback to default service logic
-            correct_opt = correct_opt_obj.content if correct_opt_obj else "Unknown"
-            ai_response = await gemini.generate_explanation(q.content, options_list, correct_opt)
+                
+                # Strip markdown wrappers if present
+                ai_response = ai_response.strip()
+                if ai_response.startswith("```markdown"):
+                    ai_response = ai_response[len("```markdown"):].strip()
+                elif ai_response.startswith("```"):
+                    ai_response = ai_response[len("```"):].strip()
+                
+                if ai_response.endswith("```"):
+                    ai_response = ai_response[:-3].strip()
+                    
+            else:
+                options_list = [o.content for o in q.options]
+                correct_opt = next((o.content for o in q.options if o.is_correct), None)
+                correct_text = correct_opt.content if correct_opt else "Unknown"
+                ai_response = await gemini.generate_explanation(q.content, options_list, correct_text)
+                
+                # Also strip wrappers for default generation
+                ai_response = ai_response.strip()
+                if ai_response.startswith("```markdown"):
+                    ai_response = ai_response[len("```markdown"):].strip()
+                elif ai_response.startswith("```"):
+                    ai_response = ai_response[len("```"):].strip()
+                if ai_response.endswith("```"):
+                    ai_response = ai_response[:-3].strip()
+            
+            q.ai_explanation = ai_response
+            await db.commit()
+        except Exception as e:
+            q.ai_explanation = f"AI Error: {str(e)}"
+            await db.commit()
+
+@router.post("/{quiz_id}/ask-ai")
+async def ask_ai(quiz_id: int, payload: dict, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    question_id = payload.get("question_id")
+    from app.modules.quiz.models import Question, Quiz
+    from app.modules.admin.interface import AdminInterface
     
-    q.ai_explanation = ai_response
-    await db.commit()
-    return {"ai_explanation": ai_response}
+    # Check if AI is enabled
+    ai_config = await AdminInterface.get_ai_config(db)
+    if not ai_config.get("enabled"):
+        return {"error": "AI Analysis is disabled."}
+
+    result = await db.execute(select(Question).filter(Question.id == question_id))
+    q = result.scalar_one_or_none()
+    if not q: return {"error": "Not found"}
+    
+    # If explanation already exists and no manual override, just return it
+    if q.ai_explanation and "ai_explanation" not in payload:
+        return {"ai_explanation": q.ai_explanation}
+
+    # Manual explanation override (saving)
+    if "ai_explanation" in payload:
+        q.ai_explanation = payload["ai_explanation"]
+        await db.commit()
+        return {"ai_explanation": q.ai_explanation}
+    
+    # Background generation
+    quiz_res = await db.execute(select(Quiz).filter(Quiz.id == quiz_id))
+    quiz = quiz_res.scalar_one_or_none()
+    
+    background_tasks.add_task(_generate_ai_task, quiz_id, question_id, quiz.ai_prompt if quiz else None)
+    
+    return {"status": "processing", "message": "AI analysis started in background."}
 
 @router.delete("/{quiz_id}/session")
 async def delete_quiz_session(quiz_id: int, db: AsyncSession = Depends(get_db)):

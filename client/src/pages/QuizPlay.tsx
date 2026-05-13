@@ -371,17 +371,46 @@ export default function QuizPlay() {
       if (manualText) payload.ai_explanation = manualText
       
       const res = await axios.post(`/api/v1/quiz/${id}/ask-ai`, payload)
-      if (res.data.ai_explanation) {
+      
+      if (res.data.status === 'processing') {
+        // Polling loop
+        let attempts = 0
+        const maxAttempts = 15 // 30 seconds total
+        const poll = setInterval(async () => {
+          attempts++
+          try {
+            const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
+            const updatedQ = quizRes.data.questions?.find((q: any) => q.id === currentQuestion.id)
+            if (updatedQ && updatedQ.ai_explanation) {
+              setSession((prev: any) => {
+                const newQs = [...prev.questions]
+                const targetIdx = newQs.findIndex(q => q.id === updatedQ.id)
+                if (targetIdx !== -1) {
+                  newQs[targetIdx].ai_explanation = updatedQ.ai_explanation
+                }
+                return { ...prev, questions: newQs }
+              })
+              setIsAskingAI(false)
+              clearInterval(poll)
+            }
+          } catch (e) {}
+          
+          if (attempts >= maxAttempts) {
+            clearInterval(poll)
+            setIsAskingAI(false)
+          }
+        }, 2000)
+      } else if (res.data.ai_explanation) {
         setSession((prev: any) => {
           const newQs = [...prev.questions]
           newQs[currentIndex].ai_explanation = res.data.ai_explanation
           return { ...prev, questions: newQs }
         })
         if (manualText) setIsEditingAI(false)
+        setIsAskingAI(false)
       }
     } catch (e) {
       alert("AI service unavailable.")
-    } finally {
       setIsAskingAI(false)
     }
   }

@@ -32,7 +32,8 @@ class GeminiService:
         """
         
         try:
-            response = self.client.models.generate_content(
+            # Use async client (aio)
+            response = await self.client.aio.models.generate_content(
                 model=self.model_id,
                 contents=prompt
             )
