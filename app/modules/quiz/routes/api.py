@@ -441,6 +441,7 @@ async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search
                 "orig_index": (page - 1) * size + i + 1,
                 "content": q.content,
                 "explanation": q.explanation,
+                "ai_explanation": q.ai_explanation,
                 "points": q.points,
                 "image": q.image,
                 "audio": q.audio,
@@ -588,6 +589,22 @@ async def remove_collaborator(request: Request, quiz_id: int, collab_user_id: in
     await db.commit()
     return {"status": "ok"}
 
+@router.post("/{quiz_id}/transfer-ownership")
+async def transfer_ownership(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
+    target_user_id = data.get("user_id")
+    
+    from app.modules.quiz.models import Quiz
+    quiz_res = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    quiz = quiz_res.scalar_one_or_none()
+    
+    if not quiz or (quiz.creator_id != user_id and user_id != 1):
+        return JSONResponse(status_code=403, content={"error": "Only current creator can transfer ownership"})
+        
+    quiz.creator_id = target_user_id
+    await db.commit()
+    return {"status": "ok"}
+
 @router.patch("/question/{question_id}")
 async def update_question(question_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Question, Option
@@ -613,5 +630,12 @@ async def update_question(question_id: int, data: dict, db: AsyncSession = Depen
                     if "content" in opt_data: opt.content = opt_data["content"]
                     if "is_correct" in opt_data: opt.is_correct = opt_data["is_correct"]
     
+    await db.commit()
+    return {"status": "ok"}
+
+@router.delete("/question/{question_id}")
+async def delete_question(question_id: int, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Question
+    await db.execute(delete(Question).where(Question.id == question_id))
     await db.commit()
     return {"status": "ok"}

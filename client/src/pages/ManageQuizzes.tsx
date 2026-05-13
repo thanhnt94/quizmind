@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit3, Trash2, Search, Filter, LayoutGrid, ChevronRight, Archive, CheckCircle2, AlertCircle, BookOpen, MoreVertical, Image as ImageIcon, X } from 'lucide-react'
+import { Plus, Edit3, Trash2, Search, Filter, LayoutGrid, ChevronRight, Archive, CheckCircle2, AlertCircle, BookOpen, MoreVertical, Image as ImageIcon, X, Settings as SettingsIcon, Layers } from 'lucide-react'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -180,19 +180,22 @@ export default function ManageQuizzes() {
                            </p>
                         </div>
                         
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                           <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Status</span>
-                           </div>
-                           <Link 
-                              to={`/manage/edit/${quiz.id}`}
-                              className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-indigo-600 text-[10px] font-black rounded-xl hover:bg-indigo-600 hover:text-white transition-all uppercase tracking-widest"
-                           >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              Edit Set
-                           </Link>
-                        </div>
+                         <div className="flex items-center gap-2 pt-4 border-t border-slate-50">
+                            <Link 
+                               to={`/manage/edit/${quiz.id}`}
+                               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 text-slate-600 text-[9px] font-black rounded-xl hover:bg-slate-100 transition-all uppercase tracking-widest border border-slate-100"
+                            >
+                               <SettingsIcon className="w-3.5 h-3.5" />
+                               Settings
+                            </Link>
+                            <Link 
+                               to={`/manage/edit/${quiz.id}/questions`}
+                               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-[9px] font-black rounded-xl hover:bg-indigo-700 transition-all uppercase tracking-widest shadow-lg shadow-indigo-100"
+                            >
+                               <Layers className="w-3.5 h-3.5" />
+                               Cards
+                            </Link>
+                         </div>
                      </div>
                   </motion.div>
                ))}
