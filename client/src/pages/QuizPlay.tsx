@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import confetti from 'canvas-confetti'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -97,6 +98,8 @@ export default function QuizPlay() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [badgeVisible, setBadgeVisible] = useState(false)
+  const [badgeMessage, setBadgeMessage] = useState("")
   const [streak, setStreak] = useState(0)
   const [sessionXP, setSessionXP] = useState(0)
   const [initialTotalXP, setInitialTotalXP] = useState(0)
@@ -242,10 +245,26 @@ export default function QuizPlay() {
       updatedXP = sessionXP + gained
       setSessionXP(updatedXP)
       setInitialTotalXP(prev => prev + gained)
+      
+      const successMsgs = ["Mastered! ✨", "Brilliant! 🚀", "Excellent! 🌈", "Perfect! 🎯"]
+      setBadgeMessage(successMsgs[Math.floor(Math.random() * successMsgs.length)])
+      
+      // Trigger Confetti
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#6366f1', '#a855f7', '#ec4899']
+      })
     } else {
       updatedStreak = 0
       setStreak(0)
+      const errorMsgs = ["Nice try! 💪", "Learning mode! 📚", "Almost there! 🍀", "Keep going! 🌻"]
+      setBadgeMessage(errorMsgs[Math.floor(Math.random() * errorMsgs.length)])
     }
+
+    setBadgeVisible(true)
+    setTimeout(() => setBadgeVisible(false), 2000)
 
     saveSession(newAnswers, currentIndex, updatedXP, updatedStreak)
 
@@ -835,7 +854,34 @@ export default function QuizPlay() {
   if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
 
   return (
-    <div className="h-screen flex flex-col bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden relative">
+      {/* Animated Feedback Badge (Floating Toast at bottom) */}
+      <AnimatePresence>
+        {badgeVisible && selectedOption !== null && currentQuestion && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className={cn(
+              "fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-[0.1em] shadow-xl flex items-center gap-3 backdrop-blur-md border",
+              currentQuestion.options[selectedOption].is_correct 
+                ? "bg-emerald-500/90 text-white border-emerald-400/30 shadow-emerald-200/20" 
+                : "bg-amber-400/90 text-slate-800 border-amber-300/30 shadow-amber-200/20"
+            )}
+          >
+            {currentQuestion.options[selectedOption].is_correct ? (
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                <Check className="w-3 h-3 text-white stroke-[4]" />
+              </div>
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-slate-800/10 flex items-center justify-center">
+                <Sparkles className="w-3 h-3 text-slate-800" />
+              </div>
+            )}
+            {badgeMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Header */}
       <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 py-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">

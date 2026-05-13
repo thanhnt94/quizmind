@@ -32,6 +32,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col pb-24 md:pb-0 md:pt-20">
+
       {/* Desktop Header */}
       <header className="fixed top-0 left-0 right-0 z-[110] bg-white/80 backdrop-blur-2xl border-b border-slate-100 px-8 py-4 hidden md:flex items-center justify-between">
         <div className="flex items-center gap-8">

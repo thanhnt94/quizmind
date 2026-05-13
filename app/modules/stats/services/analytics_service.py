@@ -1,13 +1,62 @@
 from sqlalchemy import select, func, desc, extract, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.quiz.models import UserAnswer, Quiz, Question, Category, QuizAttempt
+from app.modules.auth.models import User
 from app.modules.stats.models import UserDailyStats
 from datetime import datetime, timedelta
 
 class AnalyticsService:
     @staticmethod
+    async def get_global_stats(db: AsyncSession):
+        # 1. Platform Totals
+        total_q_stmt = select(func.count(Question.id))
+        total_quiz_stmt = select(func.count(Quiz.id))
+        total_users_stmt = select(func.count(User.id))
+        
+        # 2. Platform Performance
+        perf_stmt = select(
+            func.count(UserAnswer.id).label("total"),
+            func.sum(case((UserAnswer.is_correct == True, 1), else_=0)).label("correct"),
+            func.avg(UserAnswer.active_time).label("avg_time")
+        )
+        
+        q_res = await db.execute(total_q_stmt)
+        quiz_res = await db.execute(total_quiz_stmt)
+        u_res = await db.execute(total_users_stmt)
+        perf_res = (await db.execute(perf_stmt)).one_or_none()
+        
+        total_questions = q_res.scalar() or 0
+        total_quizzes = quiz_res.scalar() or 0
+        total_users = u_res.scalar() or 0
+        
+        platform_accuracy = 0
+        avg_time = 0
+        if perf_res and perf_res[0] > 0:
+            platform_accuracy = round((perf_res[1] / perf_res[0]) * 100, 1)
+            avg_time = round(perf_res[2] or 0, 1)
+            
+        return {
+            "total_questions": total_questions,
+            "total_quizzes": total_quizzes,
+            "total_users": total_users,
+            "platform_accuracy": platform_accuracy,
+            "avg_time_per_question": avg_time
+        }
+
+    @staticmethod
     async def get_user_detailed_stats(db: AsyncSession, user_id: int):
-        # 1. Daily Activity (last 30 days)
+        # ... existing logic ...
+        user_stats = await AnalyticsService._get_user_stats_internal(db, user_id)
+        global_stats = await AnalyticsService.get_global_stats(db)
+        
+        return {
+            "personal": user_stats,
+            "global": global_stats
+        }
+
+    @staticmethod
+    async def _get_user_stats_internal(db: AsyncSession, user_id: int):
+        # Move previous logic here
         today = datetime.utcnow().date()
         start_date = today - timedelta(days=29)
         
@@ -15,7 +64,8 @@ class AnalyticsService:
             UserDailyStats.date,
             UserDailyStats.questions_attempted,
             UserDailyStats.correct_answers,
-            UserDailyStats.accuracy
+            UserDailyStats.accuracy,
+            UserDailyStats.total_time_seconds
         ).where(
             UserDailyStats.user_id == user_id,
             UserDailyStats.date >= start_date
@@ -36,7 +86,8 @@ class AnalyticsService:
                 "date": date_str,
                 "attempted": row[1] or 0,
                 "correct": row[2] or 0,
-                "accuracy": round((row[3] or 0) * 100, 1)
+                "accuracy": round((row[3] or 0) * 100, 1),
+                "time_minutes": round((row[4] or 0) / 60, 1)
             })
 
         # 2. Category Performance
