@@ -2,12 +2,19 @@ from google import genai
 from app.core.config import settings
 
 class GeminiService:
-    def __init__(self):
-        if settings.GEMINI_API_KEY:
-            self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            self.model_id = 'gemini-2.0-flash'
+    def __init__(self, api_key: str = None, model_id: str = 'gemini-2.0-flash'):
+        self.api_key = api_key or settings.GEMINI_API_KEY
+        self.model_id = model_id
+        if self.api_key:
+            self.client = genai.Client(api_key=self.api_key)
         else:
             self.client = None
+
+    @classmethod
+    async def from_db(cls, db):
+        from app.modules.admin.interface import AdminInterface
+        config = await AdminInterface.get_ai_config(db)
+        return cls(api_key=config.get("api_key"), model_id=config.get("model_id", "gemini-2.0-flash"))
 
     async def generate_explanation(self, question: str, options: list, correct_answer: str) -> str:
         if not self.client:

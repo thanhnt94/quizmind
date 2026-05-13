@@ -340,7 +340,13 @@ async def reset_quiz_session(request: Request, quiz_id: int, db: AsyncSession = 
 async def ask_ai(quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
     question_id = payload.get("question_id")
     from app.modules.quiz.models import Question
-    result = await db.execute(select(Question).filter(Question.id == question_id))
+    from sqlalchemy.orm import selectinload
+    
+    result = await db.execute(
+        select(Question)
+        .filter(Question.id == question_id)
+        .options(selectinload(Question.options))
+    )
     q = result.scalar_one_or_none()
     if not q: return {"error": "Not found"}
     
@@ -348,12 +354,20 @@ async def ask_ai(quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)
     if "ai_explanation" in payload:
         ai_response = payload["ai_explanation"]
     else:
-        # Simulate AI Generation
-        ai_response = f"--- PHÂN TÍCH CHUYÊN SÂU TỪ AI ---\n\n" \
-                      f"Câu hỏi này kiểm tra kiến thức về: '{q.content[:30]}...'\n\n" \
-                      f"1. Tại sao đáp án đó đúng? (Dựa trên ngữ pháp và ngữ cảnh chuyên sâu).\n" \
-                      f"2. Các lỗi sai thường gặp khi làm câu này.\n" \
-                      f"3. Mẹo nhớ lâu: Sử dụng quy tắc liên tưởng hình ảnh."
+        from app.modules.ai.services.gemini_service import GeminiService
+        from app.modules.admin.interface import AdminInterface
+        
+        # Check if AI is enabled
+        ai_config = await AdminInterface.get_ai_config(db)
+        if not ai_config.get("enabled"):
+            return {"ai_explanation": "AI Analysis is currently disabled by Admin."}
+
+        gemini = await GeminiService.from_db(db)
+        
+        options = [o.content for o in q.options]
+        correct_opt = next((o.content for o in q.options if o.is_correct), "Unknown")
+        
+        ai_response = await gemini.generate_explanation(q.content, options, correct_opt)
     
     q.ai_explanation = ai_response
     await db.commit()

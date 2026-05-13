@@ -506,9 +506,9 @@ export default function QuizPlay() {
     if (!showFeedback) return null
     
     const tabs = [
-      { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-100' },
-      { id: 'ai', label: 'AI ANALYSIS', icon: Sparkles, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-      { id: 'note', label: 'PERSONAL NOTE', icon: StickyNote, color: 'text-slate-400', bg: 'bg-slate-100' }
+      { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-100', hasContent: !!currentQuestion?.explanation },
+      { id: 'ai', label: 'AI ANALYSIS', icon: Sparkles, color: 'text-indigo-600', bg: 'bg-indigo-100', hasContent: !!currentQuestion?.ai_explanation },
+      { id: 'note', label: 'PERSONAL NOTE', icon: StickyNote, color: 'text-slate-400', bg: 'bg-slate-100', hasContent: !!personalNote }
     ]
 
     const renderTabContent = () => {
@@ -695,7 +695,12 @@ export default function QuizPlay() {
                       : "text-slate-400 hover:text-indigo-400"
                   )}
                 >
-                  <tab.icon className="w-5 h-5" />
+                  <div className="relative">
+                    <tab.icon className="w-5 h-5" />
+                    {tab.hasContent && (
+                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-rose-500 rounded-full border border-white animate-pulse" />
+                    )}
+                  </div>
                 </button>
               ))}
             </div>

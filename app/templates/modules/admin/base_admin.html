@@ -53,6 +53,10 @@
                 <i data-lucide="key" class="w-5 h-5"></i>
                 <span class="text-sm font-bold" x-show="sidebarOpen">SSO Configuration</span>
             </a>
+            <a href="/admin/ai" class="flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all hover:bg-slate-50 group {% if active_page == 'ai' %}sidebar-active{% endif %}">
+                <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+                <span class="text-sm font-bold" x-show="sidebarOpen">AI Configuration</span>
+            </a>
             <a href="/admin/maintenance" class="flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all hover:bg-slate-50 group {% if active_page == 'maintenance' %}sidebar-active{% endif %}">
                 <i data-lucide="settings-2" class="w-5 h-5"></i>
                 <span class="text-sm font-bold" x-show="sidebarOpen">Maintenance</span>

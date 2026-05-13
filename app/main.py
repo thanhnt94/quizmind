@@ -452,6 +452,70 @@ async def test_sso_connection(
     except Exception as e:
         return {"status": "error", "message": f"Connection Failed: {str(e)}"}
 
+@app.get("/admin/ai")
+async def admin_ai(request: Request, db: AsyncSession = Depends(get_db)):
+    context = await get_common_context(request, db)
+    if not context["user"] or context["user"].role != "admin":
+        return RedirectResponse(url="/login?target=admin/ai", status_code=303)
+    
+    from app.modules.admin.interface import AdminInterface
+    ai_config = await AdminInterface.get_ai_config(db)
+    
+    context.update({
+        "ai_config": ai_config,
+        "active_page": "ai"
+    })
+    return templates.TemplateResponse(
+        request=request, name="modules/admin/ai.html", context=context
+    )
+
+@app.post("/admin/ai")
+async def admin_ai_update(
+    request: Request,
+    api_key: str = Form(...),
+    model_id: str = Form(...),
+    enabled: bool = Form(False),
+    db: AsyncSession = Depends(get_db)
+):
+    context = await get_common_context(request, db)
+    if not context["user"] or context["user"].role != "admin":
+        return RedirectResponse(url="/login", status_code=303)
+    
+    from app.modules.admin.interface import AdminInterface
+    config_data = {
+        "api_key": api_key,
+        "model_id": model_id,
+        "enabled": enabled
+    }
+    await AdminInterface.update_ai_config(db, config_data, context["user"].id)
+    return RedirectResponse(url="/admin/ai?success=1", status_code=303)
+
+@app.post("/api/v1/admin/ai/list-models")
+async def list_ai_models(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=403, content={"error": "Unauthorized"})
+    
+    data = await request.json()
+    api_key = data.get("api_key")
+    if not api_key:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=400, content={"error": "API Key required"})
+    
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        models = []
+        for m in client.models.list():
+            if 'generate_content' in m.supported_methods or 'generateContent' in m.supported_methods:
+                models.append({"id": m.name, "display_name": m.display_name or m.name})
+        return {"models": models}
+    except Exception as e:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.get("/admin/users")
 async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
     context = await get_common_context(request, db)
