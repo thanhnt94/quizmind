@@ -509,8 +509,12 @@ async def list_ai_models(request: Request, db: AsyncSession = Depends(get_db)):
         client = genai.Client(api_key=api_key)
         models = []
         for m in client.models.list():
-            if 'generate_content' in m.supported_methods or 'generateContent' in m.supported_methods:
-                models.append({"id": m.name, "display_name": m.display_name or m.name})
+            # The new SDK uses 'supported_generation_methods'
+            methods = getattr(m, 'supported_generation_methods', [])
+            if 'generateContent' in methods or 'generate_content' in methods:
+                # Clean up name (remove 'models/' prefix if present)
+                model_id = m.name.split('/')[-1] if '/' in m.name else m.name
+                models.append({"id": model_id, "display_name": m.display_name or model_id})
         return {"models": models}
     except Exception as e:
         from fastapi.responses import JSONResponse
