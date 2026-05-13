@@ -356,18 +356,60 @@ async def ask_ai(quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)
     else:
         from app.modules.ai.services.gemini_service import GeminiService
         from app.modules.admin.interface import AdminInterface
+        from app.modules.quiz.models import Quiz
         
         # Check if AI is enabled
         ai_config = await AdminInterface.get_ai_config(db)
         if not ai_config.get("enabled"):
             return {"ai_explanation": "AI Analysis is currently disabled by Admin."}
 
+        # Fetch quiz for prompt templates
+        quiz_result = await db.execute(select(Quiz).filter(Quiz.id == quiz_id))
+        quiz = quiz_result.scalar_one_or_none()
+        if not quiz: return {"error": "Quiz not found"}
+
         gemini = await GeminiService.from_db(db)
         
-        options = [o.content for o in q.options]
-        correct_opt = next((o.content for o in q.options if o.is_correct), "Unknown")
+        options_list = [o.content for o in q.options]
+        correct_opt_obj = next((o for o in q.options if o.is_correct), None)
         
-        ai_response = await gemini.generate_explanation(q.content, options, correct_opt)
+        # Build prompt using template if available
+        if quiz.ai_prompt:
+            options_text = "\n".join([f"{chr(65+i)}. {o.content}" for i, o in enumerate(q.options)])
+            correct_answer_text = "Unknown"
+            if correct_opt_obj:
+                idx = q.options.index(correct_opt_obj)
+                correct_answer_text = f"{chr(65+idx)}. {correct_opt_obj.content}"
+            
+            prompt = quiz.ai_prompt \
+                .replace("{{question}}", q.content) \
+                .replace("{{options}}", options_text) \
+                .replace("{{correct_answer}}", correct_answer_text) \
+                .replace("{{global_instruction}}", quiz.instruction or "") \
+                .replace("{{quiz_title}}", quiz.title or "") \
+                .replace("{{quiz_description}}", quiz.description or "")
+            
+            # Individual options
+            for i in range(4):
+                val = q.options[i].content if len(q.options) > i else ""
+                prompt = prompt.replace(f"{{{{option_{chr(97+i)}}}}}", val)
+            
+            # Call gemini with custom prompt
+            if not gemini.client:
+                return {"ai_explanation": "AI Service not configured."}
+            
+            try:
+                response = gemini.client.models.generate_content(
+                    model=gemini.model_id,
+                    contents=prompt
+                )
+                ai_response = response.text
+            except Exception as e:
+                ai_response = f"Error: {str(e)}"
+        else:
+            # Fallback to default service logic
+            correct_opt = correct_opt_obj.content if correct_opt_obj else "Unknown"
+            ai_response = await gemini.generate_explanation(q.content, options_list, correct_opt)
     
     q.ai_explanation = ai_response
     await db.commit()
