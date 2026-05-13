@@ -508,17 +508,34 @@ async def list_ai_models(request: Request, db: AsyncSession = Depends(get_db)):
         from google import genai
         client = genai.Client(api_key=api_key)
         models = []
-        for m in client.models.list():
-            # The new SDK uses 'supported_generation_methods'
+        # Attempt to list models - if API key is invalid, this will throw
+        model_list = list(client.models.list())
+        
+        for m in model_list:
+            # Check for generation capability with multiple possible attribute names/formats
             methods = getattr(m, 'supported_generation_methods', [])
-            if 'generateContent' in methods or 'generate_content' in methods:
-                # Clean up name (remove 'models/' prefix if present)
+            is_generative = any('generateContent' in str(method) or 'generate_content' in str(method) for method in methods)
+            
+            if is_generative or not methods: # Fallback: include if no methods defined or matches filter
                 model_id = m.name.split('/')[-1] if '/' in m.name else m.name
-                models.append({"id": model_id, "display_name": m.display_name or model_id})
+                models.append({
+                    "id": model_id, 
+                    "display_name": m.display_name or model_id,
+                    "is_generative": is_generative
+                })
+        
+        # If still empty, just return everything we got
+        if not models and model_list:
+            models = [{"id": m.name.split('/')[-1], "display_name": m.display_name or m.name} for m in model_list]
+            
         return {"models": models}
     except Exception as e:
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        # Provide clearer error message for API key issues
+        error_msg = str(e)
+        if "API_KEY_INVALID" in error_msg:
+            error_msg = "Invalid API Key. Please check your Google AI Studio settings."
+        return JSONResponse(status_code=500, content={"error": error_msg})
 
 @app.get("/admin/users")
 async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
