@@ -10,6 +10,7 @@ from app.modules.quiz.services.quiz_service import QuizService
 from app.modules.quiz.services.ai_service import ai_service
 from app.modules.quiz.schemas import QuizSchema, QuestionSchema, OptionSchema
 import json
+import re
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
@@ -399,6 +400,9 @@ async def _generate_ai_task(quiz_id: int, question_id: int, prompt_template: Opt
                 
                 if ai_response.endswith("```"):
                     ai_response = ai_response[:-3].strip()
+                
+                # Strip backticks around ruby tags
+                ai_response = re.sub(r'`\s*(<ruby>[\s\S]*?<\/ruby>)\s*`', r'\1', ai_response)
                     
             else:
                 options_list = [o.content for o in q.options]
@@ -414,6 +418,9 @@ async def _generate_ai_task(quiz_id: int, question_id: int, prompt_template: Opt
                     ai_response = ai_response[len("```"):].strip()
                 if ai_response.endswith("```"):
                     ai_response = ai_response[:-3].strip()
+                
+                # Strip backticks around ruby tags
+                ai_response = re.sub(r'`\s*(<ruby>[\s\S]*?<\/ruby>)\s*`', r'\1', ai_response)
             
             q.ai_explanation = ai_response
             await db.commit()

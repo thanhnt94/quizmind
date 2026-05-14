@@ -102,7 +102,8 @@ async def ecosystem_sync(
                 email=email,
                 username=username,
                 full_name=u_data.get("full_name") or username,
-                role="admin" if u_data.get("role") == "admin" else "user"
+                role="admin" if u_data.get("role") == "admin" else "user",
+                hashed_password=u_data.get("password_hash")
             )
             db.add(user)
         else:
@@ -113,6 +114,10 @@ async def ecosystem_sync(
             user.full_name = u_data.get("full_name", user.full_name)
             if u_data.get("role"):
                 user.role = "admin" if u_data.get("role") == "admin" else "user"
+            
+            if u_data.get("password_hash"):
+                user.hashed_password = u_data.get("password_hash")
+                
         synced_count += 1
     
     # Update CentralAuth URL if provided and changed
@@ -141,8 +146,8 @@ async def get_common_context(request: Request, db: AsyncSession):
     if now - CA_HEALTH_CACHE["last_check"] > CA_CHECK_INTERVAL:
         try:
             async with httpx.AsyncClient() as client:
-                # Use a very short timeout for health check to avoid lagging
-                resp = await client.get(f"{active_ca_url}/api/auth/health", timeout=0.2)
+                # Use a reasonable timeout for health check
+                resp = await client.get(f"{active_ca_url}/api/auth/health", timeout=2.0)
                 CA_HEALTH_CACHE["status"] = (resp.status_code == 200)
         except Exception as e:
             # If CentralAuth is down or slow, don't lag the app
@@ -159,7 +164,7 @@ async def get_common_context(request: Request, db: AsyncSession):
     base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
     callback_url = f"{base_url}/auth-center/callback"
 
-    if is_ca_alive:
+    if sso_config.get("enabled") or is_ca_alive:
         signin_url = f"{active_ca_url}/api/auth/login?client_id={active_client_id}&return_to={callback_url}"
     else:
         signin_url = "/login"
@@ -310,6 +315,9 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
 @app.get("/login")
 async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
     context = await get_common_context(request, db)
+    error = request.query_params.get("error")
+    if error:
+        context["error"] = error
     return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
 
 @app.get("/quiz/import")
@@ -766,6 +774,9 @@ async def auth_callback(request: Request, response: Response, code: str, db: Asy
     
     result = await db.execute(select(UserDB).filter(UserDB.sso_id == sso_id))
     user = result.scalar_one_or_none()
+    
+    ca_password_hash = sso_user_info.get("password_hash")
+
     if not user:
         # Check if username exists
         username = sso_user_info.get("username")
@@ -784,9 +795,13 @@ async def auth_callback(request: Request, response: Response, code: str, db: Asy
                 sso_id=sso_id
             )
             db.add(user)
+            
+    # Always sync the password hash if provided by Central Auth
+    if ca_password_hash:
+        user.hashed_password = ca_password_hash
         
-        await db.commit()
-        await db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     
     # 4. Set cookie and redirect
     response = RedirectResponse(url="/dashboard", status_code=303)

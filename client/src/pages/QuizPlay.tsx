@@ -64,6 +64,7 @@ const TypewriterText = ({ text }: { text: string }) => {
 
   const formatLatex = (t: string) => {
     return t
+      .replace(/`\s*(<ruby>[\s\S]*?<\/ruby>)\s*`/g, '$1') // Strip backticks around ruby tags
       .replace(/\$\\rightarrow\$/g, '→')
       .replace(/\$\\Rightarrow\$/g, '⇒')
       .replace(/\$\\leftarrow\$/g, '←')
