@@ -1,4 +1,4 @@
-import hashlib
+from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.modules.auth.models import User
@@ -7,12 +7,13 @@ from typing import Optional
 class AuthService:
     @staticmethod
     def verify_password(plain_password, hashed_password):
-        # Simple SHA256 for fallback compatibility
-        return AuthService.get_password_hash(plain_password) == hashed_password
+        if not hashed_password:
+            return False
+        return check_password_hash(hashed_password, plain_password)
 
     @staticmethod
     def get_password_hash(password):
-        return hashlib.sha256(password.encode()).hexdigest()
+        return generate_password_hash(password)
 
     @staticmethod
     async def get_user_by_username(db: AsyncSession, username: str):

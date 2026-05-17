@@ -57,8 +57,11 @@ app.add_middleware(
 
 from app.modules.quiz.routes.api import router as quiz_api_router
 from app.modules.quiz.routes.room import router as room_router
+from app.modules.sso_module.routes import router as sso_api_router
+
 app.include_router(quiz_api_router, prefix=settings.API_V1_STR)
 app.include_router(room_router, prefix=settings.API_V1_STR)
+app.include_router(sso_api_router)
 
 # --- Health Checks for Ecosystem ---
 @app.get("/api/health")
@@ -164,8 +167,12 @@ async def get_common_context(request: Request, db: AsyncSession):
     base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
     callback_url = f"{base_url}/auth-center/callback"
 
-    if sso_config.get("enabled") or is_ca_alive:
-        signin_url = f"{active_ca_url}/api/auth/login?client_id={active_client_id}&return_to={callback_url}"
+    # New SSO Module logic
+    from app.modules.sso_module.service import SSOService
+    sso_db_config = await SSOService.get_config(db)
+    
+    if sso_db_config.is_enabled:
+        signin_url = f"{sso_db_config.server_url}/auth/login?client_id={sso_db_config.client_id}&return_to={callback_url}"
     else:
         signin_url = "/login"
 
@@ -312,13 +319,72 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
         "unread_count": unread_count
     }
 
+    return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
+
+
 @app.get("/login")
 async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
+    # 1. Already logged in? Go to home.
+    from app.modules.auth.services.auth_service import AuthService
+    current_user = await AuthService.get_current_user(request, db)
+    if current_user:
+        return RedirectResponse(url="/")
+
+    # 2. Check SSO config
+    from app.modules.sso_module.service import SSOService
+    sso_config = await SSOService.get_config(db)
+    
     error = request.query_params.get("error")
+    is_backdoor = request.query_params.get("backdoor")
+    
+    # 3. If SSO is ON, no error, and not backdoor → redirect to CentralAuth
+    if sso_config.is_enabled and not error and not is_backdoor:
+        return RedirectResponse(url=f"{sso_config.server_url}/api/auth/jump/{sso_config.client_id}")
+
+    # 4. Otherwise show local login form (backdoor / SSO off / error fallback)
+    context = await get_common_context(request, db)
     if error:
         context["error"] = error
+    context["sso_enabled"] = sso_config.is_enabled
+    context["is_backdoor"] = bool(is_backdoor)
     return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
+
+
+@app.post("/login")
+async def login_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    is_backdoor: bool = Form(False),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.sso_module.service import SSOService
+    
+    # 1. Authenticate locally
+    user = await AuthService.authenticate_user(db, username, password)
+    
+    if not user:
+        context = await get_common_context(request, db)
+        context["error"] = "Invalid username or password"
+        context["is_backdoor"] = is_backdoor
+        return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
+
+    # 2. Security Policy: If SSO is enabled and this is a backdoor login
+    # ONLY allow admins to proceed.
+    sso_config = await SSOService.get_config(db)
+    if sso_config.is_enabled and is_backdoor:
+        if user.role != "admin":
+            context = await get_common_context(request, db)
+            context["error"] = "Security Alert: Backdoor access is restricted to Administrators only."
+            context["is_backdoor"] = is_backdoor
+            return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
+
+    # 3. Successful login
+    response = RedirectResponse(url="/", status_code=303)
+    response.set_cookie(key="user_id", value=str(user.id), httponly=True, path="/", samesite="lax")
+    return response
+
 
 @app.get("/quiz/import")
 async def quiz_import(request: Request, db: AsyncSession = Depends(get_db)):
@@ -740,76 +806,18 @@ async def play_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends(g
 async def legacy_admin_upload(request: Request):
     return RedirectResponse(url="/quiz/import", status_code=301)
 
-@app.get("/auth-center/callback")
-async def auth_callback(request: Request, response: Response, code: str, db: AsyncSession = Depends(get_db)):
-    # 1. Load active config
-    from app.modules.admin.interface import AdminInterface
-    sso_config = await AdminInterface.get_sso_config(db)
-    
-    ca_client = CentralAuthClient()
-    # Override client config with DB values if present
-    if sso_config:
-        ca_client.api_url = sso_config.get("central_auth_url", ca_client.api_url).rstrip('/')
-        ca_client.client_id = sso_config.get("client_id", ca_client.client_id)
-        ca_client.client_secret = sso_config.get("client_secret", ca_client.client_secret)
-
-    base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
-    callback_url = f"{base_url}/auth-center/callback"
-    
-    # 2. Exchange code for tokens
-    token_data = await ca_client.get_token(code, callback_url)
-    if not token_data:
-        return RedirectResponse(url="/login?error=SSO token exchange failed", status_code=303)
-    
-    access_token = token_data.get("access_token")
-    
-    # 2. Verify token and get user info
-    sso_user_info = await ca_client.verify_token(access_token)
-    if not sso_user_info:
-        return RedirectResponse(url="/login?error=SSO verification failed", status_code=303)
-    
-    # 3. Find or create local user
-    sso_id = str(sso_user_info.get("id"))
-    from app.modules.auth.models import User as UserDB
-    
-    result = await db.execute(select(UserDB).filter(UserDB.sso_id == sso_id))
-    user = result.scalar_one_or_none()
-    
-    ca_password_hash = sso_user_info.get("password_hash")
-
-    if not user:
-        # Check if username exists
-        username = sso_user_info.get("username")
-        result = await db.execute(select(UserDB).filter(UserDB.username == username))
-        user = result.scalar_one_or_none()
-        
-        if user:
-            # Link existing account
-            user.sso_id = sso_id
-        else:
-            # Create new user
-            user = UserDB(
-                username=username,
-                email=sso_user_info.get("email"),
-                full_name=sso_user_info.get("username"), # Fallback
-                sso_id=sso_id
-            )
-            db.add(user)
-            
-    # Always sync the password hash if provided by Central Auth
-    if ca_password_hash:
-        user.hashed_password = ca_password_hash
-        
-    await db.commit()
-    await db.refresh(user)
-    
-    # 4. Set cookie and redirect
-    response = RedirectResponse(url="/dashboard", status_code=303)
-    response.set_cookie(key="user_id", value=str(user.id), httponly=True, samesite="lax")
-    return response
-
 @app.get("/logout")
-async def logout(response: Response):
-    response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie("user_id")
+async def logout(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.sso_module.service import SSOService
+    sso_config = await SSOService.get_config(db)
+    
+    if sso_config.is_enabled:
+        # Logout from both systems, then land on CentralAuth portal
+        ca_logout_url = f"{sso_config.server_url}/api/auth/logout"
+        response = RedirectResponse(url=ca_logout_url, status_code=303)
+    else:
+        response = RedirectResponse(url="/login", status_code=303)
+    
+    response.delete_cookie("user_id", path="/")
     return response
+
