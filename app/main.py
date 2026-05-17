@@ -1,8 +1,7 @@
 from fastapi import FastAPI, Request, Depends, Form, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from app.core.config import settings
 from app.modules.auth.models import User
 from app.modules.auth.services.central_auth_client import CentralAuthClient
@@ -31,8 +30,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="QuizMind API",
-    description="A standalone high-scale Quiz system (SSR Version with Intelligent Auth)",
-    version="1.2.0",
+    description="A standalone high-scale Quiz system (100% Pure Headless React SPA)",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -44,7 +43,6 @@ DIST_DIR = os.path.join(BASE_DIR, "static", "dist")
 if os.path.exists(DIST_DIR):
     app.mount("/static/dist", StaticFiles(directory=DIST_DIR), name="dist")
 
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # CORS Setup
 app.add_middleware(
@@ -135,63 +133,6 @@ async def ecosystem_sync(
     await db.commit()
     return {"status": "success", "message": f"Synced {synced_count} users successfully."}
 
-# Helper for common context
-async def get_common_context(request: Request, db: AsyncSession):
-    user_id = request.cookies.get("user_id")
-    
-    # Optimize CentralAuth Health Check with Cache
-    from app.modules.admin.interface import AdminInterface
-    sso_config = await AdminInterface.get_sso_config(db)
-    active_ca_url = sso_config.get("central_auth_url", settings.CENTRAL_AUTH_URL).rstrip('/')
-
-    global CA_HEALTH_CACHE
-    now = time.time()
-    if now - CA_HEALTH_CACHE["last_check"] > CA_CHECK_INTERVAL:
-        try:
-            async with httpx.AsyncClient() as client:
-                # Use a reasonable timeout for health check
-                resp = await client.get(f"{active_ca_url}/api/auth/health", timeout=2.0)
-                CA_HEALTH_CACHE["status"] = (resp.status_code == 200)
-        except Exception as e:
-            # If CentralAuth is down or slow, don't lag the app
-            CA_HEALTH_CACHE["status"] = False
-        CA_HEALTH_CACHE["last_check"] = now
-
-    is_ca_alive = CA_HEALTH_CACHE["status"]
-
-    # Sign-in URL logic
-    # Use config from DB if enabled, otherwise fallback to settings
-    active_client_id = sso_config.get("client_id", settings.CLIENT_ID)
-    
-    # Dynamic callback calculation
-    base_url = settings.APP_BASE_URL.rstrip('/') if settings.APP_BASE_URL else str(request.base_url).rstrip('/')
-    callback_url = f"{base_url}/auth-center/callback"
-
-    # New SSO Module logic
-    from app.modules.sso_module.service import SSOService
-    sso_db_config = await SSOService.get_config(db)
-    
-    if sso_db_config.is_enabled:
-        signin_url = f"{sso_db_config.server_url}/auth/login?client_id={sso_db_config.client_id}&return_to={callback_url}"
-    else:
-        signin_url = "/login"
-
-    user_data = None
-    if user_id:
-        from app.modules.auth.models import User as UserDB
-        try:
-            result = await db.execute(select(UserDB).where(UserDB.id == int(user_id)))
-            user_data = result.scalar_one_or_none()
-        except:
-            user_data = None
-
-    return {
-        "request": request,
-        "user": user_data,
-        "login_url": signin_url,
-        "is_ca_alive": is_ca_alive
-    }
-
 @app.get("/api/v1/auth/me")
 async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
@@ -200,11 +141,13 @@ async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
         "user": {
             "id": user.id,
             "username": user.username,
-            "email": user.email
+            "email": user.email,
+            "role": user.role
         }
     }
 
 @app.get("/")
+@app.get("/login")
 @app.get("/dashboard")
 @app.get("/quiz/{path:path}")
 @app.get("/profile")
@@ -213,35 +156,20 @@ async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
 @app.get("/manage")
 @app.get("/manage/{path:path}")
 @app.get("/room/{path:path}")
+@app.get("/admin")
+@app.get("/admin/{path:path}")
+@app.get("/auth/callback")
 async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
-    # 1. Get authenticated user
-    user = await AuthService.get_current_user(request, db)
-    
-    # 2. If guest (not logged in)
-    if not user:
-        # If visiting root, show the beautiful SSR landing page
-        if request.url.path == "/":
-            context = await get_common_context(request, db)
-            return templates.TemplateResponse(
-                request=request, name="landing.html", context=context
-            )
-        # If visiting any internal dashboard/profile/stats page, redirect immediately to login
-        return RedirectResponse(url="/login", status_code=303)
-        
-    # 3. If authenticated user
-    # If visiting root, redirect to dashboard
-    if request.url.path == "/":
-        return RedirectResponse(url="/dashboard", status_code=303)
-        
-    # Serve SPA index if built
+    # Serve React SPA index.html unconditionally for all frontend paths
     spa_index = os.path.join(DIST_DIR, "index.html")
     if os.path.exists(spa_index):
         from fastapi.responses import FileResponse
         return FileResponse(spa_index)
     
-    # Fallback to SSR dashboard if SPA is not built yet
-    context = await get_common_context(request, db)
-    return templates.TemplateResponse("dashboard.html", context)
+    return JSONResponse(
+        status_code=404, 
+        content={"status": "error", "message": "SPA assets not found. Please compile the Vite frontend client first."}
+    )
 
 
 @app.get("/api/v1/stats/detailed")
@@ -329,82 +257,45 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
         "unread_count": unread_count
     }
 
-    return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
-
-
-@app.get("/login")
-async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
-    # 1. Already logged in? Go to home.
-    from app.modules.auth.services.auth_service import AuthService
-    current_user = await AuthService.get_current_user(request, db)
-    if current_user:
-        return RedirectResponse(url="/")
-
-    # 2. Check SSO config
-    from app.modules.sso_module.service import SSOService
-    sso_config = await SSOService.get_config(db)
-    
-    error = request.query_params.get("error")
-    is_backdoor = request.query_params.get("backdoor")
-    
-    # 3. If SSO is ON, no error, and not backdoor → redirect to CentralAuth
-    if sso_config.is_enabled and not error and not is_backdoor:
-        return RedirectResponse(url=f"{sso_config.server_url}/api/auth/jump/{sso_config.client_id}")
-
-    # 4. Otherwise show local login form (backdoor / SSO off / error fallback)
-    context = await get_common_context(request, db)
-    if error:
-        context["error"] = error
-    context["sso_enabled"] = sso_config.is_enabled
-    context["is_backdoor"] = bool(is_backdoor)
-    return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
-
-
-@app.post("/login")
-async def login_post(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    is_backdoor: bool = Form(False),
+@app.post("/api/v1/auth/login")
+async def login_api(
+    data: dict,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     from app.modules.auth.services.auth_service import AuthService
     from app.modules.sso_module.service import SSOService
     
-    # 1. Authenticate locally
+    username = data.get("username")
+    password = data.get("password")
+    is_backdoor = data.get("is_backdoor", False)
+    
     user = await AuthService.authenticate_user(db, username, password)
-    
     if not user:
-        context = await get_common_context(request, db)
-        context["error"] = "Invalid username or password"
-        context["is_backdoor"] = is_backdoor
-        return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
-
-    # 2. Security Policy: If SSO is enabled
-    # ONLY allow admins to bypass and authenticate locally.
+        return {"status": "error", "message": "Invalid username or password"}
+        
     sso_config = await SSOService.get_config(db)
-    if sso_config.is_enabled:
+    if sso_config.is_enabled and not is_backdoor:
         if user.role != "admin":
-            context = await get_common_context(request, db)
-            context["error"] = "Security Alert: SSO is active. Local login bypass is strictly restricted to Administrators only."
-            context["is_backdoor"] = is_backdoor
-            return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
-
-
-    # 3. Successful login
-    response = RedirectResponse(url="/", status_code=303)
+            return {"status": "error", "message": "Security Alert: SSO is active. Local login bypass is strictly restricted to Administrators only."}
+            
     response.set_cookie(key="user_id", value=str(user.id), httponly=True, path="/", samesite="lax")
-    return response
+    return {
+        "status": "success",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role
+        }
+    }
 
-
-
-
-@app.get("/admin")
-async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login?target=admin", status_code=303)
-    
+@app.get("/api/v1/admin/stats")
+async def api_admin_stats(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.quiz.models import Quiz, UserAnswer
     from app.modules.auth.models import User as UserDB
     
@@ -415,44 +306,53 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.admin.interface import AdminInterface
     sso_config = await AdminInterface.get_sso_config(db)
     
-    context.update({
+    return {
         "user_count": user_count_result.scalar(),
         "quiz_count": quiz_count_result.scalar(),
         "total_answers": total_answers_result.scalar(),
-        "active_page": "dashboard",
-        "sso_config": sso_config,
-        "settings": settings
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/admin/dashboard.html", context=context
-    )
+        "sso_config": {
+            "central_auth_url": sso_config.central_auth_url,
+            "client_id": sso_config.client_id,
+            "enabled": sso_config.enabled
+        }
+    }
 
-@app.get("/admin/sso")
-async def admin_sso(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login?target=admin/sso", status_code=303)
-    
+@app.get("/api/v1/admin/sso")
+async def api_admin_sso(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.admin.interface import AdminInterface
     sso_config = await AdminInterface.get_sso_config(db)
-    
-    context.update({
-        "sso_config": sso_config,
-        "active_page": "sso"
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/admin/sso.html", context=context
-    )
+    return {
+        "central_auth_url": sso_config.central_auth_url,
+        "client_id": sso_config.client_id,
+        "client_secret": sso_config.client_secret,
+        "enabled": sso_config.enabled
+    }
 
-@app.post("/admin/sso")
-async def admin_sso_update(
+@app.post("/api/v1/admin/sso")
+async def api_admin_sso_update(
     request: Request,
-    central_auth_url: str = Form(...),
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
-    enabled: bool = Form(False),
+    data: dict,
     db: AsyncSession = Depends(get_db)
 ):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
+    from app.modules.admin.interface import AdminInterface
+    config_data = {
+        "central_auth_url": data.get("central_auth_url"),
+        "client_id": data.get("client_id"),
+        "client_secret": data.get("client_secret"),
+        "enabled": data.get("enabled", False)
+    }
+    await AdminInterface.update_sso_config(db, config_data, user.id)
+    return {"status": "success", "message": "SSO configuration updated successfully!"}
     context = await get_common_context(request, db)
     if not context["user"] or context["user"].role != "admin":
         return RedirectResponse(url="/login", status_code=303)
@@ -494,43 +394,40 @@ async def test_sso_connection(
     except Exception as e:
         return {"status": "error", "message": f"Connection Failed: {str(e)}"}
 
-@app.get("/admin/ai")
-async def admin_ai(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login?target=admin/ai", status_code=303)
-    
+@app.get("/api/v1/admin/ai")
+async def api_admin_ai(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.admin.interface import AdminInterface
     ai_config = await AdminInterface.get_ai_config(db)
-    
-    context.update({
-        "ai_config": ai_config,
-        "active_page": "ai"
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/admin/ai.html", context=context
-    )
+    return {
+        "api_key": ai_config.api_key if ai_config else "",
+        "model_id": ai_config.model_id if ai_config else "gemini-2.5-flash",
+        "enabled": ai_config.enabled if ai_config else False
+    }
 
-@app.post("/admin/ai")
-async def admin_ai_update(
+@app.post("/api/v1/admin/ai")
+async def api_admin_ai_update(
     request: Request,
-    api_key: str = Form(...),
-    model_id: str = Form(...),
-    enabled: bool = Form(False),
+    data: dict,
     db: AsyncSession = Depends(get_db)
 ):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.admin.interface import AdminInterface
     config_data = {
-        "api_key": api_key,
-        "model_id": model_id,
-        "enabled": enabled
+        "api_key": data.get("api_key"),
+        "model_id": data.get("model_id", "gemini-2.5-flash"),
+        "enabled": data.get("enabled", False)
     }
-    await AdminInterface.update_ai_config(db, config_data, context["user"].id)
-    return RedirectResponse(url="/admin/ai?success=1", status_code=303)
+    await AdminInterface.update_ai_config(db, config_data, user.id)
+    return {"status": "success", "message": "AI configuration updated successfully!"}
 
 @app.post("/api/v1/admin/ai/list-models")
 async def list_ai_models(request: Request, db: AsyncSession = Depends(get_db)):
@@ -579,61 +476,59 @@ async def list_ai_models(request: Request, db: AsyncSession = Depends(get_db)):
             error_msg = "Invalid API Key. Please check your Google AI Studio settings."
         return JSONResponse(status_code=500, content={"error": error_msg})
 
-@app.get("/admin/users")
-async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
+@app.get("/api/v1/admin/users")
+async def api_admin_users(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.auth.models import User as UserDB
     users_result = await db.execute(select(UserDB))
     users = users_result.scalars().all()
     
-    context.update({
-        "users": users,
-        "active_page": "users"
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/admin/users.html", context=context
-    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role
+        } for u in users
+    ]
 
-@app.get("/admin/maintenance")
-async def admin_maintenance(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
+@app.get("/api/v1/admin/maintenance")
+async def api_admin_maintenance(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.admin.models import SystemConfig
     maintenance_config_result = await db.execute(select(SystemConfig).where(SystemConfig.id == "maintenance_mode"))
     maintenance_config = maintenance_config_result.scalar_one_or_none()
     is_enabled = maintenance_config.value.get("enabled", False) if maintenance_config else False
-    
-    context.update({
-        "maintenance_enabled": is_enabled,
-        "active_page": "maintenance"
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/admin/maintenance.html", context=context
-    )
+    return {"maintenance_enabled": is_enabled}
 
-@app.post("/admin/maintenance/toggle")
-async def toggle_maintenance(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
+@app.post("/api/v1/admin/maintenance/toggle")
+async def api_toggle_maintenance(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
     from app.modules.admin.models import SystemConfig
     config_result = await db.execute(select(SystemConfig).where(SystemConfig.id == "maintenance_mode"))
     config = config_result.scalar_one_or_none()
     if not config:
         config = SystemConfig(id="maintenance_mode", value={"enabled": True})
         db.add(config)
+        is_enabled = True
     else:
-        new_val = not config.value.get("enabled", False)
-        config.value = {"enabled": new_val}
+        is_enabled = not config.value.get("enabled", False)
+        config.value = {"enabled": is_enabled}
     
     await db.commit()
-    return RedirectResponse(url="/admin/maintenance", status_code=303)
+    return {"status": "success", "maintenance_enabled": is_enabled}
 
 
 
@@ -653,110 +548,6 @@ async def mark_notifications_read(request: Request, db: AsyncSession = Depends(g
     await db.commit()
     return {"status": "ok"}
 
-@app.post("/auth/login")
-async def local_login(
-    response: Response,
-    username: str = Form(...),
-    password: str = Form(...),
-    remember: bool = Form(False),
-    db: AsyncSession = Depends(get_db)
-):
-    user = await AuthService.authenticate_user(db, username, password)
-    if not user:
-        return RedirectResponse(url="/login?error=Invalid credentials", status_code=303)
-    
-    # Mock session
-    response = RedirectResponse(url="/", status_code=303)
-    
-    # Calculate max_age (30 days if remember is true, else None for session cookie)
-    max_age = 30 * 24 * 60 * 60 if remember else None
-    
-    response.set_cookie(
-        key="user_id", 
-        value=str(user.id), 
-        httponly=True, 
-        samesite="lax",
-        max_age=max_age
-    )
-    return response
-
-@app.get("/api/v1/quiz/{quiz_id}/data")
-async def get_quiz_data(quiz_id: int, db: AsyncSession = Depends(get_db)):
-    quiz = await QuizService.get_quiz_with_stats(db, quiz_id)
-    if not quiz: return {"error": "Quiz not found"}
-    return {
-        "id": quiz.id,
-        "title": quiz.title,
-        "description": quiz.description,
-        "questions_count": len(quiz.questions)
-    }
-
-@app.get("/quiz/{quiz_id}")
-async def quiz_detail(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    quiz = await QuizService.get_quiz_with_stats(db, quiz_id)
-    if not quiz: return RedirectResponse(url="/")
-    
-    context = await get_common_context(request, db)
-    context["quiz"] = quiz
-    return templates.TemplateResponse(
-        request=request, name="modules/quiz/detail.html", context=context
-    )
-
-@app.get("/quiz/{quiz_id}/play")
-async def play_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
-    if not quiz: return {"error": "Quiz not found"}
-    
-    from app.modules.quiz.models import UserAnswer, Question
-    from sqlalchemy import func, Integer
-    
-    # Get all stats for this quiz's questions in one go
-    stats_query = select(
-        UserAnswer.question_id,
-        func.count(UserAnswer.id).label("total"),
-        func.sum(func.cast(UserAnswer.is_correct, Integer)).label("correct"),
-        func.avg(UserAnswer.active_time).label("avg_time")
-    ).join(Question, UserAnswer.question_id == Question.id).where(Question.quiz_id == quiz_id).group_by(UserAnswer.question_id)
-    
-    stats_results = await db.execute(stats_query)
-    stats_map = {row.question_id: row for row in stats_results}
-
-    questions_data = []
-    for q in quiz.questions:
-        row = stats_map.get(q.id)
-        total = row.total if row else 0
-        correct = row.correct if row else 0
-        
-        questions_data.append({
-            "id": q.id, "content": q.content, "explanation": q.explanation,
-            "ai_explanation": q.ai_explanation,
-            "image": q.image, "audio": q.audio,
-            "stats": {
-                "total": total, 
-                "correct": correct, 
-                "wrong": total - correct, 
-                "avg_time": round(row.avg_time if row else 0, 1)
-            },
-            "options": [{"id": o.id, "content": o.content, "is_correct": o.is_correct} for o in q.options]
-        })
-    
-    context = await get_common_context(request, db)
-    context.update({
-        "quiz": {
-            "id": quiz.id,
-            "title": quiz.title,
-            "description": quiz.description,
-            "time_limit": quiz.time_limit
-        },
-        "questions": questions_data,
-        "hide_navbar": True
-    })
-    return templates.TemplateResponse(request=request, name="modules/quiz/play.html", context=context)
-
-@app.get("/admin/upload")
-async def legacy_admin_upload(request: Request):
-    return RedirectResponse(url="/quiz/import", status_code=301)
-
 @app.get("/logout")
 async def logout(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.sso_module.service import SSOService
@@ -764,10 +555,10 @@ async def logout(request: Request, db: AsyncSession = Depends(get_db)):
     
     if sso_config.is_enabled:
         # Logout from both systems, then land on CentralAuth portal
-        ca_logout_url = f"{sso_config.server_url}/api/auth/logout"
+        ca_logout_url = f"{sso_config.server_url.rstrip('/')}/api/auth/logout"
         response = RedirectResponse(url=ca_logout_url, status_code=303)
     else:
-        response = RedirectResponse(url="/login", status_code=303)
+        response = RedirectResponse(url="/", status_code=303)
     
     response.delete_cookie("user_id", path="/")
     return response

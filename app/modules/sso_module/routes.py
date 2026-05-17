@@ -19,6 +19,17 @@ async def get_sso_config(db: AsyncSession = Depends(get_db)):
     config = await SSOService.get_config(db)
     return config.to_dict()
 
+@router.get("/api/v1/auth/config")
+async def get_auth_config(db: AsyncSession = Depends(get_db)):
+    """Public authentication configuration endpoint for pure SPA."""
+    config = await SSOService.get_config(db)
+    return {
+        "auth_provider": "central" if config.is_enabled else "local",
+        "sso_enabled": config.is_enabled,
+        "jump_url": f"{config.server_url.rstrip('/')}/api/auth/jump/{config.client_id}" if config.is_enabled else None
+    }
+
+
 @router.post("/api/sso/config")
 async def update_sso_config(data: dict, db: AsyncSession = Depends(get_db)):
     """API for the sub-project's Admin Panel to toggle SSO and update settings."""

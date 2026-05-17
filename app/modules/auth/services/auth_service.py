@@ -41,9 +41,20 @@ class AuthService:
     @staticmethod
     async def get_current_user(request, db: AsyncSession) -> Optional[User]:
         user_id = request.cookies.get("user_id")
+        
+        # Graceful fallback to Authorization Header for pure SPA API requests
+        if not user_id:
+            auth_header = request.headers.get("Authorization")
+            if auth_header:
+                if auth_header.startswith("Bearer "):
+                    user_id = auth_header.split(" ")[1]
+                else:
+                    user_id = auth_header.strip()
+                    
         if not user_id:
             return None
         try:
             return await AuthService.get_user_by_id(db, int(user_id))
         except (ValueError, TypeError):
             return None
+

@@ -30,6 +30,10 @@ export default function Layout() {
     { label: 'Settings', path: '/profile', icon: Settings },
   ]
 
+  if (user?.role === 'admin') {
+    navItems.push({ label: 'Admin', path: '/admin', icon: BrainCircuit })
+  }
+
   return (
     <div className="min-h-screen flex flex-col pb-24 md:pb-0 md:pt-20">
 
