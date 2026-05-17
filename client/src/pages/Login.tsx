@@ -26,6 +26,13 @@ export default function Login() {
     }
   }, [isLoggedIn, navigate]);
 
+  // Automatic SSO redirection if enabled, not backdoor, and no callback errors
+  useEffect(() => {
+    if (authConfig && authConfig.sso_enabled && !isBackdoor && !urlError && authConfig.jump_url) {
+      window.location.href = authConfig.jump_url;
+    }
+  }, [authConfig, isBackdoor, urlError]);
+
   // Handle URL errors (e.g. callback failures)
   useEffect(() => {
     if (urlError) {
@@ -113,24 +120,33 @@ export default function Login() {
         {/* SSO Panel */}
         {showSSO ? (
           <div className="flex flex-col gap-6">
-            <button
-              onClick={handleSSORedirect}
-              className="w-full py-4 px-6 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 shadow-lg shadow-indigo-500/25 transition-all duration-300 flex items-center justify-center gap-3 active:scale-[0.98]"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h7a3 3 0 013 3v1" />
-              </svg>
-              Sign In with Central SSO
-            </button>
+            {!urlError ? (
+              <div className="flex flex-col items-center gap-4 py-8">
+                <div className="w-10 h-10 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                <span className="text-indigo-300 font-semibold animate-pulse text-sm">Redirecting to Central SSO...</span>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleSSORedirect}
+                  className="w-full py-4 px-6 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 shadow-lg shadow-indigo-500/25 transition-all duration-300 flex items-center justify-center gap-3 active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h7a3 3 0 013 3v1" />
+                  </svg>
+                  Sign In with Central SSO
+                </button>
 
-            <div className="flex items-center justify-center mt-4">
-              <button
-                onClick={() => setSearchParams({ backdoor: '1' })}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors"
-              >
-                Administrator Local Backdoor Bypass
-              </button>
-            </div>
+                <div className="flex items-center justify-center mt-4">
+                  <button
+                    onClick={() => setSearchParams({ backdoor: '1' })}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline transition-colors"
+                  >
+                    Administrator Local Backdoor Bypass
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           /* Local Login Form */
