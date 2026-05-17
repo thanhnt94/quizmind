@@ -214,25 +214,35 @@ async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
 @app.get("/manage/{path:path}")
 @app.get("/room/{path:path}")
 async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
-    # Check if we should serve SSR or SPA
-    # For now, let's serve SPA if it exists, otherwise fallback to root SSR
+    # 1. Get authenticated user
+    user = await AuthService.get_current_user(request, db)
+    
+    # 2. If guest (not logged in)
+    if not user:
+        # If visiting root, show the beautiful SSR landing page
+        if request.url.path == "/":
+            context = await get_common_context(request, db)
+            return templates.TemplateResponse(
+                request=request, name="landing.html", context=context
+            )
+        # If visiting any internal dashboard/profile/stats page, redirect immediately to login
+        return RedirectResponse(url="/login", status_code=303)
+        
+    # 3. If authenticated user
+    # If visiting root, redirect to dashboard
+    if request.url.path == "/":
+        return RedirectResponse(url="/dashboard", status_code=303)
+        
+    # Serve SPA index if built
     spa_index = os.path.join(DIST_DIR, "index.html")
     if os.path.exists(spa_index):
         from fastapi.responses import FileResponse
         return FileResponse(spa_index)
     
-    # Fallback to SSR root if no SPA built
-    user = await AuthService.get_current_user(request, db)
-    if user:
-        return RedirectResponse(url="/dashboard")
-    return templates.TemplateResponse("landing.html", {"request": request})
-    user_id = request.cookies.get("user_id")
-    if user_id:
-        return RedirectResponse(url="/dashboard", status_code=303)
+    # Fallback to SSR dashboard if SPA is not built yet
     context = await get_common_context(request, db)
-    return templates.TemplateResponse(
-        request=request, name="landing.html", context=context
-    )
+    return templates.TemplateResponse("dashboard.html", context)
+
 
 @app.get("/api/v1/stats/detailed")
 async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db)):
@@ -370,15 +380,16 @@ async def login_post(
         context["is_backdoor"] = is_backdoor
         return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
 
-    # 2. Security Policy: If SSO is enabled and this is a backdoor login
-    # ONLY allow admins to proceed.
+    # 2. Security Policy: If SSO is enabled
+    # ONLY allow admins to bypass and authenticate locally.
     sso_config = await SSOService.get_config(db)
-    if sso_config.is_enabled and is_backdoor:
+    if sso_config.is_enabled:
         if user.role != "admin":
             context = await get_common_context(request, db)
-            context["error"] = "Security Alert: Backdoor access is restricted to Administrators only."
+            context["error"] = "Security Alert: SSO is active. Local login bypass is strictly restricted to Administrators only."
             context["is_backdoor"] = is_backdoor
             return templates.TemplateResponse(request=request, name="auth/login.html", context=context)
+
 
     # 3. Successful login
     response = RedirectResponse(url="/", status_code=303)
@@ -386,50 +397,7 @@ async def login_post(
     return response
 
 
-@app.get("/quiz/import")
-async def quiz_import(request: Request, db: AsyncSession = Depends(get_db)):
-    context = await get_common_context(request, db)
-    if not context["user"]:
-        return RedirectResponse(url="/login?target=import", status_code=303)
-    return templates.TemplateResponse(
-        request=request, name="modules/quiz/import/index.html", context=context
-    )
 
-@app.get("/stats")
-async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
-    from app.modules.stats.interface import StatsInterface
-    from app.modules.gamification.interface import GamificationInterface
-    
-    context = await get_common_context(request, db)
-    if not context["user"]:
-        return RedirectResponse(url="/login?target=stats", status_code=303)
-        
-    user_id = int(request.cookies.get("user_id", 1))
-    stats_summary = await StatsInterface.get_user_summary(db, user_id)
-    gamify_data = await GamificationInterface.get_user_stats(db, user_id)
-    
-    # Fetch chart data (Activity by day - last 7 days)
-    from app.modules.stats.models import UserDailyStats
-    daily_stats_result = await db.execute(
-        select(UserDailyStats).where(UserDailyStats.user_id == user_id).order_by(UserDailyStats.date.desc()).limit(7)
-    )
-    daily_stats = daily_stats_result.scalars().all()
-    chart_data = {
-        "labels": [s.date.strftime("%d/%m") for s in reversed(daily_stats)],
-        "values": [s.questions_attempted for s in reversed(daily_stats)]
-    }
-
-    context.update({
-        "stats": stats_summary,
-        "gamify": gamify_data,
-        "chart_data": chart_data,
-        "title": "Learning Analytics - QuizMind",
-        "show_bottom_nav": True,
-        "active_nav": "stats"
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/stats/view.html", context=context
-    )
 
 @app.get("/admin")
 async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
@@ -667,24 +635,7 @@ async def toggle_maintenance(request: Request, db: AsyncSession = Depends(get_db
     await db.commit()
     return RedirectResponse(url="/admin/maintenance", status_code=303)
 
-@app.get("/profile")
-async def profile_page(request: Request, db: AsyncSession = Depends(get_db)):
-    from app.modules.gamification.interface import GamificationInterface
-    context = await get_common_context(request, db)
-    if not context["user"]:
-        return RedirectResponse(url="/login?target=profile", status_code=303)
-    
-    user_id = int(request.cookies.get("user_id", 1))
-    gamify_data = await GamificationInterface.get_user_stats(db, user_id)
-    
-    context.update({
-        "gamify": gamify_data,
-        "show_bottom_nav": True,
-        "active_nav": "profile"
-    })
-    return templates.TemplateResponse(
-        request=request, name="modules/auth/profile.html", context=context
-    )
+
 
 @app.get("/discover")
 async def discover_page(request: Request, db: AsyncSession = Depends(get_db)):

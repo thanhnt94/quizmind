@@ -3,6 +3,21 @@ import os
 import sys
 import time
 
+def build_frontend():
+    if os.environ.get("SKIP_BUILD"):
+        print("[VITE] Skipping frontend compilation because SKIP_BUILD is set.")
+        return
+        
+    if os.name == 'nt':
+        print("[VITE] Starting automated frontend build...")
+        try:
+            import build_vite
+            build_vite.build_frontend()
+        except ImportError:
+            print("[VITE] build_vite module not found, skipping compilation.")
+        except Exception as e:
+            print(f"[VITE] Automated build failed: {e}")
+
 def run_backend():
     print("Starting QuizMind (Standalone via FastAPI)...")
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +31,8 @@ def run_backend():
     return subprocess.Popen(cmd, cwd=script_dir)
 
 if __name__ == "__main__":
-    print("[INIT] Initializing QuizMind SSR Ecosystem...")
+    print("[INIT] Initializing QuizMind Ecosystem...")
+    build_frontend()
     process = run_backend()
     print("\n[OK] QuizMind is running!")
     print("URL: http://localhost:5080")
@@ -27,3 +43,4 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         print("\nStopping QuizMind...")
+
