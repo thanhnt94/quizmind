@@ -8,6 +8,7 @@ jinja2
 python-dotenv
 httpx
 requests
+werkzeug
 
 # Database
 sqlalchemy[asyncio]
