@@ -45,8 +45,8 @@ async def update_sso_config(data: dict, db: AsyncSession = Depends(get_db)):
 async def sso_callback(request: Request, code: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Standardized callback for CentralAuth SSO."""
     if not code:
-        logger.error("SSO callback called without code parameter")
-        return RedirectResponse(url="/login?backdoor=1&error=Missing+authorization+code", status_code=303)
+        logger.error("SSO callback called without code parameter. Gracefully redirecting to /login to trigger automatic SSO flow.")
+        return RedirectResponse(url="/login", status_code=303)
     
     try:
         user_data, error = await SSOService.verify_sso_code(db, code)

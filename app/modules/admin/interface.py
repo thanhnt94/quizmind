@@ -26,6 +26,23 @@ class AdminInterface:
         
         config.value = config_data
         
+        # Keep sso_settings table (SSOConfig model) in sync for auth system routes
+        try:
+            from app.modules.sso_module.models import SSOConfig
+            sso_result = await db.execute(select(SSOConfig))
+            sso_config = sso_result.scalar_one_or_none()
+            if not sso_config:
+                sso_config = SSOConfig()
+                db.add(sso_config)
+            
+            sso_config.is_enabled = bool(config_data.get("enabled", False))
+            sso_config.server_url = config_data.get("central_auth_url")
+            sso_config.client_id = config_data.get("client_id")
+            sso_config.client_secret = config_data.get("client_secret")
+        except Exception as e:
+            # Prevent failure if tables are migrating
+            pass
+        
         # Log action
         log = AdminLog(admin_id=admin_id, action="UPDATE_SSO", details="Updated CentralAuth settings")
         db.add(log)

@@ -10,24 +10,8 @@ export default function Landing() {
       <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#4f46e5] opacity-[0.15] blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#ec4899] opacity-[0.15] blur-[120px] pointer-events-none" />
 
-      {/* Header */}
-      <header className="max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#4f46e5] to-[#ec4899] flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <span className="font-extrabold text-lg text-white">Q</span>
-          </div>
-          <span className="font-extrabold text-2xl tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Quiz<span className="bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">Mind</span></span>
-        </div>
-        <button 
-          onClick={() => navigate('/login')}
-          className="px-6 py-2.5 rounded-xl font-semibold bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 transition-all duration-300 backdrop-blur-md active:scale-95"
-        >
-          Sign In
-        </button>
-      </header>
-
       {/* Hero Section */}
-      <main className="max-w-7xl mx-auto w-full px-6 py-20 flex flex-col items-center text-center z-10 flex-grow justify-center">
+      <main className="max-w-7xl mx-auto w-full px-6 pt-32 pb-20 flex flex-col items-center text-center z-10 flex-grow justify-center">
         {/* Animated Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-sm font-medium text-indigo-300 mb-8 animate-pulse shadow-inner">
           <span className="w-2 h-2 rounded-full bg-indigo-400" />

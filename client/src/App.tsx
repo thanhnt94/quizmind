@@ -29,11 +29,12 @@ const queryClient = new QueryClient({
 })
 
 function AppContent() {
-  const { user, isLoggedIn, isLoading, fetchMe } = useAppStore()
+  const { user, isLoggedIn, isLoading, fetchMe, fetchAuthConfig } = useAppStore()
 
   useEffect(() => {
     fetchMe()
-  }, [fetchMe])
+    fetchAuthConfig()
+  }, [fetchMe, fetchAuthConfig])
 
   if (isLoading) {
     return (

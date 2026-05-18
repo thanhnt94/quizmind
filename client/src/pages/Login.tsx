@@ -37,8 +37,14 @@ export default function Login() {
   useEffect(() => {
     if (urlError) {
       setErrorMsg(decodeURIComponent(urlError));
+      // Clean up the URL search params so the error doesn't persist on refresh or block future redirects
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('error');
+        return next;
+      }, { replace: true });
     }
-  }, [urlError]);
+  }, [urlError, setSearchParams]);
 
   const handleLocalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -30,7 +30,7 @@ async def init_db():
         if not admin:
             admin = User(
                 username="admin",
-                email="admin@quizmind.com",
+                email="admin@mindstack.click",
                 full_name="QuizMind Admin",
                 hashed_password=AuthService.get_password_hash("admin"),
                 role="admin"

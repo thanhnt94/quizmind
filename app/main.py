@@ -245,7 +245,8 @@ async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db
         "user": {
             "id": user.id,
             "username": user.username,
-            "email": user.email
+            "email": user.email,
+            "role": user.role
         },
         "my_quizzes": my_quizzes_data,
         "archived_quizzes": archived_quizzes_data,
@@ -311,9 +312,9 @@ async def api_admin_stats(request: Request, db: AsyncSession = Depends(get_db)):
         "quiz_count": quiz_count_result.scalar(),
         "total_answers": total_answers_result.scalar(),
         "sso_config": {
-            "central_auth_url": sso_config.central_auth_url,
-            "client_id": sso_config.client_id,
-            "enabled": sso_config.enabled
+            "central_auth_url": sso_config.get("central_auth_url") if isinstance(sso_config, dict) else getattr(sso_config, "central_auth_url", ""),
+            "client_id": sso_config.get("client_id") if isinstance(sso_config, dict) else getattr(sso_config, "client_id", ""),
+            "enabled": sso_config.get("enabled", False) if isinstance(sso_config, dict) else getattr(sso_config, "enabled", False)
         }
     }
 
@@ -327,10 +328,10 @@ async def api_admin_sso(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.admin.interface import AdminInterface
     sso_config = await AdminInterface.get_sso_config(db)
     return {
-        "central_auth_url": sso_config.central_auth_url,
-        "client_id": sso_config.client_id,
-        "client_secret": sso_config.client_secret,
-        "enabled": sso_config.enabled
+        "central_auth_url": sso_config.get("central_auth_url") if isinstance(sso_config, dict) else getattr(sso_config, "central_auth_url", ""),
+        "client_id": sso_config.get("client_id") if isinstance(sso_config, dict) else getattr(sso_config, "client_id", ""),
+        "client_secret": sso_config.get("client_secret") if isinstance(sso_config, dict) else getattr(sso_config, "client_secret", ""),
+        "enabled": sso_config.get("enabled", False) if isinstance(sso_config, dict) else getattr(sso_config, "enabled", False)
     }
 
 @app.post("/api/v1/admin/sso")
@@ -404,9 +405,9 @@ async def api_admin_ai(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.admin.interface import AdminInterface
     ai_config = await AdminInterface.get_ai_config(db)
     return {
-        "api_key": ai_config.api_key if ai_config else "",
-        "model_id": ai_config.model_id if ai_config else "gemini-2.5-flash",
-        "enabled": ai_config.enabled if ai_config else False
+        "api_key": ai_config.get("api_key", "") if isinstance(ai_config, dict) else getattr(ai_config, "api_key", ""),
+        "model_id": ai_config.get("model_id", "gemini-2.5-flash") if isinstance(ai_config, dict) else getattr(ai_config, "model_id", "gemini-2.5-flash"),
+        "enabled": ai_config.get("enabled", False) if isinstance(ai_config, dict) else getattr(ai_config, "enabled", False)
     }
 
 @app.post("/api/v1/admin/ai")
