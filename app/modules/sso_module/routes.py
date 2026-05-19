@@ -105,3 +105,41 @@ async def sso_callback(request: Request, code: Optional[str] = None, db: AsyncSe
     res = RedirectResponse(url="/", status_code=303)
     res.set_cookie(key="user_id", value=str(user.id), httponly=True, path="/", samesite="lax")
     return res
+
+from pydantic import BaseModel
+from fastapi import HTTPException
+
+class HandshakeRequest(BaseModel):
+    client_id: str
+    client_secret: str
+
+@router.post("/api/admin/sso/handshake")
+async def sso_handshake(req: HandshakeRequest, db: AsyncSession = Depends(get_db)):
+    """Dynamic DB discovery endpoint for CentralAuth Hub."""
+    config = await SSOService.get_config(db)
+    
+    # If config not in DB yet, fallback to environment settings
+    from app.core.config import settings
+    expected_client_id = config.client_id or settings.CLIENT_ID
+    expected_client_secret = config.client_secret or settings.CLIENT_SECRET
+    
+    if expected_client_id != req.client_id:
+        raise HTTPException(status_code=401, detail="Client ID mismatch")
+        
+    if expected_client_secret != req.client_secret:
+        raise HTTPException(status_code=401, detail="Client Secret mismatch")
+        
+    # Get absolute DB path
+    db_url = settings.DATABASE_URL
+    # Remove sqlite+aiosqlite:/// prefix
+    import os
+    db_path = db_url.split("///")[-1] if "///" in db_url else db_url
+    if not os.path.isabs(db_path):
+        # Resolve against project directory if relative
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        db_path = os.path.abspath(os.path.join(project_root, db_path))
+        
+    return {
+        "success": True,
+        "db_path": db_path
+    }
