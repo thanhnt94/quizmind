@@ -376,11 +376,12 @@ export default function QuizPlay() {
       if (res.data.status === 'processing') {
         // Polling loop
         let attempts = 0
-        const maxAttempts = 15 // 30 seconds total
+        const maxAttempts = 45 // 90 seconds total (45 * 2) - Gemini can be slow under load
         const poll = setInterval(async () => {
           attempts++
           try {
-            const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
+            // Append cache buster to completely bypass browser and proxy caching
+            const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data?t=${Date.now()}`)
             const updatedQ = quizRes.data.questions?.find((q: any) => q.id === currentQuestion.id)
             if (updatedQ && updatedQ.ai_explanation) {
               setSession((prev: any) => {
@@ -618,11 +619,27 @@ export default function QuizPlay() {
                    <p className="text-[8px] font-medium text-slate-400 italic">Click 'SAVE AI' để lưu thay đổi cho tất cả mọi người.</p>
                  </div>
                ) : (
-                 currentQuestion?.ai_explanation && (
-                   <div className="text-slate-700 font-medium text-sm leading-relaxed markdown-content break-words pr-2 mt-2">
-                     <TypewriterText text={currentQuestion.ai_explanation} />
-                   </div>
-                 )
+                  isAskingAI ? (
+                    <div className="flex flex-col items-center justify-center py-16 space-y-4 animate-pulse">
+                      <div className="relative w-12 h-12 flex items-center justify-center">
+                        <div className="absolute inset-0 rounded-full border-4 border-indigo-100 animate-ping" />
+                        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                        <Sparkles className="w-4 h-4 text-indigo-500 absolute animate-pulse" />
+                      </div>
+                      <p className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] text-center animate-bounce">
+                        AI DEEP ANALYSIS IN PROGRESS...
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-400 max-w-xs text-center leading-relaxed">
+                        Cho mot chut nhe, tri tue nhan tao dang phan tich sau ngu phap va Han tu cua cau hoi nay.
+                      </p>
+                    </div>
+                  ) : (
+                    currentQuestion?.ai_explanation && (
+                      <div className="text-slate-700 font-medium text-sm leading-relaxed markdown-content break-words pr-2 mt-2">
+                        <TypewriterText text={currentQuestion.ai_explanation} />
+                      </div>
+                    )
+                  )
                )}
             </div>
           )
