@@ -621,8 +621,13 @@ async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSessi
     quiz = result.scalar_one_or_none()
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
-    # Permission Check: Creator, Admin (1), or Collaborator
-    if quiz.creator_id != user_id and user_id != 1:
+    # Permission Check: Creator, Admin, or Collaborator
+    from app.modules.auth.models import User as UserDB
+    user_res = await db.execute(select(UserDB).where(UserDB.id == user_id))
+    user_obj = user_res.scalar_one_or_none()
+    is_admin = user_obj and user_obj.role == "admin"
+    
+    if quiz.creator_id != user_id and user_id != 1 and not is_admin:
         collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
         if not collab_res.scalar():
             return JSONResponse(status_code=403, content={"error": "Permission denied"})
