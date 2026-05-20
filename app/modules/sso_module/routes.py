@@ -23,10 +23,31 @@ async def get_sso_config(db: AsyncSession = Depends(get_db)):
 async def get_auth_config(db: AsyncSession = Depends(get_db)):
     """Public authentication configuration endpoint for pure SPA."""
     config = await SSOService.get_config(db)
+    
+    sso_active = config.is_enabled
+    if sso_active and config.server_url:
+        import urllib.parse
+        import socket
+        try:
+            parsed = urllib.parse.urlparse(config.server_url)
+            host = parsed.hostname
+            port = parsed.port
+            if not host:
+                sso_active = False
+            else:
+                if not port:
+                    port = 443 if parsed.scheme == "https" else 80
+                # Fast TCP ping check (0.5 second timeout) to avoid blockages
+                socket.gethostbyname(host)
+                with socket.create_connection((host, port), timeout=0.5):
+                    pass
+        except Exception:
+            sso_active = False
+            
     return {
-        "auth_provider": "central" if config.is_enabled else "local",
-        "sso_enabled": config.is_enabled,
-        "jump_url": f"{config.server_url.rstrip('/')}/api/auth/jump/{config.client_id}" if config.is_enabled else None
+        "auth_provider": "central" if sso_active else "local",
+        "sso_enabled": sso_active,
+        "jump_url": f"{config.server_url.rstrip('/')}/api/auth/jump/{config.client_id}" if sso_active else None
     }
 
 

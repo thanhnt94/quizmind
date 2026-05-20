@@ -276,6 +276,10 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
     from app.modules.gamification.interface import GamificationInterface
     user_stats = await GamificationInterface.get_user_stats(db, user_id)
     
+    from app.modules.quiz.models import QuizCollaborator
+    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+    is_collaborator = collab_res.scalar() is not None
+    
     # Format for frontend
     return {
         "id": quiz.id,
@@ -285,6 +289,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
         "instruction": quiz.instruction,
         "category_id": quiz.category_id,
         "creator_id": quiz.creator_id,
+        "is_collaborator": is_collaborator,
         "user_total_xp": user_stats.get("xp", 0),
         "questions": [
             {

@@ -122,9 +122,12 @@ export default function QuizPlay() {
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editFormData, setEditFormData] = useState<any>(null)
   const [sessionAnswers, setSessionAnswers] = useState<Record<number, number>>({})
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false)
+  const [promptInput, setPromptInput] = useState('')
 
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
+  const canEdit = user?.id === 1 || session?.creator_id === user?.id || session?.is_collaborator
 
 
   useEffect(() => {
@@ -163,6 +166,7 @@ export default function QuizPlay() {
       const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
       const questions = quizRes.data.questions || []
       setSession({ ...quizRes.data, questions })
+      setPromptInput(quizRes.data.ai_prompt || '')
       setInitialTotalXP(quizRes.data.user_total_xp || 0)
       
       try {
@@ -417,6 +421,35 @@ export default function QuizPlay() {
     }
   }
 
+  const savePrompt = async () => {
+    try {
+      await axios.patch(`/api/v1/quiz/${id}`, { ai_prompt: promptInput })
+      setSession((prev: any) => ({ ...prev, ai_prompt: promptInput }))
+      setIsEditingPrompt(false)
+      alert("Đã lưu prompt thành công!")
+    } catch (e) {
+      alert("Không thể lưu prompt.")
+    }
+  }
+
+  const clearAIExplanation = async () => {
+    if (!currentQuestion) return
+    if (!window.confirm("Bạn có chắc chắn muốn xoá nội dung giải thích AI này để tạo lại không?")) return
+    try {
+      await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, { ai_explanation: null })
+      setSession((prev: any) => {
+        const newQs = [...prev.questions]
+        const targetIdx = newQs.findIndex(q => q.id === currentQuestion.id)
+        if (targetIdx !== -1) {
+          newQs[targetIdx].ai_explanation = null
+        }
+        return { ...prev, questions: newQs }
+      })
+    } catch (e) {
+      alert("Không thể xoá giải thích AI.")
+    }
+  }
+
   const saveInsight = async () => {
     if (!currentQuestion) return
     try {
@@ -578,7 +611,26 @@ export default function QuizPlay() {
                     <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">AI ANALYSIS</span>
                  </div>
                  <div className="flex gap-2">
-                   {!currentQuestion?.ai_explanation && !isEditingAI && (
+                   {canEdit && (
+                     <button 
+                       onClick={() => setIsEditingPrompt(!isEditingPrompt)}
+                       className={cn(
+                         "text-[9px] font-black uppercase tracking-widest transition-all px-2.5 py-1.5 rounded-md",
+                         isEditingPrompt ? "bg-amber-600 text-white shadow-sm" : "text-amber-500 hover:text-amber-600 hover:bg-white"
+                       )}
+                     >
+                       {isEditingPrompt ? 'CLOSE PROMPT' : 'PROMPT'}
+                     </button>
+                   )}
+                   {canEdit && currentQuestion?.ai_explanation && !isEditingAI && !isEditingPrompt && (
+                     <button 
+                       onClick={clearAIExplanation}
+                       className="text-[9px] font-black text-rose-500 hover:text-rose-700 bg-white hover:bg-rose-50 px-2.5 py-1.5 rounded-md border border-rose-100 shadow-sm transition-all"
+                     >
+                       CLEAR AI
+                     </button>
+                   )}
+                   {!currentQuestion?.ai_explanation && !isEditingAI && !isEditingPrompt && (
                      <button 
                        onClick={() => askAI()}
                        disabled={isAskingAI}
@@ -587,27 +639,50 @@ export default function QuizPlay() {
                        {isAskingAI ? 'ANALYZING...' : 'ASK AI INSIGHT'}
                      </button>
                    )}
-                   <button 
-                     onClick={() => {
-                       if (isEditingAI) {
-                         askAI(aiInput)
-                       } else {
-                         setAiInput(currentQuestion?.ai_explanation || '')
-                         setIsEditingAI(true)
-                       }
-                     }}
-                     disabled={isAskingAI}
-                     className={cn(
-                       "text-[9px] font-black uppercase tracking-widest transition-all px-2.5 py-1.5 rounded-md",
-                       isEditingAI ? "bg-indigo-600 text-white shadow-sm" : "text-indigo-400 hover:text-indigo-600 hover:bg-white"
-                     )}
-                   >
-                     {isAskingAI ? 'SAVING...' : (isEditingAI ? 'SAVE AI' : 'EDIT')}
-                   </button>
+                   {canEdit && !isEditingPrompt && (
+                     <button 
+                       onClick={() => {
+                         if (isEditingAI) {
+                           askAI(aiInput)
+                         } else {
+                           setAiInput(currentQuestion?.ai_explanation || '')
+                           setIsEditingAI(true)
+                         }
+                       }}
+                       disabled={isAskingAI}
+                       className={cn(
+                         "text-[9px] font-black uppercase tracking-widest transition-all px-2.5 py-1.5 rounded-md",
+                         isEditingAI ? "bg-indigo-600 text-white shadow-sm" : "text-indigo-400 hover:text-indigo-600 hover:bg-white"
+                       )}
+                     >
+                       {isAskingAI ? 'SAVING...' : (isEditingAI ? 'SAVE AI' : 'EDIT')}
+                     </button>
+                   )}
                  </div>
                </div>
                
-               {isEditingAI ? (
+               {isEditingPrompt ? (
+                 <div className="space-y-3 mt-2 bg-amber-50/50 border border-amber-100 rounded-2xl p-4">
+                   <div className="flex items-center justify-between">
+                     <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">CHỈNH SỬA SYSTEM PROMPT CHO AI</span>
+                     <button 
+                       onClick={savePrompt}
+                       className="text-[9px] font-black bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                     >
+                       LƯU PROMPT
+                     </button>
+                   </div>
+                   <textarea 
+                     value={promptInput}
+                     onChange={(e) => setPromptInput(e.target.value)}
+                     placeholder="Nhập System Prompt hướng dẫn cho AI..."
+                     className="w-full h-80 bg-white rounded-xl p-4 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-amber-500 outline-none border border-amber-200 resize-none transition-all"
+                   />
+                   <p className="text-[9px] font-medium text-amber-600/80 italic leading-relaxed">
+                     * Hướng dẫn: Sử dụng các biến <code>{"{{question}}"}</code>, <code>{"{{options}}"}</code>, <code>{"{{correct_answer}}"}</code> để chèn dữ liệu động. Prompt mới sẽ được áp dụng cho tất cả các câu hỏi được tạo lại sau này.
+                   </p>
+                 </div>
+               ) : isEditingAI ? (
                  <div className="space-y-2 mt-2">
                    <textarea 
                      value={aiInput}
