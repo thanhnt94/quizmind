@@ -127,7 +127,7 @@ export default function QuizPlay() {
 
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
-  const canEdit = user?.id === 1 || session?.creator_id === user?.id || session?.is_collaborator
+  const canEdit = user?.role === 'admin' || user?.id === 1 || session?.creator_id === user?.id || session?.is_collaborator
 
 
   useEffect(() => {
@@ -609,6 +609,14 @@ export default function QuizPlay() {
                  <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
                     <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">AI ANALYSIS</span>
+                    {canEdit && currentQuestion?.ai_explanation && !isEditingAI && !isEditingPrompt && (
+                      <button 
+                        onClick={clearAIExplanation}
+                        className="text-[9px] font-black text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-md border border-rose-200 shadow-sm transition-all ml-2"
+                      >
+                        CLEAR AI
+                      </button>
+                    )}
                  </div>
                  <div className="flex gap-2">
                    {canEdit && (
@@ -620,14 +628,6 @@ export default function QuizPlay() {
                        )}
                      >
                        {isEditingPrompt ? 'CLOSE PROMPT' : 'PROMPT'}
-                     </button>
-                   )}
-                   {canEdit && currentQuestion?.ai_explanation && !isEditingAI && !isEditingPrompt && (
-                     <button 
-                       onClick={clearAIExplanation}
-                       className="text-[9px] font-black text-rose-500 hover:text-rose-700 bg-white hover:bg-rose-50 px-2.5 py-1.5 rounded-md border border-rose-100 shadow-sm transition-all"
-                     >
-                       CLEAR AI
                      </button>
                    )}
                    {!currentQuestion?.ai_explanation && !isEditingAI && !isEditingPrompt && (
