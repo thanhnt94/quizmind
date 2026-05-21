@@ -124,6 +124,19 @@ export default function QuizPlay() {
   const [sessionAnswers, setSessionAnswers] = useState<Record<number, number>>({})
   const [isEditingPrompt, setIsEditingPrompt] = useState(false)
   const [promptInput, setPromptInput] = useState('')
+  // ── Engagement State ──
+  const [answerContext, setAnswerContext] = useState<{
+    wasCorrect: boolean
+    prevTotal: number
+    prevCorrect: number
+    timeTaken: number
+    avgTime: number
+    newStreak: number
+    xpGained: number
+  } | null>(null)
+  const [isSessionSummaryOpen, setIsSessionSummaryOpen] = useState(false)
+  const [xpFloat, setXpFloat] = useState<{ visible: boolean; amount: number }>({ visible: false, amount: 0 })
+  const [milestonesHit, setMilestonesHit] = useState<Set<number>>(new Set())
 
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
@@ -237,39 +250,81 @@ export default function QuizPlay() {
     setSelectedOption(optIdx)
     const correct = currentQuestion.options[optIdx].is_correct
     setShowFeedback(true)
+
+    // Snapshot BEFORE updating stats (for context display)
+    const prevTotal = currentQuestion.stats?.total || 0
+    const prevCorrect = currentQuestion.stats?.correct || 0
+    const avgTime = currentQuestion.stats?.avg_time || 0
+    const timeTaken = timeLeft
     
     const newAnswers = { ...sessionAnswers, [currentIndex]: optIdx }
     setSessionAnswers(newAnswers)
     
     let updatedXP = sessionXP
     let updatedStreak = streak
+    const isFirstEver = prevTotal === 0
+    const prevRatio = prevTotal > 0 ? prevCorrect / prevTotal : 0
+    const usuallyCorrect = prevRatio >= 0.7 && prevTotal >= 2
+
     if (correct) {
       updatedStreak = streak + 1
       setStreak(updatedStreak)
-      const gained = 10
-      updatedXP = sessionXP + gained
+      const xpGained = isFirstEver ? 15 : (updatedStreak >= 5 ? 20 : 10)
+      updatedXP = sessionXP + xpGained
       setSessionXP(updatedXP)
-      setInitialTotalXP(prev => prev + gained)
-      
-      const successMsgs = ["Mastered! ✨", "Brilliant! 🚀", "Excellent! 🌈", "Perfect! 🎯"]
-      setBadgeMessage(successMsgs[Math.floor(Math.random() * successMsgs.length)])
-      
-      // Trigger Confetti
-      confetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#6366f1', '#a855f7', '#ec4899']
-      })
+      setInitialTotalXP(prev => prev + xpGained)
+
+      // Context-aware success messages
+      let msg = ''
+      if (isFirstEver) msg = `First Blood! 🎯 +${xpGained} XP`
+      else if (updatedStreak >= 10) msg = `UNSTOPPABLE! 🔥 ${updatedStreak}-streak!`
+      else if (updatedStreak >= 5) msg = `On Fire! 🔥 ${updatedStreak}-streak bonus!`
+      else if (prevRatio < 0.5 && prevTotal >= 2) msg = `Redemption! 📈 You improved!`
+      else if (prevRatio >= 0.9 && prevTotal >= 3) msg = `Consistent! ⭐ You always nail this`
+      else msg = [`Brilliant! 🚀`, `Perfect! 🎯`, `Nailed it! ✨`, `Excellent! 🌈`][Math.floor(Math.random() * 4)]
+      setBadgeMessage(msg)
+
+      // XP float animation
+      setXpFloat({ visible: true, amount: xpGained })
+      setTimeout(() => setXpFloat({ visible: false, amount: 0 }), 1500)
+
+      // Streak milestone confetti
+      const confettiColors = updatedStreak >= 5
+        ? ['#f59e0b', '#ef4444', '#f97316']
+        : ['#6366f1', '#a855f7', '#ec4899']
+      confetti({ particleCount: updatedStreak >= 5 ? 250 : 150, spread: updatedStreak >= 5 ? 100 : 70, origin: { y: 0.6 }, colors: confettiColors })
+
+      setAnswerContext({ wasCorrect: true, prevTotal, prevCorrect, timeTaken, avgTime, newStreak: updatedStreak, xpGained })
     } else {
       updatedStreak = 0
       setStreak(0)
-      const errorMsgs = ["Nice try! 💪", "Learning mode! 📚", "Almost there! 🍀", "Keep going! 🌻"]
-      setBadgeMessage(errorMsgs[Math.floor(Math.random() * errorMsgs.length)])
+      const xpGained = 0
+
+      // Context-aware failure messages
+      let msg = ''
+      if (isFirstEver) msg = `First try! No worries 💪`
+      else if (usuallyCorrect) msg = `Slip! You usually nail this 😅`
+      else if (prevRatio === 0 && prevTotal >= 2) msg = `Keep at it! 📚 It'll click soon`
+      else msg = [`Nice try! 💪`, `Learning mode! 📚`, `Almost! 🍀`, `Keep going! 🌻`][Math.floor(Math.random() * 4)]
+      setBadgeMessage(msg)
+
+      setAnswerContext({ wasCorrect: false, prevTotal, prevCorrect, timeTaken, avgTime, newStreak: 0, xpGained })
     }
 
     setBadgeVisible(true)
-    setTimeout(() => setBadgeVisible(false), 2000)
+    setTimeout(() => setBadgeVisible(false), 2500)
+
+    // Check session progress milestones
+    const answered = Object.keys(newAnswers).length
+    const total = session?.questions?.length || 1
+    const pct = Math.round((answered / total) * 100)
+    const milestones = [25, 50, 75, 100]
+    milestones.forEach(m => {
+      if (pct >= m && !milestonesHit.has(m)) {
+        setMilestonesHit(prev => new Set([...prev, m]))
+        if (m === 100) setTimeout(() => setIsSessionSummaryOpen(true), 800)
+      }
+    })
 
     saveSession(newAnswers, currentIndex, updatedXP, updatedStreak)
 
@@ -284,15 +339,10 @@ export default function QuizPlay() {
       const newTotal = currentStats.total + 1
       const newCorrect = currentStats.correct + (correct ? 1 : 0)
       
-      // Calculate new moving average for time
       const oldTotalTime = (currentStats.avg_time || 0) * currentStats.total
-      const newAvgTime = Math.round((oldTotalTime + timeLeft) / newTotal)
+      const newAvgTime = Math.round((oldTotalTime + timeTaken) / newTotal)
       
-      q.stats = {
-        total: newTotal,
-        correct: newCorrect,
-        avg_time: newAvgTime
-      }
+      q.stats = { total: newTotal, correct: newCorrect, avg_time: newAvgTime }
       newQs[currentIndex] = q
       newSession.questions = newQs
       return newSession
@@ -303,7 +353,7 @@ export default function QuizPlay() {
         question_id: currentQuestion.id,
         option_id: currentQuestion.options[optIdx].id,
         is_correct: correct,
-        time_spent: timeLeft,
+        time_spent: timeTaken,
         local_date: new Date().toLocaleDateString('en-CA')
       })
     } catch (e) {
@@ -1010,7 +1060,19 @@ export default function QuizPlay() {
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Header */}
+      {/* XP Float Animation */}
+      <AnimatePresence>
+        {xpFloat.visible && (
+          <motion.div
+            initial={{ opacity: 0, y: 0, scale: 0.8 }}
+            animate={{ opacity: 1, y: -60, scale: 1.1 }}
+            exit={{ opacity: 0, y: -100, scale: 0.8 }}
+            className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[1001] px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-base shadow-xl shadow-indigo-300/50 pointer-events-none"
+          >
+            +{xpFloat.amount} XP ✨
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/90 backdrop-blur-2xl border-b border-slate-100/80 px-4 py-2.5 flex items-center justify-between shadow-[0_1px_20px_rgba(99,102,241,0.06)]">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="w-9 h-9 flex items-center justify-center bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600 shadow-sm hover:bg-indigo-100 active:scale-90 transition-all">
@@ -1118,17 +1180,26 @@ export default function QuizPlay() {
                     </div>
                   </div>
 
-                  {/* Progress bar */}
+                  {/* Progress bar with milestone markers */}
                   <div className="mt-1">
                     <div className="flex justify-between text-[9px] font-bold text-slate-400 mb-1.5">
-                      <span>Câu {currentIndex + 1} / {session.questions?.length}</span>
+                      <span>Q {currentIndex + 1} / {session.questions?.length}</span>
                       <span>{Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%</span>
                     </div>
-                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
                       <div 
                         className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
                         style={{ width: `${Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%` }}
                       />
+                    </div>
+                    {/* Milestone markers */}
+                    <div className="flex justify-between mt-1">
+                      {[25, 50, 75, 100].map(m => (
+                        <span key={m} className={cn(
+                          "text-[8px] font-black transition-all",
+                          milestonesHit.has(m) ? "text-indigo-500" : "text-slate-300"
+                        )}>{milestonesHit.has(m) ? (m === 25 ? '🎖' : m === 50 ? '🏆' : m === 75 ? '🌟' : '🎊') : `${m}%`}</span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1208,7 +1279,71 @@ export default function QuizPlay() {
                     </div>
                   </div>
                  </div>
+                 {/* Community Difficulty Pill (before answering) + Post-answer Engagement Row */}
+                 {!showFeedback && (currentQuestion?.stats?.total || 0) >= 5 && (() => {
+                   const total = currentQuestion!.stats!.total
+                   const correct = currentQuestion!.stats!.correct
+                   const ratio = correct / total
+                   const isHard = ratio < 0.45
+                   const isEasy = ratio > 0.80
+                   return (
+                     <div className={cn(
+                       "mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border",
+                       isHard ? "bg-rose-50 border-rose-200 text-rose-600" :
+                       isEasy ? "bg-emerald-50 border-emerald-200 text-emerald-600" :
+                       "bg-amber-50 border-amber-200 text-amber-600"
+                     )}>
+                       {isHard ? "⚠️ HARD" : isEasy ? "✅ EASY" : "📊 MODERATE"}
+                       <span className="opacity-70 font-semibold normal-case tracking-normal">
+                         — {Math.round(ratio * 100)}% answer correctly
+                       </span>
+                     </div>
+                   )
+                 })()}
 
+                 {/* Post-answer engagement badges */}
+                 {showFeedback && answerContext && (
+                   <div className="mb-5 flex flex-wrap gap-2">
+                     {/* Mastery Badge */}
+                     {(() => {
+                       const total = answerContext.prevTotal
+                       const correct = answerContext.prevCorrect
+                       if (total === 0) return (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-200">🆕 FIRST ATTEMPT</span>
+                       )
+                       const ratio = correct / total
+                       if (ratio >= 0.8) return (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-200">⭐ MASTERED ({Math.round(ratio*100)}%)</span>
+                       )
+                       if (ratio >= 0.5) return (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-teal-100 text-teal-700 border border-teal-200">📈 GETTING STRONGER ({Math.round(ratio*100)}%)</span>
+                       )
+                       return (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-200">🔄 KEEP PRACTICING ({Math.round(ratio*100)}%)</span>
+                       )
+                     })()}
+
+                     {/* Speed badge */}
+                     {answerContext.avgTime > 0 && answerContext.timeTaken > 0 && (
+                       answerContext.timeTaken < answerContext.avgTime * 0.8 ? (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
+                           ⚡ FAST! {answerContext.timeTaken}s vs avg {answerContext.avgTime}s
+                         </span>
+                       ) : answerContext.timeTaken > answerContext.avgTime * 1.5 ? (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">
+                           🐢 Careful thinker — {answerContext.timeTaken}s
+                         </span>
+                       ) : null
+                     )}
+
+                     {/* Streak badge */}
+                     {answerContext.wasCorrect && answerContext.newStreak >= 3 && (
+                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-orange-100 text-orange-700 border border-orange-200">
+                         🔥 {answerContext.newStreak} STREAK
+                       </span>
+                     )}
+                   </div>
+                 )}
                  {session.instruction && (
                     <div className="md:mb-6 mb-4 md:p-5 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 shadow-sm animate-in fade-in slide-in-from-top-2">
                        <div className="flex items-center gap-2 mb-2">
@@ -1319,7 +1454,84 @@ export default function QuizPlay() {
           )}
         </div>
       </footer>
+      {/* ✅ SESSION COMPLETE SUMMARY MODAL */}
+      <AnimatePresence>
+        {isSessionSummaryOpen && (() => {
+          const answeredCount = Object.keys(sessionAnswers).length
+          const correctCount = Object.entries(sessionAnswers).filter(([idx, optIdx]) =>
+            session.questions[Number(idx)]?.options[optIdx as number]?.is_correct
+          ).length
+          const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0
+          const grade = accuracy >= 90 ? { label: 'S', color: 'from-yellow-400 to-amber-500', text: 'OUTSTANDING!' } :
+                        accuracy >= 75 ? { label: 'A', color: 'from-emerald-400 to-teal-500', text: 'EXCELLENT!' } :
+                        accuracy >= 60 ? { label: 'B', color: 'from-indigo-400 to-blue-500', text: 'WELL DONE!' } :
+                        accuracy >= 45 ? { label: 'C', color: 'from-amber-400 to-orange-500', text: 'KEEP IT UP!' } :
+                                         { label: 'D', color: 'from-rose-400 to-pink-500', text: 'KEEP PRACTICING!' }
+          return (
+            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-slate-900/70 backdrop-blur-md"
+                onClick={() => setIsSessionSummaryOpen(false)} />
+              <motion.div initial={{ opacity: 0, scale: 0.8, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, y: 30 }} transition={{ type: 'spring', bounce: 0.35 }}
+                className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden">
+                {/* Grade header */}
+                <div className={`bg-gradient-to-br ${grade.color} p-8 flex flex-col items-center text-white`}>
+                  <div className="text-[9px] font-black uppercase tracking-[0.4em] opacity-80 mb-2">SESSION COMPLETE</div>
+                  <div className="w-24 h-24 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center text-5xl font-black mb-3 border-2 border-white/30">
+                    {grade.label}
+                  </div>
+                  <h2 className="text-xl font-black">{grade.text}</h2>
+                  <p className="text-sm opacity-80 mt-1">{accuracy}% accuracy</p>
+                </div>
 
+                {/* Stats grid */}
+                <div className="p-6 space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-3 bg-slate-50 rounded-2xl">
+                      <div className="text-2xl font-black text-slate-800">{answeredCount}</div>
+                      <div className="text-[9px] font-black text-slate-400 uppercase">Answered</div>
+                    </div>
+                    <div className="text-center p-3 bg-emerald-50 rounded-2xl">
+                      <div className="text-2xl font-black text-emerald-600">{correctCount}</div>
+                      <div className="text-[9px] font-black text-emerald-400 uppercase">Correct</div>
+                    </div>
+                    <div className="text-center p-3 bg-indigo-50 rounded-2xl">
+                      <div className="text-2xl font-black text-indigo-600">+{sessionXP}</div>
+                      <div className="text-[9px] font-black text-indigo-400 uppercase">XP Earned</div>
+                    </div>
+                  </div>
+
+                  {/* Milestones unlocked */}
+                  {milestonesHit.size > 0 && (
+                    <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100">
+                      <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-2">Milestones Unlocked</div>
+                      <div className="flex gap-3">
+                        {milestonesHit.has(25) && <span className="text-2xl" title="25%">🎖</span>}
+                        {milestonesHit.has(50) && <span className="text-2xl" title="50%">🏆</span>}
+                        {milestonesHit.has(75) && <span className="text-2xl" title="75%">🌟</span>}
+                        {milestonesHit.has(100) && <span className="text-2xl" title="100%">🎊</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => setIsSessionSummaryOpen(false)}
+                      className="py-3.5 bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-200 transition-all">
+                      Keep Going
+                    </button>
+                    <button onClick={() => navigate(`/quiz/${id}`)}
+                      className="py-3.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-all">
+                      Finish &amp; Exit
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )
+        })()}
+      </AnimatePresence>
 
       {/* Mobile Question Map Modal */}
       <AnimatePresence>
