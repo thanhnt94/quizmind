@@ -1073,7 +1073,87 @@ export default function QuizPlay() {
 
       <main className="flex-1 flex w-full max-w-none justify-center gap-4 lg:gap-8 px-2 lg:px-6 xl:px-10 md:py-6 py-2 overflow-hidden">
         <aside className="hidden xl:flex w-[340px] 2xl:w-[440px] flex-shrink-0 flex-col overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
-          {renderFeedbackArea(false)}
+          {showFeedback ? renderFeedbackArea(false) : (
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="p-6 border-b border-slate-50 flex items-center justify-center bg-white sticky top-0 z-10">
+                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Trả lời để xem phân tích</span>
+              </div>
+              
+              <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center">
+                {/* Animated waiting indicator */}
+                <div className="relative w-20 h-20 flex items-center justify-center mb-2">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 animate-pulse" />
+                  <div className="absolute inset-2 rounded-full bg-white" />
+                  <Lightbulb className="w-8 h-8 text-indigo-400 relative z-10" />
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-black text-slate-700 mb-1">Chọn câu trả lời</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">Sau khi trả lời, bạn sẽ thấy phân tích chi tiết và giải thích từ AI tại đây.</p>
+                </div>
+
+                {/* Divider */}
+                <div className="w-full h-px bg-slate-100" />
+
+                {/* Session Quick Stats */}
+                <div className="w-full space-y-2">
+                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Tiến độ phiên học</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                      <span className="text-lg font-black text-slate-700">{Object.keys(sessionAnswers).length}</span>
+                      <span className="text-[8px] font-bold text-slate-400 uppercase">Đã làm</span>
+                    </div>
+                    <div className="flex flex-col items-center p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                      <span className="text-lg font-black text-emerald-600">
+                        {Object.entries(sessionAnswers).filter(([idx, optIdx]) => session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
+                      </span>
+                      <span className="text-[8px] font-bold text-emerald-400 uppercase">Đúng</span>
+                    </div>
+                    <div className="flex flex-col items-center p-3 bg-rose-50 rounded-2xl border border-rose-100">
+                      <span className="text-lg font-black text-rose-600">
+                        {Object.entries(sessionAnswers).filter(([idx, optIdx]) => !session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
+                      </span>
+                      <span className="text-[8px] font-bold text-rose-400 uppercase">Sai</span>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-1">
+                    <div className="flex justify-between text-[9px] font-bold text-slate-400 mb-1.5">
+                      <span>Câu {currentIndex + 1} / {session.questions?.length}</span>
+                      <span>{Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="w-full h-px bg-slate-100" />
+
+                {/* Tip */}
+                <div className="w-full p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100/60 text-left">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Mẹo học tập</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                    {currentIndex % 3 === 0 
+                      ? "Hãy đọc kỹ toàn bộ câu hỏi trước khi chọn đáp án. Đôi khi từ ngữ tinh tế tạo ra sự khác biệt lớn! 🎯"
+                      : currentIndex % 3 === 1
+                      ? "Loại trừ những đáp án sai rõ ràng trước để tăng xác suất chọn đúng. Phương pháp POE rất hiệu quả! 💡"
+                      : "Streak liên tiếp giúp bạn nhớ lâu hơn. Cố gắng duy trì chuỗi đúng để kích hoạt bộ nhớ dài hạn! 🔥"
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </aside>
 
         <div className="w-full max-w-4xl min-w-0 flex flex-col overflow-hidden">
