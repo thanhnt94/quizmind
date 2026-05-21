@@ -8,10 +8,12 @@ from datetime import datetime, timedelta
 class AnalyticsService:
     @staticmethod
     async def get_global_stats(db: AsyncSession):
-        # 1. Platform Totals
-        total_q_stmt = select(func.count(Question.id))
-        total_quiz_stmt = select(func.count(Quiz.id))
-        total_users_stmt = select(func.count(User.id))
+        # 1. Platform Totals in a single consolidated subquery statement
+        totals_stmt = select(
+            select(func.count(Question.id)).scalar_subquery().label("total_questions"),
+            select(func.count(Quiz.id)).scalar_subquery().label("total_quizzes"),
+            select(func.count(User.id)).scalar_subquery().label("total_users")
+        )
         
         # 2. Platform Performance
         perf_stmt = select(
@@ -20,20 +22,19 @@ class AnalyticsService:
             func.avg(UserAnswer.active_time).label("avg_time")
         )
         
-        q_res = await db.execute(total_q_stmt)
-        quiz_res = await db.execute(total_quiz_stmt)
-        u_res = await db.execute(total_users_stmt)
+        # Execute both consolidated queries
+        totals_res = (await db.execute(totals_stmt)).one_or_none()
         perf_res = (await db.execute(perf_stmt)).one_or_none()
         
-        total_questions = q_res.scalar() or 0
-        total_quizzes = quiz_res.scalar() or 0
-        total_users = u_res.scalar() or 0
+        total_questions = totals_res.total_questions if totals_res else 0
+        total_quizzes = totals_res.total_quizzes if totals_res else 0
+        total_users = totals_res.total_users if totals_res else 0
         
         platform_accuracy = 0
         avg_time = 0
-        if perf_res and perf_res[0] > 0:
-            platform_accuracy = round((perf_res[1] / perf_res[0]) * 100, 1)
-            avg_time = round(perf_res[2] or 0, 1)
+        if perf_res and perf_res.total > 0:
+            platform_accuracy = round((perf_res.correct / perf_res.total) * 100, 1)
+            avg_time = round(perf_res.avg_time or 0, 1)
             
         return {
             "total_questions": total_questions,

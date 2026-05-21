@@ -12,10 +12,11 @@ from app.core.db import Base
 from app.core.config import settings
 from app.modules.auth.models import User
 from app.modules.quiz.models import Category, Quiz, Question, Option, QuizSession, QuizAttempt, UserAnswer, UserQuestionNote, QuizRoom, QuizRoomParticipant
-from app.modules.gamification.models import UserGamification, Badge
+from app.modules.gamification.models import UserGamification, Badge, UserDailyActivity
 from app.modules.notification.models import Notification
 from app.modules.stats.models import UserDailyStats
 from app.modules.admin.models import SystemConfig, AdminLog
+from app.modules.sso_module.models import SSOConfig
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

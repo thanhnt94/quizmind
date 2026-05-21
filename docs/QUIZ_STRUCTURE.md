@@ -1,10 +1,10 @@
 # QuizMind Data Structure Guide
 
-This document outlines the standard structure for Quiz collections and individual Flashcards in the QuizMind ecosystem. Use this as a reference for creating Excel templates or integrating via API.
+This document outlines the standard structure for Quiz collections and individual Quiz Questions in the QuizMind ecosystem. Use this as a reference for creating Excel templates or integrating via API.
 
 ## 1. Collection Metadata (Info Sheet)
 
-The metadata defines the overall identity and behavior of the flashcard set. In an Excel template, these are key-value pairs in the **'Info'** sheet.
+The metadata defines the overall identity and behavior of the quiz question set. In an Excel template, these are key-value pairs in the **'Info'** sheet.
 
 | Key | Description | Example |
 |:---|:---|:---|
@@ -17,9 +17,9 @@ The metadata defines the overall identity and behavior of the flashcard set. In 
 
 ---
 
-## 2. Flashcard Structure (Data Sheet)
+## 2. Quiz Question Structure (Data Sheet)
 
-Individual cards are defined in the **'Data'** (or first) sheet. Each row represents one card.
+Individual quiz questions/items are defined in the **'Data'** (or first) sheet. Each row represents one question.
 
 ### Core Fields
 | Column Header | Description | Required |

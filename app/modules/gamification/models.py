@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Date
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 from datetime import datetime
@@ -22,3 +22,12 @@ class Badge(Base):
     icon = Column(String(50)) # Lucide icon name
     criteria_type = Column(String(50)) # 'xp', 'streak', 'accuracy'
     criteria_value = Column(Integer)
+
+class UserDailyActivity(Base):
+    __tablename__ = "user_daily_activities"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    activity_date = Column(Date, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

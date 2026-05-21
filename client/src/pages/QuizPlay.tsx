@@ -303,7 +303,8 @@ export default function QuizPlay() {
         question_id: currentQuestion.id,
         option_id: currentQuestion.options[optIdx].id,
         is_correct: correct,
-        time_spent: timeLeft
+        time_spent: timeLeft,
+        local_date: new Date().toLocaleDateString('en-CA')
       })
     } catch (e) {
       console.error("Failed to record answer")

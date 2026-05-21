@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends, Form, Response
+from fastapi import FastAPI, Request, Depends, Form, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -18,9 +18,6 @@ import httpx
 import time
 import asyncio
 
-# Cache for CentralAuth health status
-CA_HEALTH_CACHE = {"status": False, "last_check": 0}
-CA_CHECK_INTERVAL = 60 # Check every 60 seconds
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,7 +76,6 @@ async def ecosystem_sync(
     # CentralAuth sends client_secret as hub_secret for verification
     hub_secret = data.get("hub_secret") or data.get("client_secret")
     if not hub_secret or hub_secret != sso_config.get("client_secret"):
-        from fastapi import Response
         return Response(content="Unauthorized: Invalid Secret", status_code=401)
 
     # Sync users
@@ -176,7 +172,6 @@ async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
 async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
     if not user:
-        from fastapi import HTTPException
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         return await AnalyticsService.get_user_detailed_stats(db, user.id)
@@ -187,7 +182,6 @@ async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db
 async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
     if not user:
-        from fastapi import HTTPException
         raise HTTPException(status_code=401, detail="Unauthorized")
     user_id_int = user.id
     
@@ -354,19 +348,6 @@ async def api_admin_sso_update(
     }
     await AdminInterface.update_sso_config(db, config_data, user.id)
     return {"status": "success", "message": "SSO configuration updated successfully!"}
-    context = await get_common_context(request, db)
-    if not context["user"] or context["user"].role != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-    
-    from app.modules.admin.interface import AdminInterface
-    config_data = {
-        "central_auth_url": central_auth_url,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "enabled": enabled
-    }
-    await AdminInterface.update_sso_config(db, config_data, context["user"].id)
-    return RedirectResponse(url="/admin/sso?success=1", status_code=303)
 
 @app.post("/api/v1/admin/sso/test")
 async def test_sso_connection(

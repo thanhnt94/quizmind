@@ -196,7 +196,8 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
     # --- Gamification Logic ---
     xp_gain = 10 if is_correct else 2
     gamify_res = await GamificationInterface.add_xp(db, user_id, xp_gain)
-    await GamificationInterface.update_streak(db, user_id)
+    local_date = data.get("local_date")
+    await GamificationInterface.update_streak(db, user_id, local_date)
 
     if gamify_res["level_up"]:
         await NotificationInterface.send(
@@ -226,8 +227,9 @@ async def get_quiz_stats(db: AsyncSession = Depends(get_db)):
     
     # 2. Activity by day (last 7 days)
     activity_res = await db.execute(
-        select(func.date(UserAnswer.id), func.count(UserAnswer.id))
-        .group_by(func.date(UserAnswer.id))
+        select(func.date(UserAnswer.created_at), func.count(UserAnswer.id))
+        .group_by(func.date(UserAnswer.created_at))
+        .order_by(func.date(UserAnswer.created_at))
         .limit(7)
     )
     activity = activity_res.all()

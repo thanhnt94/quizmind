@@ -17,7 +17,7 @@ class Quiz(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), index=True)
     description = Column(Text, nullable=True)
-    category_id = Column(Integer, ForeignKey("categories.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"), index=True)
     creator_id = Column(Integer, nullable=True) # ID of the user who created/uploaded it
     ai_prompt = Column(Text, nullable=True) # System prompt for AI generation related to this quiz
     instruction = Column(Text, nullable=True) # General instruction for the entire quiz (e.g. JLPT problem description)
@@ -34,7 +34,7 @@ class Quiz(Base):
 class Question(Base):
     __tablename__ = "questions"
     id = Column(Integer, primary_key=True, index=True)
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
     content = Column(Text, nullable=False)
     image = Column(String(512), nullable=True)
     audio = Column(String(512), nullable=True)
@@ -50,7 +50,7 @@ class Question(Base):
 class Option(Base):
     __tablename__ = "options"
     id = Column(Integer, primary_key=True, index=True)
-    question_id = Column(Integer, ForeignKey("questions.id"))
+    question_id = Column(Integer, ForeignKey("questions.id"), index=True)
     content = Column(Text, nullable=False)
     is_correct = Column(Boolean, default=False)
     
@@ -59,8 +59,8 @@ class Option(Base):
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
     mode = Column(String(50)) # sequential, random, mastery
     score = Column(Integer, default=0)
     total_questions = Column(Integer, default=0)
@@ -73,8 +73,8 @@ class QuizAttempt(Base):
 class UserAnswer(Base):
     __tablename__ = "user_answers"
     id = Column(Integer, primary_key=True, index=True)
-    attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"))
-    question_id = Column(Integer, ForeignKey("questions.id"))
+    attempt_id = Column(Integer, ForeignKey("quiz_attempts.id"), index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), index=True)
     selected_option_id = Column(Integer, ForeignKey("options.id"), nullable=True)
     is_correct = Column(Boolean, default=False)
     active_time = Column(Float, default=0.0)
@@ -86,7 +86,7 @@ class QuizSession(Base):
     __tablename__ = "quiz_sessions"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
     mode = Column(String) # classic, chaos, mastery, batch
     current_index = Column(Integer, default=0)
     state_json = Column(String) # For storing question order/answers
@@ -95,8 +95,8 @@ class QuizSession(Base):
 class UserQuestionNote(Base):
     __tablename__ = "user_question_notes"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    question_id = Column(Integer, ForeignKey("questions.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), index=True)
     content = Column(Text, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -118,9 +118,9 @@ class QuizTag(Base):
 class QuizRoom(Base):
     __tablename__ = "quiz_rooms"
     id = Column(Integer, primary_key=True, index=True)
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
     room_code = Column(String(20), unique=True, index=True)
-    host_id = Column(Integer, ForeignKey("users.id"))
+    host_id = Column(Integer, ForeignKey("users.id"), index=True)
     status = Column(String(50), default="waiting") # waiting, active, finished
     settings = Column(JSON, nullable=True) # { "show_leaderboard": true, "auto_start": false }
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -134,8 +134,8 @@ class QuizRoom(Base):
 class QuizRoomParticipant(Base):
     __tablename__ = "quiz_room_participants"
     id = Column(Integer, primary_key=True, index=True)
-    room_id = Column(Integer, ForeignKey("quiz_rooms.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    room_id = Column(Integer, ForeignKey("quiz_rooms.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
     is_ready = Column(Boolean, default=False)
     score = Column(Integer, default=0)
     total_answered = Column(Integer, default=0)

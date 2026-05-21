@@ -35,20 +35,26 @@ export default function Layout() {
     navItems.push({ label: 'Admin', path: '/admin', icon: BrainCircuit })
   }
 
+  const isLandingPage = location.pathname === '/' && !isLoggedIn
+  const isDashboard = location.pathname === '/' || location.pathname === '/dashboard'
+
   return (
     <div className={cn(
       "min-h-screen flex flex-col",
-      isLoggedIn ? "pb-24 md:pb-0 md:pt-20" : ""
+      isLoggedIn 
+        ? (isDashboard ? "pb-24 md:pb-0 md:min-h-0 md:h-screen md:w-screen md:overflow-hidden" : "pb-24 md:pb-0")
+        : ""
     )}>
 
       {/* Desktop Header */}
-      <header className={cn(
-        "fixed top-0 left-0 right-0 z-[110] backdrop-blur-2xl border-b px-8 py-4 hidden md:flex items-center justify-between transition-all duration-300",
-        isLoggedIn 
-          ? "bg-white/80 border-slate-100 text-slate-900" 
-          : "bg-slate-950/80 border-white/5 text-white"
-      )}>
-        <div className="flex items-center gap-8">
+      {!isLandingPage && (
+        <header className={cn(
+          "fixed top-0 left-0 right-0 z-[110] backdrop-blur-2xl border-b px-8 py-4 hidden md:flex items-center justify-between transition-all duration-300",
+          isLoggedIn 
+            ? "bg-white/80 border-slate-100 text-slate-900" 
+            : "bg-slate-950/80 border-white/5 text-white"
+        )}>
+          <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2 group">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200 group-hover:rotate-12 transition-transform">
               <BrainCircuit className="w-6 h-6" />
@@ -125,9 +131,15 @@ export default function Layout() {
           </div>
         )}
       </header>
+      )}
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main className={cn(
+        "flex-1 w-full",
+        isLoggedIn 
+          ? (isDashboard ? "pt-0 md:pt-20 md:h-full md:overflow-hidden" : "pt-0 md:pt-20 min-h-[calc(100vh-80px)]")
+          : ""
+      )}>
         <Outlet />
       </main>
 

@@ -42,3 +42,18 @@ Tuân thủ nghiêm ngặt các quy tắc định nghĩa trong `MindStack/docs/M
 - **Async First:** Sử dụng `AsyncSession` và các hàm `async/await` cho mọi tương tác IO/DB.
 - **Validation:** Mọi dữ liệu đầu vào từ API phải được validate qua Pydantic Schema.
 - **Documentation:** Giữ nguyên các comment/docstring quan trọng khi refactor code.
+
+## 🚀 Performance & DB Optimization Rules (New)
+- **ForeignKey Indexing:** TẤT CẢ các trường khóa ngoại (ForeignKey) trong models SQLAlchemy bắt buộc phải khai báo `index=True` để tăng tốc độ truy vấn (Join/Filter) lên tới 10x - 100x và bảo vệ CPU của SQLite.
+- **Consolidated Queries:** Hợp nhất các truy vấn đếm dữ liệu (count) hoặc phân tích thống kê thành một câu lệnh SQL duy nhất sử dụng subqueries (scalar_subquery) thay vì chạy nhiều câu lệnh SQL rời rạc gây nghẽn kết nối.
+
+## ⚡ Gamification & Timezone Rules (New)
+- **Timezone-Independent Streaks:** Việc tính toán streak học tập không được dựa trên so sánh timestamp UTC ở server. Thay vào đó:
+  - Sử dụng model `UserDailyActivity` để ghi nhận hoạt động học tập dựa trên ngày lịch địa phương (`activity_date` có kiểu dữ liệu `Date`).
+  - Phía Client (React) bắt buộc truyền lên tham số `local_date` được định dạng `YYYY-MM-DD` (sử dụng `new Date().toLocaleDateString('en-CA')`).
+  - Hàm `update_streak` kiểm tra tính liên tục bằng ngày lịch địa phương gửi lên này.
+
+## 🔒 Alembic & Metadata Standards (New)
+- **Prevent Auto-Deletion:** Mọi database model mới (ví dụ: `UserDailyActivity`, `SSOConfig`) bắt buộc phải được khai báo import đầy đủ trong `migrations/env.py` trước khi chạy autogenerate migration. Điều này ngăn Alembic nhận diện sai và tự động phát hiện lệnh xóa (drop table) các bảng quan trọng của hệ thống.
+- **Standardized Terminology:** QuizMind tập trung 100% vào **Trắc nghiệm nhiều lựa chọn (Multiple Choice Quizzes)**. Không sử dụng thuật ngữ "Flashcard" hay "Spaced Repetition" trong tài liệu, mã nguồn và API.
+
