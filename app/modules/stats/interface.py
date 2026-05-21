@@ -16,15 +16,27 @@ class StatsInterface:
         stats = result.scalar_one_or_none()
         
         if not stats:
-            stats = UserDailyStats(user_id=user_id, date=today)
+            stats = UserDailyStats(
+                user_id=user_id,
+                date=today,
+                questions_attempted=0,
+                correct_answers=0,
+                total_time_seconds=0,
+                accuracy=0.0
+            )
             db.add(stats)
         
         stats.questions_attempted = (stats.questions_attempted or 0) + 1
         if is_correct:
             stats.correct_answers = (stats.correct_answers or 0) + 1
+        else:
+            stats.correct_answers = stats.correct_answers or 0
         
         stats.total_time_seconds = (stats.total_time_seconds or 0) + time_spent
-        stats.accuracy = (stats.correct_answers / stats.questions_attempted) * 100
+        
+        correct_cnt = stats.correct_answers or 0
+        attempted_cnt = stats.questions_attempted or 1
+        stats.accuracy = (correct_cnt / attempted_cnt) * 100
         
         await db.commit()
         return stats
