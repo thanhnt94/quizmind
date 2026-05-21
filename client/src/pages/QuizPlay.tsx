@@ -82,13 +82,26 @@ const TypewriterText = ({ text }: { text: string }) => {
 
   return (
     <>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={MarkdownComponents}>
         {formatLatex(displayedText)}
       </ReactMarkdown>
       {isTyping && <span className="inline-block w-1.5 h-3.5 ml-1 bg-indigo-500 animate-pulse align-middle" />}
       <div ref={bottomRef} />
     </>
   )
+}
+
+const MarkdownComponents = {
+  code({ node, className, children, ...props }: any) {
+    const value = String(children || '').replace(/\n$/, '')
+    const hasRuby = value.includes('<ruby>') || value.includes('</ruby>')
+    if (hasRuby) {
+      return (
+        <code className={className} dangerouslySetInnerHTML={{ __html: value }} {...props} />
+      )
+    }
+    return <code className={className} {...props}>{children}</code>
+  }
 }
 
 export default function QuizPlay() {
@@ -646,7 +659,7 @@ export default function QuizPlay() {
                         placeholder="Nhập giải thích cho câu hỏi..."
                       />
                     ) : (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={MarkdownComponents}>
                         {currentQuestion?.explanation || 'No detail.'}
                       </ReactMarkdown>
                     )}
@@ -795,7 +808,7 @@ export default function QuizPlay() {
                
                {!isEditingNote ? (
                  <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content min-h-[100px] break-words pr-2">
-                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={MarkdownComponents}>
                      {personalNote || '*Ghi chú trống.*'}
                    </ReactMarkdown>
                  </div>
@@ -901,15 +914,13 @@ export default function QuizPlay() {
                       <HelpCircle className="w-4 h-4 text-slate-400" />
                       <span className="text-[11px] font-black text-slate-600 uppercase">Copy Question</span>
                     </button>
-                    {(session.creator_id === user?.id || user?.id === 1) && (
-                      <button 
-                        onClick={() => copyCurrentTabContent('prompt')}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 rounded-xl transition-all text-left"
-                      >
-                        <Brain className="w-4 h-4 text-indigo-500" />
-                        <span className="text-[11px] font-black text-indigo-600 uppercase">Copy Prompt</span>
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => copyCurrentTabContent('prompt')}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 rounded-xl transition-all text-left"
+                    >
+                      <Brain className="w-4 h-4 text-indigo-500" />
+                      <span className="text-[11px] font-black text-indigo-600 uppercase">Copy Prompt</span>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
