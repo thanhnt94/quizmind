@@ -89,6 +89,14 @@ export default function QuizDetail() {
     }
   })
 
+  const { data: masteryData } = useQuery({
+    queryKey: ['quiz-mastery', id],
+    queryFn: async () => {
+      const res = await axios.get(`/api/v1/quiz/quizzes/${id}/mastery`)
+      return res.data
+    }
+  })
+
   const { data: notes } = useQuery({
     queryKey: ['quiz-notes', id],
     queryFn: async () => {
@@ -176,6 +184,92 @@ export default function QuizDetail() {
             </div>
           </div>
         </div>
+
+        {/* Deck Mastery Distribution Widget */}
+        {masteryData && (
+          <div className="px-6 max-w-5xl mx-auto mb-8">
+            <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">Deck Mastery</h3>
+                  <p className="text-[9px] font-bold text-slate-400 mt-0.5">Leitner spaced repetition progress</p>
+                </div>
+              </div>
+
+              {/* Segmented Progress Bar */}
+              {masteryData.total > 0 ? (
+                <div>
+                  <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex mb-4 border border-slate-50">
+                    <div 
+                      className="h-full bg-slate-300 transition-all duration-500" 
+                      style={{ width: `${(masteryData.new / masteryData.total) * 100}%` }}
+                      title={`New: ${masteryData.new} cards`}
+                    />
+                    <div 
+                      className="h-full bg-rose-400 transition-all duration-500" 
+                      style={{ width: `${(masteryData.learning / masteryData.total) * 100}%` }}
+                      title={`Learning: ${masteryData.learning} cards`}
+                    />
+                    <div 
+                      className="h-full bg-amber-400 transition-all duration-500" 
+                      style={{ width: `${(masteryData.familiar / masteryData.total) * 100}%` }}
+                      title={`Familiar: ${masteryData.familiar} cards`}
+                    />
+                    <div 
+                      className="h-full bg-emerald-500 transition-all duration-500" 
+                      style={{ width: `${(masteryData.mastered / masteryData.total) * 100}%` }}
+                      title={`Mastered: ${masteryData.mastered} cards`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 bg-slate-300 rounded-full" />
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">NEW</span>
+                      </div>
+                      <span className="text-xs font-black text-slate-700">{masteryData.new}</span>
+                    </div>
+
+                    <div className="p-3 bg-rose-50/30 border border-rose-100/10 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 bg-rose-400 rounded-full animate-pulse" />
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">LEARNING</span>
+                      </div>
+                      <span className="text-xs font-black text-rose-500">{masteryData.learning}</span>
+                    </div>
+
+                    <div className="p-3 bg-amber-50/30 border border-amber-100/10 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 bg-amber-400 rounded-full" />
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">FAMILIAR</span>
+                      </div>
+                      <span className="text-xs font-black text-amber-500">{masteryData.familiar}</span>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50/30 border border-emerald-100/10 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">MASTERED</span>
+                      </div>
+                      <span className="text-xs font-black text-emerald-600">{masteryData.mastered}</span>
+                    </div>
+
+                    <div className="p-3 bg-indigo-50/30 border border-indigo-100/10 rounded-2xl flex items-center justify-between col-span-2 sm:col-span-1">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">TOTAL</span>
+                      <span className="text-xs font-black text-indigo-600">{masteryData.total}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[10px] font-medium text-slate-400">Add questions to this deck to display mastery level distribution.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="px-6 max-w-5xl mx-auto">

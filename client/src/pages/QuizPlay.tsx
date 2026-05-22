@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, AlertCircle, TrendingUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, AlertCircle, TrendingUp, Award } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -23,6 +23,7 @@ interface Question {
   ai_explanation?: string
   options: Option[]
   stats?: { total: number, correct: number, avg_time: number }
+  box_level?: number
 }
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('')
@@ -133,6 +134,8 @@ export default function QuizPlay() {
   const [activeFeedbackTab, setActiveFeedbackTab] = useState<'insight' | 'ai' | 'note'>('insight')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [activeUnlockedBadge, setActiveUnlockedBadge] = useState<any | null>(null)
+  const [activeMasteryUpgrade, setActiveMasteryUpgrade] = useState<any | null>(null)
   const [editFormData, setEditFormData] = useState<any>(null)
   const [sessionAnswers, setSessionAnswers] = useState<Record<number, number>>({})
   const [isEditingPrompt, setIsEditingPrompt] = useState(false)
@@ -173,6 +176,62 @@ export default function QuizPlay() {
 
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
+
+  const getMasteryPill = (boxLevel: number) => {
+    switch (boxLevel) {
+      case 5:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-sm">
+            🏆 MASTERED
+          </span>
+        )
+      case 4:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 shadow-sm">
+            ⚡ PROFICIENT
+          </span>
+        )
+      case 3:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20 shadow-sm">
+            📘 FAMILIAR
+          </span>
+        )
+      case 2:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm">
+            🌱 LEARNING
+          </span>
+        )
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-slate-500/10 text-slate-600 border border-slate-500/20 shadow-sm">
+            ⭐ NEW
+          </span>
+        )
+    }
+  }
+
+  const getBadgeIcon = (badgeId: string) => {
+    switch (badgeId) {
+      case 'first_steps':
+        return Play
+      case 'streak_starter':
+        return Flame
+      case 'streak_legend':
+        return Trophy
+      case 'perfect_score':
+        return CheckCircle2
+      case 'speed_demon':
+        return Clock
+      case 'goal_crusher':
+        return Target
+      case 'card_master':
+        return Brain
+      default:
+        return Award
+    }
+  }
   const canEdit = user?.role === 'admin' || user?.id === 1 || session?.creator_id === user?.id || session?.is_collaborator
 
 
@@ -446,6 +505,58 @@ export default function QuizPlay() {
         time_spent: timeTaken,
         local_date: new Date().toLocaleDateString('en-CA')
       })
+
+      // Spaced Repetition Mastery Level Up
+      const masteryUpdate = res.data.mastery_update
+      if (masteryUpdate) {
+        setSession((prevSession: any) => {
+          if (!prevSession) return prevSession
+          const updatedQuestions = [...prevSession.questions]
+          if (updatedQuestions[currentIndex]) {
+            updatedQuestions[currentIndex] = {
+              ...updatedQuestions[currentIndex],
+              box_level: masteryUpdate.new_level
+            }
+          }
+          return {
+            ...prevSession,
+            questions: updatedQuestions
+          }
+        })
+
+        if (masteryUpdate.level_up) {
+          confetti({
+            particleCount: 50,
+            angle: 90,
+            spread: 45,
+            origin: { y: 0.5 },
+            colors: ['#34D399', '#10B981', '#FBBF24']
+          })
+
+          setActiveMasteryUpgrade({
+            old_level: masteryUpdate.old_level,
+            new_level: masteryUpdate.new_level,
+            question_id: currentQuestion.id
+          })
+
+          setTimeout(() => {
+            setActiveMasteryUpgrade(null)
+          }, 3000)
+        }
+      }
+
+      // Real-time Achievement Badge Unlock
+      const unlockedBadge = res.data.unlocked_badge
+      if (unlockedBadge) {
+        setActiveUnlockedBadge(unlockedBadge)
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#8B5CF6', '#EC4899', '#FBBF24', '#3B82F6']
+        })
+      }
+
       const goalUpdate = res.data.goal_update
       if (goalUpdate) {
         setGoalToast({
@@ -1885,7 +1996,17 @@ export default function QuizPlay() {
                        <p className="text-[13px] font-bold text-slate-600 italic leading-relaxed">{session.instruction}</p>
                     </div>
                  )}
-                 <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
+                 {currentQuestion && (
+                    <div className="mb-3 flex items-center gap-2 flex-wrap">
+                      {getMasteryPill(currentQuestion.box_level || 1)}
+                      {currentQuestion.stats && currentQuestion.stats.total > 0 && (
+                        <span className="text-[10px] font-black tracking-widest text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 uppercase">
+                          ({currentQuestion.stats.correct}/{currentQuestion.stats.total} correct)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
                  
                  <div className="grid grid-cols-1 gap-3">
                     {currentQuestion?.options.map((opt, idx) => (
@@ -2514,6 +2635,116 @@ export default function QuizPlay() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Card Mastery Level Up Toast */}
+      <AnimatePresence>
+        {activeMasteryUpgrade && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed bottom-24 left-6 z-[1002] max-w-sm backdrop-blur-xl rounded-[2rem] p-5 flex items-center gap-4 border bg-gradient-to-r from-emerald-500/95 to-teal-600/95 border-emerald-400/60 text-white shadow-[0_20px_50px_rgba(16,185,129,0.35)]"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner flex-shrink-0">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <span className="text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-white/20 text-white mb-1 inline-block">
+                CARD UPGRADED! ⚡
+              </span>
+              <h4 className="font-black text-sm text-white">Mastery Level Increased!</h4>
+              <p className="text-[11px] text-emerald-100/90 font-bold mt-0.5">
+                Box {activeMasteryUpgrade.old_level} → Box {activeMasteryUpgrade.new_level} (Consecutive Correct 🎉)
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Full-Screen Achievement Celebration Overlay */}
+      <AnimatePresence>
+        {activeUnlockedBadge && (() => {
+          const BadgeIcon = getBadgeIcon(activeUnlockedBadge.id)
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+            >
+              {/* Radial glow background effect */}
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.15),transparent_60%)] animate-pulse pointer-events-none" />
+
+              <motion.div
+                initial={{ scale: 0.9, y: 50 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 50 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="relative max-w-md w-full bg-slate-900/95 border border-violet-500/30 rounded-[3rem] p-8 text-center shadow-[0_0_80px_rgba(139,92,246,0.35)] overflow-hidden"
+              >
+                {/* Background neon splashes */}
+                <div className="absolute -top-12 -left-12 w-48 h-48 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-pink-600/10 rounded-full blur-3xl pointer-events-none" />
+
+                {/* Sparkling particles background */}
+                <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(0,0,0,0.4))] pointer-events-none" />
+
+                {/* Close Button */}
+                <button
+                  onClick={() => setActiveUnlockedBadge(null)}
+                  className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all active:scale-95"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Animated Badge Hexagon Glow container */}
+                <div className="relative mx-auto w-32 h-32 flex items-center justify-center mb-6 mt-4">
+                  {/* Hexagon Neon Ring */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-violet-500 via-fuchsia-500 to-pink-500 rounded-[2.5rem] rotate-45 opacity-20 blur-md animate-pulse" />
+                  <div className="absolute inset-2 bg-gradient-to-tr from-violet-600 via-fuchsia-600 to-pink-600 rounded-[2rem] rotate-12 animate-spin-slow" />
+                  
+                  {/* Frosted Icon Shield */}
+                  <div className="relative w-20 h-20 rounded-2xl bg-slate-950/60 border border-white/15 flex items-center justify-center shadow-2xl backdrop-blur-md">
+                    <BadgeIcon className="w-10 h-10 text-transparent bg-clip-text bg-gradient-to-tr from-violet-400 via-fuchsia-400 to-pink-400" />
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-black tracking-[0.3em] text-violet-400 uppercase bg-violet-500/10 px-4 py-1.5 rounded-full border border-violet-500/20 mb-2 inline-block">
+                  ACHIEVEMENT UNLOCKED
+                </span>
+
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-3 uppercase bg-gradient-to-tr from-white via-slate-100 to-slate-300 bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]">
+                  {activeUnlockedBadge.name}
+                </h2>
+
+                <p className="text-slate-400 text-sm font-bold leading-relaxed mb-6 px-4">
+                  {activeUnlockedBadge.description}
+                </p>
+
+                {/* Reward stats display */}
+                <div className="flex items-center justify-center gap-4 mb-8 bg-slate-950/40 border border-white/5 rounded-2xl p-4">
+                  <div className="text-center flex-1 border-r border-white/5">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 block uppercase mb-1">XP REWARD</span>
+                    <span className="text-lg font-black text-amber-400">+{activeUnlockedBadge.xp_reward} XP ✨</span>
+                  </div>
+                  <div className="text-center flex-1">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 block uppercase mb-1">BONUS REWARD</span>
+                    <span className="text-lg font-black text-violet-400">🏅 BADGE</span>
+                  </div>
+                </div>
+
+                {/* Manual Dismiss CTA */}
+                <button
+                  onClick={() => setActiveUnlockedBadge(null)}
+                  className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 text-white shadow-lg shadow-violet-600/35 hover:shadow-violet-600/50 hover:brightness-110 active:scale-[0.98] transition-all duration-200"
+                >
+                  AWESOME, CLAIM IT! 🏆
+                </button>
+              </motion.div>
+            </motion.div>
+          )
+        })()}
       </AnimatePresence>
     </div>
   )

@@ -177,3 +177,15 @@ class UserDailyProgress(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     goal = relationship("UserQuizGoal")
+
+class UserQuestionMastery(Base):
+    __tablename__ = "user_question_mastery"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), index=True)
+    box_level = Column(Integer, default=1)  # Leitner system box 1-5 (Mastery level)
+    consecutive_correct = Column(Integer, default=0)
+    last_answered = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    question = relationship("Question")
+

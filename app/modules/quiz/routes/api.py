@@ -161,11 +161,13 @@ async def get_quiz_mistakes(quiz_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/record_answer")
 async def record_answer(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import UserAnswer, Question, QuizAttempt
+    from app.modules.quiz.models import UserAnswer, Question, QuizAttempt, UserQuestionMastery
+    from app.modules.gamification.models import UserGamification, Badge
     from app.modules.gamification.interface import GamificationInterface
     from app.modules.stats.interface import StatsInterface
     from app.modules.notification.interface import NotificationInterface
- 
+    from sqlalchemy import and_, case
+
     user_id = int(request.cookies.get("user_id", 1)) # Default to 1 for demo
     is_correct = data.get("is_correct", False)
     time_spent = int(data.get("time_spent", 0))
@@ -177,6 +179,8 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
     question = q_res.scalar_one_or_none()
     
     goal_update_info = None
+    mastery_update_info = None
+    unlocked_badge_info = None
 
     if question:
         attempt_res = await db.execute(select(QuizAttempt).filter(QuizAttempt.user_id == user_id, QuizAttempt.quiz_id == question.quiz_id).order_by(QuizAttempt.id.desc()))
@@ -194,6 +198,43 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
             active_time=float(time_spent)
         )
         db.add(db_answer)
+        await db.flush()
+
+        # --- Spaced Repetition Mastery Levels ---
+        mastery_res = await db.execute(
+            select(UserQuestionMastery).where(
+                UserQuestionMastery.user_id == user_id,
+                UserQuestionMastery.question_id == question_id
+            )
+        )
+        mastery = mastery_res.scalar_one_or_none()
+        if not mastery:
+            mastery = UserQuestionMastery(user_id=user_id, question_id=question_id, box_level=1, consecutive_correct=0)
+            db.add(mastery)
+            await db.flush()
+
+        old_box_level = mastery.box_level
+        if is_correct:
+            mastery.consecutive_correct += 1
+            if mastery.consecutive_correct >= 5:
+                mastery.box_level = 5
+            elif mastery.consecutive_correct >= 4:
+                mastery.box_level = 4
+            elif mastery.consecutive_correct >= 3:
+                mastery.box_level = 3
+            elif mastery.consecutive_correct >= 2:
+                mastery.box_level = 2
+        else:
+            mastery.consecutive_correct = 0
+            mastery.box_level = 1
+
+        new_box_level = mastery.box_level
+        mastery_update_info = {
+            "old_level": old_box_level,
+            "new_level": new_box_level,
+            "consecutive_correct": mastery.consecutive_correct,
+            "level_up": new_box_level > old_box_level
+        }
         
         # --- Goal Progress Tracking Logic ---
         from app.modules.quiz.models import UserQuizGoal, UserDailyProgress
@@ -296,7 +337,7 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
 
         await db.commit()
 
-    # --- Gamification Logic ---
+    # --- Gamification Logic & Achievements Check ---
     xp_gain = 10 if is_correct else 2
     gamify_res = await GamificationInterface.add_xp(db, user_id, xp_gain)
     has_leveled_up = gamify_res["level_up"]
@@ -316,14 +357,137 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
             "level_up"
         )
 
+    # --- Achievements Check ---
+    user_gamify_res = await db.execute(select(UserGamification).where(UserGamification.user_id == user_id))
+    user_gamify = user_gamify_res.scalar_one_or_none()
+    if not user_gamify:
+        user_gamify = UserGamification(user_id=user_id, xp=0, level=1, badges=[])
+        db.add(user_gamify)
+        await db.flush()
+
+    already_earned = set(user_gamify.badges or [])
+    badges_res = await db.execute(select(Badge))
+    all_badges = badges_res.scalars().all()
+
+    for badge in all_badges:
+        if badge.id in already_earned:
+            continue
+        
+        should_unlock = False
+        if badge.id == "first_steps":
+            ans_count_res = await db.execute(
+                select(func.count(UserAnswer.id)).join(QuizAttempt).where(QuizAttempt.user_id == user_id)
+            )
+            if (ans_count_res.scalar() or 0) >= 1:
+                should_unlock = True
+                
+        elif badge.id == "streak_starter":
+            if user_gamify.streak_count >= 3 or (goal_update_info and goal_update_info["streak_count"] >= 3):
+                should_unlock = True
+                
+        elif badge.id == "streak_legend":
+            if user_gamify.streak_count >= 7 or (goal_update_info and goal_update_info["streak_count"] >= 7):
+                should_unlock = True
+                
+        elif badge.id == "perfect_score":
+            perf_attempt_res = await db.execute(
+                select(QuizAttempt.id)
+                .join(UserAnswer)
+                .where(QuizAttempt.user_id == user_id)
+                .group_by(QuizAttempt.id)
+                .having(
+                    and_(
+                        func.count(UserAnswer.id) >= 5,
+                        func.sum(case((UserAnswer.is_correct == True, 1), else_=0)) == func.count(UserAnswer.id)
+                    )
+                )
+            )
+            if perf_attempt_res.first():
+                should_unlock = True
+                
+        elif badge.id == "speed_demon":
+            if time_spent > 0 and time_spent <= 5 and is_correct:
+                fast_correct_res = await db.execute(
+                    select(func.count(UserAnswer.id))
+                    .join(QuizAttempt)
+                    .where(
+                        QuizAttempt.user_id == user_id,
+                        UserAnswer.is_correct == True,
+                        UserAnswer.active_time <= 5.0,
+                        UserAnswer.active_time > 0.0
+                    )
+                )
+                if (fast_correct_res.scalar() or 0) >= 5:
+                    should_unlock = True
+                    
+        elif badge.id == "goal_crusher":
+            goal_completed_res = await db.execute(
+                select(func.count(UserDailyProgress.id)).where(
+                    UserDailyProgress.goal_id.in_(
+                        select(UserQuizGoal.id).where(UserQuizGoal.user_id == user_id)
+                    ),
+                    UserDailyProgress.is_target_met == True
+                )
+            )
+            if (goal_completed_res.scalar() or 0) >= 3:
+                should_unlock = True
+                
+        elif badge.id == "card_master":
+            mastered_cards_res = await db.execute(
+                select(func.count(UserQuestionMastery.id)).where(
+                    UserQuestionMastery.user_id == user_id,
+                    UserQuestionMastery.box_level == 5
+                )
+            )
+            if (mastered_cards_res.scalar() or 0) >= 10:
+                should_unlock = True
+        
+        if should_unlock:
+            new_badges = list(user_gamify.badges or [])
+            new_badges.append(badge.id)
+            user_gamify.badges = new_badges
+            
+            xp_reward = 150
+            if badge.id == "first_steps": xp_reward = 100
+            elif badge.id == "streak_starter": xp_reward = 250
+            elif badge.id == "streak_legend": xp_reward = 500
+            elif badge.id == "perfect_score": xp_reward = 300
+            elif badge.id == "speed_demon": xp_reward = 200
+            elif badge.id == "goal_crusher": xp_reward = 400
+            elif badge.id == "card_master": xp_reward = 500
+            
+            gamify_res2 = await GamificationInterface.add_xp(db, user_id, xp_reward)
+            if gamify_res2["level_up"]:
+                has_leveled_up = True
+                current_level = gamify_res2["current_level"]
+            
+            await NotificationInterface.send(
+                db, user_id,
+                f"🏆 ACHIEVEMENT UNLOCKED: {badge.name}!",
+                f"You unlocked the badge '{badge.name}' and earned +{xp_reward} XP! {badge.description}",
+                "achievement"
+            )
+            
+            unlocked_badge_info = {
+                "id": badge.id,
+                "name": badge.name,
+                "description": badge.description,
+                "icon": badge.icon,
+                "xp_reward": xp_reward
+            }
+            break
+
     # --- Stats Logic ---
     await StatsInterface.record_activity(db, user_id, is_correct, time_spent)
+    await db.commit()
 
     return {
         "status": "ok", 
-        "xp_gained": xp_gain + (goal_update_info["bonus_xp"] if goal_update_info else 0), 
+        "xp_gained": xp_gain + (goal_update_info["bonus_xp"] if goal_update_info else 0) + (unlocked_badge_info["xp_reward"] if unlocked_badge_info else 0), 
         "level_up": has_leveled_up,
-        "goal_update": goal_update_info
+        "goal_update": goal_update_info,
+        "mastery_update": mastery_update_info,
+        "unlocked_badge": unlocked_badge_info
     }
 
 @router.get("/stats")
@@ -396,6 +560,14 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
     collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
     is_collaborator = collab_res.scalar() is not None
     
+    from app.modules.quiz.models import UserQuestionMastery
+    mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.box_level).where(
+        UserQuestionMastery.user_id == user_id,
+        UserQuestionMastery.question_id.in_([q.id for q in quiz.questions])
+    )
+    mastery_res = await db.execute(mastery_stmt)
+    mastery_map = {row[0]: row[1] for row in mastery_res.all()}
+    
     # Format for frontend
     return {
         "id": quiz.id,
@@ -414,6 +586,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
                 "explanation": q.explanation,
                 "ai_explanation": q.ai_explanation,
                 "stats": q.stats,
+                "box_level": mastery_map.get(q.id, 1),
                 "options": [
                     {"id": o.id, "content": o.content, "is_correct": o.is_correct}
                     for o in q.options
@@ -976,3 +1149,283 @@ async def remove_goal(request: Request, data: dict, db: AsyncSession = Depends(g
     )
     await db.commit()
     return {"status": "ok"}
+
+@router.get("/gamification/badges")
+async def get_user_badges(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.gamification.models import UserGamification, Badge
+    from app.modules.quiz.models import UserAnswer, QuizAttempt, UserQuizGoal, UserDailyProgress, UserQuestionMastery
+    from app.modules.auth.services.auth_service import AuthService
+    
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else 1
+    
+    # Get user gamification model
+    user_gamify_res = await db.execute(select(UserGamification).where(UserGamification.user_id == user_id))
+    user_gamify = user_gamify_res.scalar_one_or_none()
+    unlocked_badge_ids = set(user_gamify.badges or []) if user_gamify else set()
+    
+    # Get all badges
+    badges_res = await db.execute(select(Badge))
+    all_badges = badges_res.scalars().all()
+    
+    badges_list = []
+    for badge in all_badges:
+        is_unlocked = badge.id in unlocked_badge_ids
+        progress = 0
+        if is_unlocked:
+            progress = 100
+        else:
+            if badge.id == "first_steps":
+                ans_res = await db.execute(
+                    select(func.count(UserAnswer.id)).join(QuizAttempt).where(QuizAttempt.user_id == user_id)
+                )
+                cnt = ans_res.scalar() or 0
+                progress = min(100, int((cnt / 1) * 100))
+            elif badge.id == "streak_starter":
+                streak = user_gamify.streak_count if user_gamify else 0
+                progress = min(100, int((streak / 3) * 100))
+            elif badge.id == "streak_legend":
+                streak = user_gamify.streak_count if user_gamify else 0
+                progress = min(100, int((streak / 7) * 100))
+            elif badge.id == "perfect_score":
+                progress = 0
+            elif badge.id == "speed_demon":
+                fast_res = await db.execute(
+                    select(func.count(UserAnswer.id))
+                    .join(QuizAttempt)
+                    .where(
+                        QuizAttempt.user_id == user_id,
+                        UserAnswer.is_correct == True,
+                        UserAnswer.active_time <= 5.0,
+                        UserAnswer.active_time > 0.0
+                    )
+                )
+                cnt = fast_res.scalar() or 0
+                progress = min(100, int((cnt / 5) * 100))
+            elif badge.id == "goal_crusher":
+                goals_res = await db.execute(
+                    select(func.count(UserDailyProgress.id)).where(
+                        UserDailyProgress.goal_id.in_(
+                            select(UserQuizGoal.id).where(UserQuizGoal.user_id == user_id)
+                        ),
+                        UserDailyProgress.is_target_met == True
+                    )
+                )
+                cnt = goals_res.scalar() or 0
+                progress = min(100, int((cnt / 3) * 100))
+            elif badge.id == "card_master":
+                mastered_res = await db.execute(
+                    select(func.count(UserQuestionMastery.id)).where(
+                        UserQuestionMastery.user_id == user_id,
+                        UserQuestionMastery.box_level == 5
+                    )
+                )
+                cnt = mastered_res.scalar() or 0
+                progress = min(100, int((cnt / 10) * 100))
+
+        badges_list.append({
+            "id": badge.id,
+            "name": badge.name,
+            "description": badge.description,
+            "icon": badge.icon,
+            "criteria_type": badge.criteria_type,
+            "criteria_value": badge.criteria_value,
+            "is_unlocked": is_unlocked,
+            "progress": progress
+        })
+        
+    return {
+        "badges": badges_list,
+        "total_unlocked": len(unlocked_badge_ids),
+        "total_count": len(all_badges)
+    }
+
+@router.get("/stats/heatmap")
+async def get_heatmap_stats(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.stats.models import UserDailyStats
+    from datetime import datetime, timedelta
+    
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else 1
+    
+    today = datetime.utcnow().date()
+    start_date = today - timedelta(days=365)
+    
+    heatmap_stmt = select(
+        UserDailyStats.date,
+        UserDailyStats.questions_attempted
+    ).where(
+        UserDailyStats.user_id == user_id,
+        UserDailyStats.date >= start_date
+    ).order_by(UserDailyStats.date)
+    
+    results = await db.execute(heatmap_stmt)
+    data = []
+    for row in results.all():
+        day_val = row[0]
+        if isinstance(day_val, str):
+            date_str = day_val[:10]
+        elif day_val:
+            date_str = day_val.strftime("%Y-%m-%d")
+        else:
+            date_str = ""
+            
+        data.append({
+            "date": date_str,
+            "count": row[1] or 0
+        })
+        
+    return data
+
+@router.get("/stats/weekly-report")
+async def get_weekly_report(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.stats.models import UserDailyStats
+    from datetime import datetime, timedelta
+    from sqlalchemy import desc
+    
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else 1
+    
+    today = datetime.utcnow().date()
+    
+    # Current week (last 7 days)
+    start_cur = today - timedelta(days=6)
+    cur_stmt = select(
+        func.sum(UserDailyStats.questions_attempted).label("total_q"),
+        func.sum(UserDailyStats.correct_answers).label("total_correct"),
+        func.sum(UserDailyStats.total_time_seconds).label("total_time")
+    ).where(
+        UserDailyStats.user_id == user_id,
+        UserDailyStats.date >= start_cur
+    )
+    cur_res = (await db.execute(cur_stmt)).one_or_none()
+    
+    # Previous week (prior 7 days)
+    start_prev = today - timedelta(days=13)
+    end_prev = today - timedelta(days=7)
+    prev_stmt = select(
+        func.sum(UserDailyStats.questions_attempted).label("total_q"),
+        func.sum(UserDailyStats.correct_answers).label("total_correct"),
+        func.sum(UserDailyStats.total_time_seconds).label("total_time")
+    ).where(
+        UserDailyStats.user_id == user_id,
+        UserDailyStats.date >= start_prev,
+        UserDailyStats.date <= end_prev
+    )
+    prev_res = (await db.execute(prev_stmt)).one_or_none()
+    
+    cur_q = cur_res.total_q or 0 if cur_res and cur_res.total_q else 0
+    cur_correct = cur_res.total_correct or 0 if cur_res and cur_res.total_correct else 0
+    cur_time = cur_res.total_time or 0 if cur_res and cur_res.total_time else 0
+    cur_accuracy = round((cur_correct / cur_q * 100), 1) if cur_q > 0 else 0
+    
+    prev_q = prev_res.total_q or 0 if prev_res and prev_res.total_q else 0
+    prev_correct = prev_res.total_correct or 0 if prev_res and prev_res.total_correct else 0
+    prev_accuracy = round((prev_correct / prev_q * 100), 1) if prev_q > 0 else 0
+    
+    # Calculate deltas
+    q_delta = cur_q - prev_q
+    q_pct_change = round((q_delta / prev_q * 100), 1) if prev_q > 0 else 100.0 if cur_q > 0 else 0.0
+    accuracy_delta = round(cur_accuracy - prev_accuracy, 1)
+    
+    # Best active weekday in last 7 days
+    best_stmt = select(
+        UserDailyStats.date,
+        UserDailyStats.questions_attempted
+    ).where(
+        UserDailyStats.user_id == user_id,
+        UserDailyStats.date >= start_cur
+    ).order_by(desc(UserDailyStats.questions_attempted)).limit(1)
+    best_res = (await db.execute(best_stmt)).first()
+    
+    best_day = "None"
+    if best_res and best_res[0]:
+        dt = best_res[0]
+        if isinstance(dt, str):
+            try:
+                dt = datetime.strptime(dt[:10], "%Y-%m-%d")
+            except Exception:
+                pass
+        if isinstance(dt, (datetime, date)):
+            best_day = dt.strftime("%A")
+        
+    insights = []
+    if cur_q == 0:
+        insights = [
+            "We noticed you haven't answered any questions this week. Set a simple goal of 5 cards today to kickstart your streak! 🚀",
+            "Try studying at the same time each day to build a powerful long-term learning habit."
+        ]
+    else:
+        insights.append(f"Awesome velocity! You attempted {cur_q} questions this week. Keep up this incredible momentum! 🔥")
+        if accuracy_delta > 0:
+            insights.append(f"Precision Boost! Your accuracy increased by {accuracy_delta}% compared to last week. Your retrieval speed is solid. 🎯")
+        elif accuracy_delta < 0:
+            insights.append("Focus Tip: Your accuracy fell slightly. Try turning on 'Incorrect Mistakes' learning mode to iron out weak cards. 🧠")
+        else:
+            insights.append("Great consistency! Your learning accuracy is holding perfectly steady. 📈")
+            
+        if cur_time > 1200:
+            insights.append(f"Deep Focus: You spent {round(cur_time/60, 1)} minutes in deep study mode. Excellent focus stamina! ⏱️")
+        else:
+            insights.append("Habit Tip: Even 2 minutes of flashcard reviews daily triggers active recall and prevents forgetting! ⚡")
+            
+    return {
+        "current_week": {
+            "questions": cur_q,
+            "accuracy": cur_accuracy,
+            "time_minutes": round(cur_time / 60, 1)
+        },
+        "previous_week": {
+            "questions": prev_q,
+            "accuracy": prev_accuracy
+        },
+        "deltas": {
+            "questions_change_pct": q_pct_change,
+            "questions_change_absolute": q_delta,
+            "accuracy_change": accuracy_delta
+        },
+        "best_day": best_day,
+        "ai_insights": insights
+    }
+
+@router.get("/quizzes/{quiz_id}/mastery")
+async def get_quiz_mastery(quiz_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.quiz.models import UserQuestionMastery, Question
+    
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else 1
+    
+    # Count total questions in the quiz
+    q_count_res = await db.execute(select(func.count(Question.id)).where(Question.quiz_id == quiz_id))
+    total_questions = q_count_res.scalar() or 0
+    
+    # Get all mastered cards for this quiz
+    mastery_stmt = select(
+        UserQuestionMastery.box_level,
+        func.count(UserQuestionMastery.id)
+    ).join(Question, UserQuestionMastery.question_id == Question.id)\
+     .where(Question.quiz_id == quiz_id, UserQuestionMastery.user_id == user_id)\
+     .group_by(UserQuestionMastery.box_level)
+     
+    results = await db.execute(mastery_stmt)
+    
+    mastery_counts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for row in results.all():
+        lvl = row[0]
+        if lvl in mastery_counts:
+            mastery_counts[lvl] = row[1]
+            
+    unattempted = max(0, total_questions - sum(mastery_counts.values()))
+    mastery_counts[1] += unattempted # Treat unattempted questions as Level 1 (New)
+    
+    return {
+        "new": mastery_counts[1],
+        "learning": mastery_counts[2],
+        "familiar": mastery_counts[3] + mastery_counts[4],
+        "mastered": mastery_counts[5],
+        "total": total_questions
+    }
+

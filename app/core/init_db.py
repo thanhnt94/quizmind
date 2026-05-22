@@ -52,5 +52,71 @@ async def init_db():
             await db.commit()
             print("Default SSO configuration seeded.")
 
+        # Seed Default Achievements/Badges
+        result = await db.execute(select(Badge))
+        if not result.scalar():
+            default_badges = [
+                Badge(
+                    id="first_steps",
+                    name="First Steps",
+                    description="Solve your first question in any quiz",
+                    icon="Zap",
+                    criteria_type="xp",
+                    criteria_value=1
+                ),
+                Badge(
+                    id="streak_starter",
+                    name="Streak Starter",
+                    description="Reach a 3-day learning streak",
+                    icon="Flame",
+                    criteria_type="streak",
+                    criteria_value=3
+                ),
+                Badge(
+                    id="streak_legend",
+                    name="Streak Legend",
+                    description="Reach a 7-day learning streak",
+                    icon="Award",
+                    criteria_type="streak",
+                    criteria_value=7
+                ),
+                Badge(
+                    id="perfect_score",
+                    name="Perfect Score",
+                    description="Score 100% accuracy on a quiz of at least 5 questions",
+                    icon="CheckCircle2",
+                    criteria_type="accuracy",
+                    criteria_value=100
+                ),
+                Badge(
+                    id="speed_demon",
+                    name="Speed Demon",
+                    description="Answer 5 questions under 5 seconds each",
+                    icon="Activity",
+                    criteria_type="speed",
+                    criteria_value=5
+                ),
+                Badge(
+                    id="goal_crusher",
+                    name="Goal Crusher",
+                    description="Reach your daily goal 3 times",
+                    icon="Target",
+                    criteria_type="goals",
+                    criteria_value=3
+                ),
+                Badge(
+                    id="card_master",
+                    name="Card Master",
+                    description="Elevate 10 cards to 'Mastered' level",
+                    icon="Trophy",
+                    criteria_type="mastery",
+                    criteria_value=10
+                )
+            ]
+            db.add_all(default_badges)
+            await db.commit()
+            print("Default achievements seeded.")
+
+
 if __name__ == "__main__":
     asyncio.run(init_db())
