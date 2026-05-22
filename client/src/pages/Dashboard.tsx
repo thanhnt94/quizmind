@@ -175,7 +175,7 @@ export default function Dashboard() {
   )
 
   return (
-    <div className="flex flex-col bg-gradient-to-br from-[#f8fafc] via-[#f1f6fa] to-[#f8fafc] min-h-screen md:min-h-0 md:h-full md:overflow-hidden">
+    <div className="flex flex-col bg-gradient-to-br from-[#f8fafc] via-[#f1f6fa] to-[#f8fafc] min-h-[calc(100vh-6rem)] md:min-h-0 md:h-full md:overflow-hidden">
       
       {/* Background soft glowing pastel blobs to make dashboard extremely tasty */}
       <div className="absolute top-[20%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-indigo-200/10 blur-[130px] pointer-events-none" />
@@ -496,7 +496,7 @@ export default function Dashboard() {
       </div>
 
       {/* 3. SHARED MOBILE FEED CONTENT (Keeps original scroll flow for mobile) */}
-      <div className="md:hidden px-4 w-full mt-4 flex-grow overflow-y-auto pb-24">
+      <div className="md:hidden px-4 w-full mt-4 flex-grow">
         {filteredData.length === 0 ? (
           <div className="w-full bg-white border border-slate-200 rounded-3xl p-12 text-center flex flex-col items-center justify-center shadow-sm">
             <span className="text-4xl mb-4">🔍</span>

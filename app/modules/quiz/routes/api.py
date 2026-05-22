@@ -456,7 +456,10 @@ async def ask_ai(quiz_id: int, payload: dict, background_tasks: BackgroundTasks,
 
     # Manual explanation override (saving)
     if "ai_explanation" in payload:
-        q.ai_explanation = payload["ai_explanation"]
+        val = payload["ai_explanation"]
+        if isinstance(val, str):
+            val = val.strip()
+        q.ai_explanation = val if val else None
         await db.commit()
         return {"ai_explanation": q.ai_explanation}
     

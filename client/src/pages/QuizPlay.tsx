@@ -437,7 +437,7 @@ export default function QuizPlay() {
     setIsAskingAI(true)
     try {
       const payload: any = { question_id: currentQuestion.id }
-      if (manualText) payload.ai_explanation = manualText
+      if (typeof manualText === 'string') payload.ai_explanation = manualText
       
       const res = await axios.post(`/api/v1/quiz/${id}/ask-ai`, payload)
       
@@ -470,13 +470,13 @@ export default function QuizPlay() {
             setIsAskingAI(false)
           }
         }, 2000)
-      } else if (res.data.ai_explanation) {
+      } else if (res.data.ai_explanation !== undefined) {
         setSession((prev: any) => {
           const newQs = [...prev.questions]
           newQs[currentIndex].ai_explanation = res.data.ai_explanation
           return { ...prev, questions: newQs }
         })
-        if (manualText) setIsEditingAI(false)
+        if (typeof manualText === 'string') setIsEditingAI(false)
         setIsAskingAI(false)
       }
     } catch (e) {
