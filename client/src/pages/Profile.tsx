@@ -29,7 +29,7 @@ export default function Profile() {
           </div>
 
           <h2 className="text-3xl font-black text-slate-900 mb-1">{user?.username}</h2>
-          <p className="text-sm font-medium text-slate-400 mb-8">Học viên của MindStack</p>
+          <p className="text-sm font-medium text-slate-400 mb-8">MindStack Learner</p>
 
           <div className="bg-slate-50 rounded-3xl p-6 mb-8 text-left">
             <div className="flex items-center justify-between mb-3">

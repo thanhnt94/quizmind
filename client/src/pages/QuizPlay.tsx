@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, AlertCircle, TrendingUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -150,6 +150,26 @@ export default function QuizPlay() {
   const [isSessionSummaryOpen, setIsSessionSummaryOpen] = useState(false)
   const [xpFloat, setXpFloat] = useState<{ visible: boolean; amount: number }>({ visible: false, amount: 0 })
   const [milestonesHit, setMilestonesHit] = useState<Set<number>>(new Set())
+  const [goalToast, setGoalToast] = useState<{
+    visible: boolean;
+    message: string;
+    isTargetMet: boolean;
+    justCompleted: boolean;
+    streakCount: number;
+    doneToday: number;
+    dailyTarget: number;
+    bonusXP?: number;
+  } | null>(null)
+  const [activeGoal, setActiveGoal] = useState<any>(null)
+  const [showGoalCelebration, setShowGoalCelebration] = useState(false)
+  const [isLimitlessStrike, setIsLimitlessStrike] = useState(false)
+  const [activeMode, setActiveMode] = useState<string>(() => localStorage.getItem('quiz_learning_mode') || 'sequential')
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
+  const [learningModeAlert, setLearningModeAlert] = useState<{
+    visible: boolean;
+    message: string;
+    type?: 'info' | 'warning';
+  } | null>(null)
 
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
@@ -194,6 +214,19 @@ export default function QuizPlay() {
       setSession({ ...quizRes.data, questions })
       setPromptInput(quizRes.data.ai_prompt || '')
       setInitialTotalXP(quizRes.data.user_total_xp || 0)
+
+      // Fetch active goal if any
+      try {
+        const goalsRes = await axios.get('/api/v1/quiz/goals/active', {
+          params: { local_date: new Date().toLocaleDateString('en-CA') }
+        })
+        const matchingGoal = goalsRes.data.find((g: any) => g.quiz_id === Number(id))
+        if (matchingGoal) {
+          setActiveGoal(matchingGoal)
+        }
+      } catch (e) {
+        console.error("Failed to load active goals", e)
+      }
       
       try {
         const sessionRes = await axios.get(`/api/v1/quiz/${id}/session`)
@@ -201,7 +234,51 @@ export default function QuizPlay() {
           const restoredAnswers = sessionRes.data.state?.sessionAnswers || {}
           setSessionAnswers(restoredAnswers)
           
-          const curIdx = sessionRes.data.current_index || 0
+          let curIdx = sessionRes.data.current_index || 0
+          
+          // Adjust initial index based on smart learning mode if we are starting a fresh/unanswered question
+          if (restoredAnswers[curIdx] === undefined) {
+            const savedMode = localStorage.getItem('quiz_learning_mode') || 'sequential'
+            if (savedMode !== 'sequential') {
+              let modeIdx = -1
+              if (savedMode === 'unseen') {
+                modeIdx = questions.findIndex((q: any, i: number) => (q.stats?.total || 0) === 0 && restoredAnswers[i] === undefined)
+              } else if (savedMode === 'review') {
+                modeIdx = questions.findIndex((q: any, i: number) => ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && restoredAnswers[i] === undefined)
+              } else if (savedMode === 'hardest') {
+                let minRatio = Infinity
+                let maxWrongs = -1
+                for (let i = 0; i < questions.length; i++) {
+                  if (restoredAnswers[i] !== undefined) continue
+                  const q = questions[i]
+                  const t = q.stats?.total || 0
+                  const c = q.stats?.correct || 0
+                  const wrongs = t - c
+                  if (t > 0) {
+                    const ratio = c / t
+                    if (ratio < minRatio) {
+                      minRatio = ratio
+                      maxWrongs = wrongs
+                      modeIdx = i
+                    } else if (ratio === minRatio && wrongs > maxWrongs) {
+                      maxWrongs = wrongs
+                      modeIdx = i
+                    }
+                  }
+                }
+              } else if (savedMode === 'random') {
+                const pool = questions.map((_: any, i: number) => i).filter((i: number) => restoredAnswers[i] === undefined)
+                if (pool.length > 0) {
+                  modeIdx = pool[Math.floor(Math.random() * pool.length)]
+                }
+              }
+
+              if (modeIdx !== -1) {
+                curIdx = modeIdx
+              }
+            }
+          }
+          
           setCurrentIndex(curIdx)
           
           // Update local state to reflect which questions are answered in this session
@@ -362,13 +439,122 @@ export default function QuizPlay() {
     })
 
     try {
-      await axios.post('/api/v1/quiz/record_answer', {
+      const res = await axios.post('/api/v1/quiz/record_answer', {
         question_id: currentQuestion.id,
         option_id: currentQuestion.options[optIdx].id,
         is_correct: correct,
         time_spent: timeTaken,
         local_date: new Date().toLocaleDateString('en-CA')
       })
+      const goalUpdate = res.data.goal_update
+      if (goalUpdate) {
+        setGoalToast({
+          visible: !goalUpdate.just_completed,
+          message: goalUpdate.motivational_message,
+          isTargetMet: goalUpdate.is_target_met,
+          justCompleted: goalUpdate.just_completed,
+          streakCount: goalUpdate.streak_count,
+          doneToday: goalUpdate.done_today,
+          dailyTarget: goalUpdate.daily_target,
+          bonusXP: goalUpdate.bonus_xp
+        })
+        
+        setActiveGoal((prev: any) => {
+          if (!prev) return {
+            goal_id: goalUpdate.goal_id,
+            quiz_id: Number(id),
+            quiz_title: session?.title || "",
+            cover_image: session?.cover_image || null,
+            total_questions: session?.questions?.length || 0,
+            total_learned: goalUpdate.is_new_question ? 1 : 0,
+            daily_target: goalUpdate.daily_target,
+            done_today: goalUpdate.done_today,
+            is_target_met: goalUpdate.is_target_met,
+            streak_count: goalUpdate.streak_count,
+            days_remaining_est: Math.ceil(Math.max(0, (session?.questions?.length || 0) - (goalUpdate.is_new_question ? 1 : 0)) / goalUpdate.daily_target)
+          }
+          const updatedLearned = goalUpdate.is_new_question ? prev.total_learned + 1 : prev.total_learned
+          const remainingQs = Math.max(0, prev.total_questions - updatedLearned)
+          return {
+            ...prev,
+            done_today: goalUpdate.done_today,
+            is_target_met: goalUpdate.is_target_met,
+            streak_count: goalUpdate.streak_count,
+            total_learned: updatedLearned,
+            days_remaining_est: Math.ceil(remainingQs / prev.daily_target)
+          }
+        })
+
+        // Auto-dismiss milestone toast after 4.5 seconds
+        setTimeout(() => {
+          setGoalToast(prev => prev ? { ...prev, visible: false } : null)
+        }, 4500)
+
+        if (goalUpdate.just_completed) {
+          setShowGoalCelebration(true)
+          // Epic continuous confetti shower from bottom corners
+          const end = Date.now() + 4.5 * 1000;
+          const colors = ['#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
+          
+          (function frame() {
+            confetti({
+              particleCount: 4,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0, y: 0.8 },
+              colors: colors
+            });
+            confetti({
+              particleCount: 4,
+              angle: 120,
+              spread: 55,
+              origin: { x: 1, y: 0.8 },
+              colors: colors
+            });
+            
+            if (Date.now() < end) {
+              requestAnimationFrame(frame);
+            }
+          }());
+        } else if (goalUpdate.is_target_met) {
+          if (correct && goalUpdate.done_today > goalUpdate.daily_target) {
+            // Screen flash lightning overlay
+            setIsLimitlessStrike(true);
+            setTimeout(() => setIsLimitlessStrike(false), 800);
+
+            // Epic multi-angle golden/purple fireworks cascade!
+            confetti({
+              particleCount: 50,
+              angle: 60,
+              spread: 75,
+              origin: { x: 0.15, y: 0.85 },
+              colors: ['#F59E0B', '#F97316', '#EF4444', '#8B5CF6', '#FFF']
+            });
+            confetti({
+              particleCount: 50,
+              angle: 120,
+              spread: 75,
+              origin: { x: 0.85, y: 0.85 },
+              colors: ['#F59E0B', '#F97316', '#EF4444', '#8B5CF6', '#FFF']
+            });
+            confetti({
+              particleCount: 40,
+              spread: 100,
+              origin: { x: 0.5, y: 0.5 },
+              colors: ['#F59E0B', '#F97316', '#FFF']
+            });
+          } else {
+            // Epic gold/rose sparkle burst from the top right corner near the toast
+            confetti({
+              particleCount: 20,
+              angle: 220,
+              spread: 45,
+              origin: { x: 0.9, y: 0.12 },
+              colors: ['#F59E0B', '#F97316', '#EF4444', '#EC4899']
+            });
+          }
+        }
+      }
     } catch (e) {
       console.error("Failed to record answer")
     }
@@ -393,42 +579,189 @@ export default function QuizPlay() {
   const handleNext = () => {
     if (!session || !session.questions) return
 
-    const mode = localStorage.getItem('quiz_learning_mode') || 'sequential'
     const questions = session.questions
     const total = questions.length
 
-    if (mode === 'sequential') {
-      navigateToQuestion(Math.min(currentIndex + 1, total - 1))
-    } else if (mode === 'random') {
+    // Fallback function to find the first unanswered question index in this session
+    const getFirstUnanswered = () => {
+      for (let i = 0; i < total; i++) {
+        if (sessionAnswers[i] === undefined) return i
+      }
+      return -1
+    }
+
+    let nextIdx = -1
+
+    if (activeMode === 'sequential') {
+      nextIdx = Math.min(currentIndex + 1, total - 1)
+    } else if (activeMode === 'random') {
       // Find a random index not answered in THIS session
       const pool = questions.map((_: any, i: number) => i).filter((i: number) => sessionAnswers[i] === undefined)
       if (pool.length > 0) {
-        const rand = pool[Math.floor(Math.random() * pool.length)]
-        navigateToQuestion(rand)
-      } else {
-        navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+        nextIdx = pool[Math.floor(Math.random() * pool.length)]
       }
-    } else if (mode === 'unseen') {
-      // Find next question with 0 historical attempts
-      const nextUnseen = questions.findIndex((q: any, i: number) => i > currentIndex && (q.stats?.total || 0) === 0)
-      if (nextUnseen !== -1) {
-        navigateToQuestion(nextUnseen)
-      } else {
+    } else if (activeMode === 'unseen') {
+      // Find next question with 0 historical attempts and not answered in THIS session
+      nextIdx = questions.findIndex((q: any, i: number) => 
+        i > currentIndex && 
+        (q.stats?.total || 0) === 0 && 
+        sessionAnswers[i] === undefined
+      )
+      if (nextIdx === -1) {
         // Loop back to find any unseen
-        const anyUnseen = questions.findIndex((q: any) => (q.stats?.total || 0) === 0)
-        if (anyUnseen !== -1) navigateToQuestion(anyUnseen)
-        else navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+        nextIdx = questions.findIndex((q: any, i: number) => 
+          (q.stats?.total || 0) === 0 && 
+          sessionAnswers[i] === undefined
+        )
+      }
+    } else if (activeMode === 'review') {
+      // Find next question with historical mistakes (total - correct > 0) and not answered in THIS session
+      nextIdx = questions.findIndex((q: any, i: number) => 
+        i > currentIndex && 
+        ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && 
+        sessionAnswers[i] === undefined
+      )
+      if (nextIdx === -1) {
+        // Loop back to find any mistake question not answered in THIS session
+        nextIdx = questions.findIndex((q: any, i: number) => 
+          ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && 
+          sessionAnswers[i] === undefined
+        )
+      }
+    } else if (activeMode === 'hardest') {
+      // Find the unanswered question in this session with the lowest correctness ratio.
+      // We prioritize cards that have been attempted at least once.
+      let bestIdx = -1
+      let minRatio = Infinity
+      let maxWrongs = -1
+
+      for (let i = 0; i < total; i++) {
+        if (sessionAnswers[i] !== undefined) continue
+
+        const q = questions[i]
+        const t = q.stats?.total || 0
+        const c = q.stats?.correct || 0
+        const wrongs = t - c
+
+        if (t > 0) {
+          const ratio = c / t
+          // Sort by lowest ratio first, then by absolute wrong count if ratios are equal
+          if (ratio < minRatio) {
+            minRatio = ratio
+            maxWrongs = wrongs
+            bestIdx = i
+          } else if (ratio === minRatio && wrongs > maxWrongs) {
+            maxWrongs = wrongs
+            bestIdx = i
+          }
+        }
+      }
+
+      nextIdx = bestIdx
+    }
+
+    // Fallback: If no candidate was found for the active mode, fall back to next unanswered question in this session,
+    // or simply currentIndex + 1 if everything is answered
+    if (nextIdx === -1) {
+      nextIdx = getFirstUnanswered()
+    }
+    if (nextIdx === -1) {
+      nextIdx = Math.min(currentIndex + 1, total - 1)
+    }
+
+    navigateToQuestion(nextIdx)
+  }
+
+  const applyLearningMode = (mode: string) => {
+    setActiveMode(mode)
+    localStorage.setItem('quiz_learning_mode', mode)
+    setIsModeMenuOpen(false)
+
+    if (!session || !session.questions) return
+
+    const questions = session.questions
+    const total = questions.length
+
+    // If the current question is already answered (feedback is shown), 
+    // we don't jump immediately. The next question will automatically follow the new mode.
+    if (showFeedback) return
+
+    let targetIdx = -1
+    let alertMsg = ''
+
+    if (mode === 'unseen') {
+      targetIdx = questions.findIndex((q: any, i: number) => 
+        (q.stats?.total || 0) === 0 && 
+        sessionAnswers[i] === undefined
+      )
+      if (targetIdx === -1) {
+        alertMsg = 'All cards have been attempted! Serving remaining cards sequentially.'
       }
     } else if (mode === 'review') {
-      // Find next question with some errors in history
-      const nextReview = questions.findIndex((q: any, i: number) => i > currentIndex && (q.stats?.wrong || 0) > 0)
-      if (nextReview !== -1) {
-        navigateToQuestion(nextReview)
-      } else {
-        navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+      targetIdx = questions.findIndex((q: any, i: number) => 
+        ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && 
+        sessionAnswers[i] === undefined
+      )
+      if (targetIdx === -1) {
+        alertMsg = "No incorrect cards found yet! We'll serve questions sequentially until mistakes are recorded."
       }
-    } else {
-      navigateToQuestion(Math.min(currentIndex + 1, total - 1))
+    } else if (mode === 'hardest') {
+      let bestIdx = -1
+      let minRatio = Infinity
+      let maxWrongs = -1
+
+      for (let i = 0; i < total; i++) {
+        if (sessionAnswers[i] !== undefined) continue
+
+        const q = questions[i]
+        const t = q.stats?.total || 0
+        const c = q.stats?.correct || 0
+        const wrongs = t - c
+
+        if (t > 0) {
+          const ratio = c / t
+          if (ratio < minRatio) {
+            minRatio = ratio
+            maxWrongs = wrongs
+            bestIdx = i
+          } else if (ratio === minRatio && wrongs > maxWrongs) {
+            maxWrongs = wrongs
+            bestIdx = i
+          }
+        }
+      }
+
+      if (bestIdx !== -1) {
+        targetIdx = bestIdx
+      } else {
+        alertMsg = 'No attempted cards found yet! Serving sequentially until difficulty stats are gathered.'
+      }
+    } else if (mode === 'random') {
+      if (sessionAnswers[currentIndex] === undefined) {
+        targetIdx = currentIndex
+      } else {
+        const pool = questions.map((_: any, i: number) => i).filter((i: number) => sessionAnswers[i] === undefined)
+        if (pool.length > 0) {
+          targetIdx = pool[Math.floor(Math.random() * pool.length)]
+        }
+      }
+    } else if (mode === 'sequential') {
+      targetIdx = questions.findIndex((_: any, i: number) => sessionAnswers[i] === undefined)
+    }
+
+    if (alertMsg) {
+      setLearningModeAlert({
+        visible: true,
+        message: alertMsg,
+        type: 'info'
+      })
+      setTimeout(() => {
+        setLearningModeAlert(prev => prev ? { ...prev, visible: false } : null)
+      }, 4500)
+    }
+
+    if (targetIdx !== -1 && targetIdx !== currentIndex) {
+      navigateToQuestion(targetIdx)
     }
   }
 
@@ -490,15 +823,15 @@ export default function QuizPlay() {
       await axios.patch(`/api/v1/quiz/${id}`, { ai_prompt: promptInput })
       setSession((prev: any) => ({ ...prev, ai_prompt: promptInput }))
       setIsEditingPrompt(false)
-      alert("Đã lưu prompt thành công!")
+      alert("Prompt saved successfully!")
     } catch (e) {
-      alert("Không thể lưu prompt.")
+      alert("Failed to save prompt.")
     }
   }
 
   const clearAIExplanation = async () => {
     if (!currentQuestion) return
-    if (!window.confirm("Bạn có chắc chắn muốn xoá nội dung giải thích AI này để tạo lại không?")) return
+    if (!window.confirm("Are you sure you want to delete this AI explanation?")) return
     try {
       await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, { ai_explanation: null })
       setSession((prev: any) => {
@@ -510,7 +843,7 @@ export default function QuizPlay() {
         return { ...prev, questions: newQs }
       })
     } catch (e) {
-      alert("Không thể xoá giải thích AI.")
+      alert("Failed to delete AI explanation.")
     }
   }
 
@@ -656,7 +989,7 @@ export default function QuizPlay() {
                         value={insightInput}
                         onChange={(e) => setInsightInput(e.target.value)}
                         className="w-full h-80 p-3 bg-white border border-indigo-100 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
-                        placeholder="Nhập giải thích cho câu hỏi..."
+                        placeholder="Enter explanation for this question..."
                       />
                     ) : (
                       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={MarkdownComponents}>
@@ -728,22 +1061,22 @@ export default function QuizPlay() {
                {isEditingPrompt ? (
                  <div className="space-y-3 mt-2 bg-amber-50/50 border border-amber-100 rounded-2xl p-4">
                    <div className="flex items-center justify-between">
-                     <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">CHỈNH SỬA SYSTEM PROMPT CHO AI</span>
+                     <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">EDIT SYSTEM PROMPT FOR AI</span>
                      <button 
                        onClick={savePrompt}
                        className="text-[9px] font-black bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-all"
                      >
-                       LƯU PROMPT
+                       SAVE PROMPT
                      </button>
                    </div>
                    <textarea 
                      value={promptInput}
                      onChange={(e) => setPromptInput(e.target.value)}
-                     placeholder="Nhập System Prompt hướng dẫn cho AI..."
+                     placeholder="Enter System Prompt to guide the AI..."
                      className="w-full h-80 bg-white rounded-xl p-4 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-amber-500 outline-none border border-amber-200 resize-none transition-all"
                    />
                    <p className="text-[9px] font-medium text-amber-600/80 italic leading-relaxed">
-                     * Hướng dẫn: Sử dụng các biến <code>{"{{question}}"}</code>, <code>{"{{options}}"}</code>, <code>{"{{correct_answer}}"}</code> để chèn dữ liệu động. Prompt mới sẽ được áp dụng cho tất cả các câu hỏi được tạo lại sau này.
+                     * Guide: Use variables <code>{"{{question}}"}</code>, <code>{"{{options}}"}</code>, <code>{"{{correct_answer}}"}</code> to insert dynamic data. The new prompt will be applied to all subsequently regenerated questions.
                    </p>
                  </div>
                ) : isEditingAI ? (
@@ -751,11 +1084,11 @@ export default function QuizPlay() {
                    <textarea 
                      value={aiInput}
                      onChange={(e) => setAiInput(e.target.value)}
-                     placeholder="Nhập nội dung AI Analysis thủ công..."
+                     placeholder="Enter AI Analysis content manually..."
                      className="w-full h-80 bg-white/50 rounded-xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border-none resize-none transition-all"
                      autoFocus
                    />
-                   <p className="text-[8px] font-medium text-slate-400 italic">Click 'SAVE AI' để lưu thay đổi cho tất cả mọi người.</p>
+                   <p className="text-[8px] font-medium text-slate-400 italic">Click 'SAVE AI' to save changes for everyone.</p>
                  </div>
                ) : (
                   isAskingAI ? (
@@ -769,7 +1102,7 @@ export default function QuizPlay() {
                         AI DEEP ANALYSIS IN PROGRESS...
                       </p>
                       <p className="text-[10px] font-semibold text-slate-400 max-w-xs text-center leading-relaxed">
-                        Cho mot chut nhe, tri tue nhan tao dang phan tich sau ngu phap va Han tu cua cau hoi nay.
+                        Please wait a moment, the AI is deeply analyzing the grammar and vocabulary of this question.
                       </p>
                     </div>
                   ) : (
@@ -809,7 +1142,7 @@ export default function QuizPlay() {
                {!isEditingNote ? (
                  <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content min-h-[100px] break-words pr-2">
                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={MarkdownComponents}>
-                     {personalNote || '*Ghi chú trống.*'}
+                     {personalNote || '*Empty note.*'}
                    </ReactMarkdown>
                  </div>
                ) : (
@@ -817,11 +1150,11 @@ export default function QuizPlay() {
                    <textarea 
                      value={personalNote}
                      onChange={(e) => setPersonalNote(e.target.value)}
-                     placeholder="Ghi lại kiến thức của bạn ở đây... (Hỗ trợ Markdown)"
+                     placeholder="Write your study notes here... (Supports Markdown)"
                      className="w-full h-80 bg-slate-50 rounded-xl p-4 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border-none resize-none transition-all"
                      autoFocus
                    />
-                   <p className="text-[8px] font-medium text-slate-300 italic">Hỗ trợ Markdown syntax. Click 'SAVE & CLOSE' để hoàn tất.</p>
+                   <p className="text-[8px] font-medium text-slate-300 italic">Supports Markdown syntax. Click 'SAVE & CLOSE' to complete.</p>
                  </div>
                )}
             </div>
@@ -842,115 +1175,129 @@ export default function QuizPlay() {
          </div>
          
          <div className={cn(
-            "flex items-center justify-between gap-3 py-4 border-t border-slate-100 bg-white/95 backdrop-blur-xl sticky bottom-0 z-50 px-6"
-         )}>
-            {isMobile && (
-              <button 
-                onClick={() => setIsFeedbackOpen(false)}
-                className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-100 rounded-xl text-slate-400 active:scale-90 transition-all"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+             "flex items-center justify-between gap-3 py-4 border-t border-slate-100 bg-white/95 backdrop-blur-xl sticky bottom-0 z-50 px-6"
+          )}>
+             {isMobile && (
+               <button 
+                 onClick={() => setIsFeedbackOpen(false)}
+                 className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 text-slate-500 rounded-xl hover:bg-rose-50 hover:border-rose-100 hover:text-rose-500 active:scale-90 transition-all shadow-sm"
+               >
+                 <X className="w-4 h-4" />
+               </button>
+             )}
 
-            <button 
-              onClick={handleEditCurrentTab}
-              className={cn(
-                "w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-90",
-                ((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight))
-                  ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100"
-                  : "bg-white border-slate-100 text-slate-400 hover:text-indigo-600 shadow-sm"
-              )}
-            >
-              {((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight)) ? (
-                <Check className="w-5 h-5 stroke-[3]" />
-              ) : (
-                <Edit3 className="w-5 h-5" />
-              )}
-            </button>
+             <button 
+               onClick={handleEditCurrentTab}
+               className={cn(
+                 "w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all duration-300 active:scale-90",
+                 ((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight))
+                   ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-lg shadow-emerald-100 scale-105"
+                   : "bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 shadow-sm"
+               )}
+             >
+               {((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight)) ? (
+                 <Check className="w-5 h-5 stroke-[3] animate-pulse" />
+               ) : (
+                 <Edit3 className="w-5 h-5" />
+               )}
+             </button>
 
-            <div className="flex items-center bg-slate-100/50 p-1.5 rounded-2xl h-14 border border-slate-100/50">
-              {tabs.map((tab: any) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveFeedbackTab(tab.id)}
-                  className={cn(
-                    "w-12 h-11 flex items-center justify-center rounded-xl transition-all",
-                    activeFeedbackTab === tab.id 
-                      ? "text-indigo-600 bg-white shadow-md ring-1 ring-slate-100" 
-                      : "text-slate-400 hover:text-indigo-400"
-                  )}
-                >
-                  <div className="relative">
-                    <tab.icon className="w-5 h-5" />
-                    {tab.hasContent && (
-                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-rose-500 rounded-full border border-white animate-pulse" />
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+             <div className="flex items-center bg-slate-50 p-1 rounded-2xl h-14 border border-slate-200/60 shadow-inner gap-1">
+               {tabs.map((tab: any) => {
+                 const isActive = activeFeedbackTab === tab.id
+                 return (
+                   <button
+                     key={tab.id}
+                     onClick={() => setActiveFeedbackTab(tab.id)}
+                     className={cn(
+                       "w-12 h-11 flex items-center justify-center rounded-xl transition-all duration-300 relative",
+                       isActive 
+                         ? (
+                             tab.id === 'insight' ? "text-amber-500 bg-white shadow-md border border-amber-100/60 scale-105" :
+                             tab.id === 'ai' ? "text-indigo-600 bg-white shadow-md border border-indigo-100/60 scale-105" :
+                             "text-emerald-600 bg-white shadow-md border border-emerald-100/60 scale-105"
+                           )
+                         : "text-slate-400 hover:text-slate-600 hover:bg-white/40"
+                     )}
+                   >
+                     <div className="relative">
+                       <tab.icon className={cn("w-5 h-5 transition-transform duration-300", isActive && "scale-110")} />
+                       {tab.hasContent && (
+                         <span className={cn(
+                           "absolute -top-1 -right-1 w-2 h-2 rounded-full border border-white animate-pulse",
+                           tab.id === 'insight' ? "bg-amber-500" :
+                           tab.id === 'ai' ? "bg-indigo-600" :
+                           "bg-emerald-500"
+                         )} />
+                       )}
+                     </div>
+                   </button>
+                 )
+               })}
+             </div>
 
-            <div className="relative">
-              <AnimatePresence>
-                {isCopyMenuOpen && activeFeedbackTab === 'ai' && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                    className="absolute bottom-16 right-0 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-[100]"
-                  >
-                    <button 
-                      onClick={() => copyCurrentTabContent('default')}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 rounded-xl transition-all text-left"
-                    >
-                      <FileText className="w-4 h-4 text-slate-400" />
-                      <span className="text-[11px] font-black text-slate-600 uppercase">Copy Result</span>
-                    </button>
-                    <button 
-                      onClick={() => copyCurrentTabContent('question')}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 rounded-xl transition-all text-left"
-                    >
-                      <HelpCircle className="w-4 h-4 text-slate-400" />
-                      <span className="text-[11px] font-black text-slate-600 uppercase">Copy Question</span>
-                    </button>
-                    <button 
-                      onClick={() => copyCurrentTabContent('prompt')}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 rounded-xl transition-all text-left"
-                    >
-                      <Brain className="w-4 h-4 text-indigo-500" />
-                      <span className="text-[11px] font-black text-indigo-600 uppercase">Copy Prompt</span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+             <div className="relative">
+               <AnimatePresence>
+                 {isCopyMenuOpen && activeFeedbackTab === 'ai' && (
+                   <motion.div 
+                     initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                     animate={{ opacity: 1, y: 0, scale: 1 }}
+                     exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                     className="absolute bottom-16 right-0 w-56 bg-white/95 backdrop-blur-md rounded-2xl shadow-[0_10px_30px_rgba(99,102,241,0.12)] border border-slate-100/80 p-2 flex flex-col gap-1 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-200"
+                   >
+                     <button 
+                       onClick={() => copyCurrentTabContent('default')}
+                       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 hover:text-slate-800 rounded-xl transition-all text-left"
+                     >
+                       <FileText className="w-4 h-4 text-slate-400" />
+                       <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Copy Result</span>
+                     </button>
+                     <button 
+                       onClick={() => copyCurrentTabContent('question')}
+                       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 hover:text-slate-800 rounded-xl transition-all text-left"
+                     >
+                       <HelpCircle className="w-4 h-4 text-slate-400" />
+                       <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Copy Question</span>
+                     </button>
+                     <button 
+                       onClick={() => copyCurrentTabContent('prompt')}
+                       className="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50/60 hover:text-indigo-600 rounded-xl transition-all text-left"
+                     >
+                       <Brain className="w-4 h-4 text-indigo-400" />
+                       <span className="text-[11px] font-black text-indigo-500 uppercase tracking-wider">Copy Prompt</span>
+                     </button>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
 
-              <button 
-                onClick={() => {
-                  if (activeFeedbackTab === 'ai') setIsCopyMenuOpen(!isCopyMenuOpen)
-                  else copyCurrentTabContent()
-                }}
-                className={cn(
-                  "w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-90 shadow-sm",
-                  isCopied ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-100 text-slate-400 hover:text-indigo-600"
-                )}
-              >
-                {isCopied ? <Check className="w-5 h-5 stroke-[3]" /> : <Copy className="w-5 h-5" />}
-              </button>
-            </div>
+               <button 
+                 onClick={() => {
+                   if (activeFeedbackTab === 'ai') setIsCopyMenuOpen(!isCopyMenuOpen)
+                   else copyCurrentTabContent()
+                 }}
+                 className={cn(
+                   "w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all duration-300 active:scale-90 shadow-sm",
+                   isCopied 
+                     ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-lg shadow-emerald-100 scale-105" 
+                     : "bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600"
+                 )}
+               >
+                 {isCopied ? <Check className="w-5 h-5 stroke-[3]" /> : <Copy className="w-5 h-5" />}
+               </button>
+             </div>
 
-            {isMobile && (
-              <button 
-                onClick={() => {
-                  handleNext()
-                  setIsFeedbackOpen(false)
-                }}
-                className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-100 active:scale-90 transition-all"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            )}
-         </div>
+             {isMobile && (
+               <button 
+                 onClick={() => {
+                   handleNext()
+                   setIsFeedbackOpen(false)
+                 }}
+                 className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200/60 active:scale-90 hover:scale-105 hover:rotate-3 transition-all"
+               >
+                 <ChevronRight className="w-5 h-5" />
+               </button>
+             )}
+          </div>
       </div>
     )
   }
@@ -1052,7 +1399,7 @@ export default function QuizPlay() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={cn(
-              "fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-[0.1em] shadow-xl flex items-center gap-3 backdrop-blur-md border",
+              "fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-[0.1em] shadow-xl flex items-center gap-3 backdrop-blur-md border whitespace-nowrap",
               currentQuestion.options[selectedOption].is_correct 
                 ? "bg-emerald-500/90 text-white border-emerald-400/30 shadow-emerald-200/20" 
                 : "bg-amber-400/90 text-slate-800 border-amber-300/30 shadow-amber-200/20"
@@ -1063,8 +1410,8 @@ export default function QuizPlay() {
                 <Check className="w-3 h-3 text-white stroke-[4]" />
               </div>
             ) : (
-              <div className="w-5 h-5 rounded-full bg-slate-800/10 flex items-center justify-center">
-                <Sparkles className="w-3 h-3 text-slate-800" />
+              <div className="w-5 h-5 rounded-full bg-white/60 flex items-center justify-center">
+                <Sparkles className="w-3 h-3 text-amber-700" />
               </div>
             )}
             {badgeMessage}
@@ -1073,17 +1420,160 @@ export default function QuizPlay() {
       </AnimatePresence>
       {/* XP Float Animation */}
       <AnimatePresence>
-        {xpFloat.visible && (
+        {xpFloat.visible && (() => {
+          const isLimitless = (activeGoal && activeGoal.done_today > activeGoal.daily_target) || (goalToast && goalToast.doneToday > goalToast.dailyTarget);
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.5 }}
+              animate={{ opacity: 1, y: -120, scale: isLimitless ? 1.4 : 1.2 }}
+              exit={{ opacity: 0, y: -180, scale: 0.8 }}
+              className={cn(
+                "fixed bottom-32 left-1/2 -translate-x-1/2 z-[1001] px-6 py-3 rounded-2xl font-black text-base shadow-2xl pointer-events-none transition-all duration-300",
+                isLimitless 
+                  ? "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white shadow-amber-500/50 border border-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.6)] animate-bounce" 
+                  : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-indigo-300/50"
+              )}
+            >
+              {isLimitless ? "⚡ OVERDRIVE +" : "+"}
+              {xpFloat.amount} XP ✨
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Goal Milestone Toast */}
+      <AnimatePresence>
+        {goalToast && goalToast.visible && (() => {
+          const isLimitless = goalToast.doneToday > goalToast.dailyTarget
+          return (
+            <motion.div
+              initial={{ opacity: 0, x: 200, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 200, scale: 0.9 }}
+              className={cn(
+                "fixed top-24 right-6 z-[1002] max-w-sm w-82 backdrop-blur-xl rounded-[2rem] p-5 flex items-center gap-4 border transition-all duration-300",
+                isLimitless 
+                  ? "bg-slate-950/95 border-amber-500/60 shadow-[0_0_40px_rgba(245,158,11,0.35),inset_0_1px_1px_rgba(255,255,255,0.15)] text-white" 
+                  : "bg-white/95 border-slate-100 shadow-[0_20px_50px_rgba(99,102,241,0.15)] text-slate-900"
+              )}
+            >
+              {/* Circular Progress Ring or Flame Icon */}
+              <div className="relative w-14 h-14 flex-shrink-0 flex items-center justify-center">
+                {goalToast.justCompleted ? (
+                  <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-400 to-red-500 flex items-center justify-center shadow-lg shadow-orange-100 animate-bounce">
+                    <Flame className="w-6 h-6 text-white fill-white" />
+                  </div>
+                ) : (
+                  <>
+                    <svg className="w-14 h-14 transform -rotate-90">
+                      <circle
+                        cx="28"
+                        cy="28"
+                        r="22"
+                        className={isLimitless ? "stroke-slate-900" : "stroke-slate-100"}
+                        strokeWidth="3.5"
+                        fill="transparent"
+                      />
+                      <circle
+                        cx="28"
+                        cy="28"
+                        r="22"
+                        className={cn(
+                          "transition-all duration-1000 ease-out",
+                          isLimitless ? "stroke-amber-400 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" : (goalToast.isTargetMet ? "stroke-emerald-500" : "stroke-indigo-600")
+                        )}
+                        strokeWidth="3.5"
+                        fill="transparent"
+                        strokeDasharray={2 * Math.PI * 22}
+                        strokeDashoffset={2 * Math.PI * 22 * (1 - Math.min(1, goalToast.doneToday / goalToast.dailyTarget))}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className={cn(
+                      "absolute text-[10px] font-black",
+                      isLimitless ? "text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-pulse" : "text-slate-700"
+                    )}>
+                      {isLimitless ? `⚡${goalToast.doneToday}` : `${goalToast.doneToday}/${goalToast.dailyTarget}`}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={cn(
+                    "text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md",
+                    goalToast.justCompleted ? "bg-amber-100 text-amber-700" : 
+                    isLimitless ? "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white animate-pulse border border-amber-400/35 shadow-lg shadow-amber-500/25 tracking-wider" :
+                    "bg-indigo-50 text-indigo-600"
+                  )}>
+                    {goalToast.justCompleted ? "GOAL REACHED" : isLimitless ? "LIMITLESS MODE ⚡" : "DAILY GOAL"}
+                  </span>
+                  {goalToast.streakCount > 0 && (
+                    <span className={cn(
+                      "flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md",
+                      isLimitless ? "bg-amber-950 text-amber-300 border border-amber-500/20" : "bg-orange-50 text-orange-600"
+                    )}>
+                      🔥 {goalToast.streakCount}d
+                    </span>
+                  )}
+                </div>
+                <p className={cn(
+                  "font-bold text-xs leading-relaxed pr-2",
+                  isLimitless ? "text-amber-200 drop-shadow-[0_0_2px_rgba(245,158,11,0.2)]" : "text-slate-600"
+                )}>
+                  {goalToast.message}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setGoalToast(prev => prev ? { ...prev, visible: false } : null)}
+                className={cn(
+                  "absolute top-4 right-4 w-6 h-6 flex items-center justify-center rounded-full transition-all",
+                  isLimitless ? "hover:bg-slate-800 text-slate-500 hover:text-slate-300" : "hover:bg-slate-50 text-slate-400 hover:text-slate-600"
+                )}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          )
+        })()}
+      </AnimatePresence>
+
+      {/* Learning Mode Alert Toast */}
+      <AnimatePresence>
+        {learningModeAlert && learningModeAlert.visible && (
           <motion.div
-            initial={{ opacity: 0, y: 0, scale: 0.8 }}
-            animate={{ opacity: 1, y: -60, scale: 1.1 }}
-            exit={{ opacity: 0, y: -100, scale: 0.8 }}
-            className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[1001] px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-base shadow-xl shadow-indigo-300/50 pointer-events-none"
+            initial={{ opacity: 0, x: 200, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 200, scale: 0.9 }}
+            className="fixed top-24 right-6 z-[1002] max-w-sm w-82 bg-white/95 backdrop-blur-xl border border-slate-100 shadow-[0_20px_50px_rgba(99,102,241,0.15)] rounded-[2rem] p-5 flex items-start gap-4 text-slate-900 transition-all duration-300"
           >
-            +{xpFloat.amount} XP ✨
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600">
+                  SMART LEARNING
+                </span>
+              </div>
+              <p className="font-bold text-xs leading-relaxed pr-2 text-slate-600">
+                {learningModeAlert.message}
+              </p>
+            </div>
+
+            <button
+              onClick={() => setLearningModeAlert(prev => prev ? { ...prev, visible: false } : null)}
+              className="absolute top-4 right-4 w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
+
       <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/90 backdrop-blur-2xl border-b border-slate-100/80 px-4 py-2.5 flex items-center justify-between shadow-[0_1px_20px_rgba(99,102,241,0.06)]">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="w-9 h-9 flex items-center justify-center bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600 shadow-sm hover:bg-indigo-100 active:scale-90 transition-all">
@@ -1121,7 +1611,7 @@ export default function QuizPlay() {
                 animate={{ opacity: 1, scale: 1 }}
                 onClick={copyQuestionToClipboard}
                 className="w-9 h-9 flex items-center justify-center bg-amber-50 border border-amber-100 rounded-xl text-amber-500 shadow-sm active:scale-90 transition-all hover:bg-amber-100"
-                title="Copy câu hỏi"
+                title="Copy question"
               >
                 <Copy className="w-4 h-4" />
               </motion.button>
@@ -1131,7 +1621,7 @@ export default function QuizPlay() {
           <button 
             onClick={openEditModal}
             className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm active:scale-90 transition-all"
-            title="Sửa câu hỏi"
+            title="Edit question"
           >
             <Edit3 className="w-4 h-4" />
           </button>
@@ -1150,7 +1640,7 @@ export default function QuizPlay() {
             <div className="flex flex-col h-full">
               {/* Header */}
               <div className="p-6 border-b border-slate-50 flex items-center justify-center bg-white sticky top-0 z-10">
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Trả lời để xem phân tích</span>
+                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Answer to view analysis</span>
               </div>
               
               <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center">
@@ -1162,8 +1652,8 @@ export default function QuizPlay() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-black text-slate-700 mb-1">Chọn câu trả lời</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">Sau khi trả lời, bạn sẽ thấy phân tích chi tiết và giải thích từ AI tại đây.</p>
+                  <h3 className="text-sm font-black text-slate-700 mb-1">Choose your answer</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">After answering, you will see detailed analysis and AI explanation here.</p>
                 </div>
 
                 {/* Divider */}
@@ -1171,23 +1661,23 @@ export default function QuizPlay() {
 
                 {/* Session Quick Stats */}
                 <div className="w-full space-y-2">
-                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Tiến độ phiên học</span>
+                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Study Session Progress</span>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="flex flex-col items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
                       <span className="text-lg font-black text-slate-700">{Object.keys(sessionAnswers).length}</span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase">Đã làm</span>
+                      <span className="text-[8px] font-bold text-slate-400 uppercase">Done</span>
                     </div>
                     <div className="flex flex-col items-center p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
                       <span className="text-lg font-black text-emerald-600">
                         {Object.entries(sessionAnswers).filter(([idx, optIdx]) => session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
                       </span>
-                      <span className="text-[8px] font-bold text-emerald-400 uppercase">Đúng</span>
+                      <span className="text-[8px] font-bold text-emerald-400 uppercase">Correct</span>
                     </div>
                     <div className="flex flex-col items-center p-3 bg-rose-50 rounded-2xl border border-rose-100">
                       <span className="text-lg font-black text-rose-600">
                         {Object.entries(sessionAnswers).filter(([idx, optIdx]) => !session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
                       </span>
-                      <span className="text-[8px] font-bold text-rose-400 uppercase">Sai</span>
+                      <span className="text-[8px] font-bold text-rose-400 uppercase">Wrong</span>
                     </div>
                   </div>
 
@@ -1222,14 +1712,14 @@ export default function QuizPlay() {
                 <div className="w-full p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100/60 text-left">
                   <div className="flex items-center gap-2 mb-2">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Mẹo học tập</span>
+                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Learning Tip</span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                     {currentIndex % 3 === 0 
-                      ? "Hãy đọc kỹ toàn bộ câu hỏi trước khi chọn đáp án. Đôi khi từ ngữ tinh tế tạo ra sự khác biệt lớn! 🎯"
+                      ? "Read the entire question carefully before selecting an answer. Subtle phrasing can make a big difference! 🎯"
                       : currentIndex % 3 === 1
-                      ? "Loại trừ những đáp án sai rõ ràng trước để tăng xác suất chọn đúng. Phương pháp POE rất hiệu quả! 💡"
-                      : "Streak liên tiếp giúp bạn nhớ lâu hơn. Cố gắng duy trì chuỗi đúng để kích hoạt bộ nhớ dài hạn! 🔥"
+                      ? "Eliminate obviously incorrect answers first to increase your chances. The POE method is highly effective! 💡"
+                      : "Consecutive streaks help with long-term retention. Try to maintain your correct answers to activate long-term memory! 🔥"
                     }
                   </p>
                 </div>
@@ -1353,8 +1843,39 @@ export default function QuizPlay() {
                          🔥 {answerContext.newStreak} STREAK
                        </span>
                      )}
+
+                     {/* Daily Goal Badge */}
+                      {activeGoal && (
+                        activeGoal.done_today > activeGoal.daily_target ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-gradient-to-r from-amber-500 to-red-500 text-white border border-transparent shadow-md shadow-amber-200/50 animate-pulse">
+                            ⚡ OVERDRIVE ({activeGoal.done_today}/{activeGoal.daily_target})
+                          </span>
+                        ) : activeGoal.is_target_met ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-emerald-500 text-white border border-emerald-400 shadow-md shadow-emerald-100/50 animate-pulse">
+                            🎯 GOAL MET ({activeGoal.done_today}/{activeGoal.daily_target})
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            🎯 GOAL: {activeGoal.done_today}/{activeGoal.daily_target}
+                          </span>
+                        )
+                      )}
+
+                     {/* Deck Completion Speed Badge */}
+                     {activeGoal && (
+                       activeGoal.days_remaining_est > 0 ? (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-100">
+                           🚀 COMPLETE IN {activeGoal.days_remaining_est} DAYS
+                         </span>
+                       ) : (
+                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100">
+                           🎉 DECK MASTERED
+                         </span>
+                       )
+                     )}
                    </div>
                  )}
+
                  {session.instruction && (
                     <div className="md:mb-6 mb-4 md:p-5 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 shadow-sm animate-in fade-in slide-in-from-top-2">
                        <div className="flex items-center gap-2 mb-2">
@@ -1440,6 +1961,18 @@ export default function QuizPlay() {
           <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all">
             <LayoutGrid className="w-5 h-5" />
           </button>
+
+          <button 
+            onClick={() => setIsModeMenuOpen(true)} 
+            className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all"
+            title="Change Smart Learning Mode"
+          >
+            {activeMode === 'sequential' && <ListOrdered className="w-5 h-5" />}
+            {activeMode === 'random' && <Shuffle className="w-5 h-5" />}
+            {activeMode === 'unseen' && <EyeOff className="w-5 h-5" />}
+            {activeMode === 'review' && <AlertCircle className="w-5 h-5" />}
+            {activeMode === 'hardest' && <TrendingUp className="w-5 h-5" />}
+          </button>
           
           {showFeedback && (
             <button onClick={() => setIsFeedbackOpen(true)} className="xl:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-indigo-50 border border-indigo-200 rounded-2xl text-indigo-600 shadow-sm active:scale-95 transition-all relative hover:bg-indigo-100">
@@ -1453,14 +1986,14 @@ export default function QuizPlay() {
               disabled={selectedOption === null}
               className="flex-1 h-12 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black text-xs rounded-2xl shadow-lg shadow-slate-300/40 uppercase tracking-widest active:scale-[0.98] transition-all disabled:opacity-20 disabled:cursor-not-allowed"
             >
-              XÁC NHẬN ĐÁP ÁN
+              CONFIRM ANSWER
             </button>
           ) : (
             <button 
               onClick={handleNext}
               className="flex-1 h-12 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/50 flex items-center justify-center gap-2.5 uppercase tracking-widest active:scale-[0.98] transition-all hover:shadow-indigo-400/60 hover:shadow-xl"
             >
-              CÂU TIẾP THEO <ChevronRight className="w-4 h-4" />
+              NEXT QUESTION <ChevronRight className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -1588,6 +2121,98 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
+      {/* ⚡ LIMITLESS MODE SCREEN FLASH OVERLAY */}
+      <AnimatePresence>
+        {isLimitlessStrike && (
+          <div className="pointer-events-none fixed inset-0 z-[1999] border-[8px] border-amber-400/50 shadow-[inset_0_0_100px_rgba(245,158,11,0.4)] animate-pulse flex items-center justify-center">
+            <motion.div 
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: [1, 1.15, 1], opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 tracking-widest drop-shadow-[0_0_15px_rgba(245,158,11,0.7)] uppercase text-center"
+            >
+              ⚡ OVERDRIVE STRIKE! ⚡
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🏆 DAILY GOAL CELEBRATION MODAL */}
+      <AnimatePresence>
+        {showGoalCelebration && goalToast && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setShowGoalCelebration(false)
+                confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } })
+              }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl pointer-events-auto"
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 50 }}
+              transition={{ type: 'spring', bounce: 0.35, duration: 0.6 }}
+              className="relative w-full max-w-md bg-white rounded-[3rem] p-8 shadow-[0_25px_60px_rgba(99,102,241,0.3)] border border-slate-100/80 overflow-hidden text-center z-10 pointer-events-auto"
+            >
+              {/* Top premium border indicator */}
+              <div className="absolute top-0 left-0 w-full h-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500"></div>
+              
+              {/* Spinning/glowing light background aura */}
+              <div className="absolute top-12 left-1/2 -translate-x-1/2 w-56 h-56 bg-gradient-to-tr from-amber-200/20 to-orange-200/20 rounded-full blur-3xl animate-pulse pointer-events-none" />
+              
+              {/* Giant Bouncing Trophy Icon */}
+              <div className="relative w-28 h-28 mx-auto mb-6 flex items-center justify-center">
+                <div className="absolute inset-0 bg-gradient-to-tr from-amber-400 to-orange-500 rounded-[2.5rem] rotate-12 scale-95 opacity-20 animate-pulse" />
+                <div className="relative w-24 h-24 bg-gradient-to-tr from-amber-400 via-orange-500 to-red-500 rounded-[2rem] flex items-center justify-center shadow-lg shadow-orange-300 transform hover:scale-105 transition-all">
+                  <Trophy className="w-12 h-12 text-white fill-white animate-bounce" />
+                </div>
+              </div>
+              
+              <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-4 py-1.5 rounded-full uppercase tracking-[0.2em] mb-4 inline-block shadow-sm">
+                Daily Goal Achieved! 🏆
+              </span>
+              
+              <h3 className="text-3xl font-black text-slate-800 tracking-tight leading-tight mb-3">
+                SUPER STUDY DISCIPLINE!
+              </h3>
+              
+              <p className="text-slate-500 font-bold text-xs leading-relaxed mb-8 px-4">
+                {goalToast.message}
+              </p>
+              
+              {/* Rewards Summary Grid */}
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="bg-gradient-to-br from-indigo-50/50 via-purple-50/30 to-white border border-indigo-100/50 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm">
+                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">BONUS REWARD</span>
+                  <span className="text-xl font-black text-indigo-600">⚡ +{goalToast.bonusXP || 50} XP</span>
+                </div>
+                <div className="bg-gradient-to-br from-orange-50/50 via-amber-50/30 to-white border border-orange-100/50 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm">
+                  <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">DAILY STREAK</span>
+                  <span className="text-xl font-black text-orange-600">🔥 {goalToast.streakCount}d</span>
+                </div>
+              </div>
+              
+              {/* High Motivation Action Button */}
+              <button 
+                onClick={() => {
+                  setShowGoalCelebration(false)
+                  confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } })
+                }}
+                className="w-full py-4 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-orange-200 hover:shadow-orange-300 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                AWESOME, KEEP GOING! 🚀
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Exit Confirmation Modal */}
       <AnimatePresence>
         {isQuitModalOpen && (
@@ -1612,15 +2237,15 @@ export default function QuizPlay() {
                   <X className="w-8 h-8 text-rose-500" />
                 </div>
                 
-                <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tight">Kết Thúc Phiên Học?</h3>
-                <p className="text-slate-500 font-medium text-sm leading-relaxed mb-8">Thoát ngay bây giờ sẽ xóa trạng thái hiện tại của phiên học này. Bạn có chắc chắn muốn thoát không?</p>
+                <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tight">End Study Session?</h3>
+                <p className="text-slate-500 font-medium text-sm leading-relaxed mb-8">Exiting now will clear the current state of this study session. Are you sure you want to exit?</p>
                 
                 <div className="grid grid-cols-2 gap-3 w-full">
                   <button 
                     onClick={() => setIsQuitModalOpen(false)}
                     className="py-4 bg-slate-50 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all"
                   >
-                    Ở LẠI HỌC
+                    KEEP STUDYING
                   </button>
                   <button 
                     onClick={async () => {
@@ -1631,7 +2256,7 @@ export default function QuizPlay() {
                     }}
                     className="py-4 bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-200 active:scale-95 transition-all"
                   >
-                    XÁC NHẬN THOÁT
+                    CONFIRM EXIT
                   </button>
                 </div>
               </div>
@@ -1659,7 +2284,7 @@ export default function QuizPlay() {
                 <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                      <Edit3 className="w-5 h-5 text-indigo-600" />
-                     SỬA CÂU HỎI #{currentIndex + 1}
+                     EDIT QUESTION #{currentIndex + 1}
                    </h2>
                    <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-all">
                       <X className="w-5 h-5 text-slate-400" />
@@ -1669,7 +2294,7 @@ export default function QuizPlay() {
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                    {/* Content */}
                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">NỘI DUNG CÂU HỎI</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">QUESTION CONTENT</label>
                       <textarea 
                         value={editFormData.content}
                         onChange={(e) => setEditFormData({...editFormData, content: e.target.value})}
@@ -1679,7 +2304,7 @@ export default function QuizPlay() {
                    
                    {/* Options */}
                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CÁC LỰA CHỌN</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OPTIONS</label>
                       <div className="grid grid-cols-1 gap-2">
                         {editFormData.options.map((opt: any, idx: number) => (
                           <div key={idx} className="flex items-center gap-3 group">
@@ -1715,7 +2340,7 @@ export default function QuizPlay() {
                    {/* Insights */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">INSIGHT (GIẢI THÍCH)</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">INSIGHT (EXPLANATION)</label>
                         <textarea 
                           value={editFormData.explanation}
                           onChange={(e) => setEditFormData({...editFormData, explanation: e.target.value})}
@@ -1741,17 +2366,152 @@ export default function QuizPlay() {
                      onClick={() => setIsEditModalOpen(false)}
                      className="px-6 py-3 text-sm font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-all"
                    >
-                     HỦY BỎ
+                     CANCEL
                    </button>
                    <button 
                      onClick={handleSaveEdit}
                      disabled={isSavingEdit}
                      className="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
                    >
-                     {isSavingEdit ? 'ĐANG LƯU...' : 'LƯU THAY ĐỔI'}
+                     {isSavingEdit ? 'SAVING...' : 'SAVE CHANGES'}
                    </button>
                 </div>
              </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ⚙️ SMART LEARNING MODE MODAL */}
+      <AnimatePresence>
+        {isModeMenuOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModeMenuOpen(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md pointer-events-auto"
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] p-6 shadow-[0_25px_60px_rgba(99,102,241,0.25)] border border-slate-100 overflow-hidden z-[1010] pointer-events-auto"
+            >
+              {/* Top premium border indicator */}
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+              
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100">
+                    <Sliders className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-800 tracking-tight uppercase">Smart Learning Modes</h3>
+                </div>
+                <button 
+                  onClick={() => setIsModeMenuOpen(false)} 
+                  className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 active:scale-95 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              {/* Description */}
+              <p className="text-slate-500 font-bold text-xs leading-relaxed mb-5">
+                Customize how QuizMind serves the next question. Choose a pathway that matches your active study goals.
+              </p>
+              
+              {/* Mode Options List */}
+              <div className="space-y-2.5 mb-6">
+                {[
+                  {
+                    id: 'sequential',
+                    name: 'Sequential Order',
+                    desc: 'Follow deck natural sequence from first to last question.',
+                    icon: ListOrdered,
+                    color: 'from-blue-500 to-indigo-500',
+                    bg: 'bg-blue-50/50 border-blue-100'
+                  },
+                  {
+                    id: 'random',
+                    name: 'Shuffle Mode',
+                    desc: 'Serve questions in a completely randomized, unexpected order.',
+                    icon: Shuffle,
+                    color: 'from-purple-500 to-indigo-500',
+                    bg: 'bg-purple-50/50 border-purple-100'
+                  },
+                  {
+                    id: 'unseen',
+                    name: 'New Cards First',
+                    desc: 'Prioritize questions you have never attempted in this deck.',
+                    icon: EyeOff,
+                    color: 'from-teal-500 to-emerald-500',
+                    bg: 'bg-teal-50/50 border-teal-100'
+                  },
+                  {
+                    id: 'review',
+                    name: 'Mistakes First',
+                    desc: 'Focus on review cards you answered incorrectly in prior attempts.',
+                    icon: AlertCircle,
+                    color: 'from-amber-500 to-red-500',
+                    bg: 'bg-amber-50/50 border-amber-100'
+                  },
+                  {
+                    id: 'hardest',
+                    name: 'Hardest First (SRS)',
+                    desc: 'Prioritize questions with the lowest accuracy ratio first.',
+                    icon: TrendingUp,
+                    color: 'from-rose-500 to-pink-500',
+                    bg: 'bg-rose-50/50 border-rose-100'
+                  }
+                ].map((m) => {
+                  const Icon = m.icon
+                  const isSelected = activeMode === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        applyLearningMode(m.id)
+                      }}
+                      className={cn(
+                        "w-full p-4 rounded-2xl border-2 text-left flex items-start gap-4 transition-all duration-200 active:scale-[0.99]",
+                        isSelected 
+                          ? "border-indigo-500 bg-indigo-50/20 shadow-md shadow-indigo-100/50" 
+                          : "border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50/30"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center text-white bg-gradient-to-br shadow-md flex-shrink-0",
+                        m.color
+                      )}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-bold text-sm text-slate-800">{m.name}</span>
+                          {isSelected && (
+                            <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-200">
+                              <Check className="w-3 h-3 text-white stroke-[3]" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-500 leading-relaxed block">{m.desc}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              
+              <button 
+                onClick={() => setIsModeMenuOpen(false)}
+                className="w-full py-3.5 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-slate-300 active:scale-95 transition-all hover:bg-slate-800"
+              >
+                APPLY & CLOSE
+              </button>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

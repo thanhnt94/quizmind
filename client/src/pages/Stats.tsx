@@ -149,7 +149,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Accuracy" 
                        value={`${personal.summary.global_accuracy}%`} 
-                       sub="Tỷ lệ chính xác"
+                       sub="Accuracy Rate"
                        icon={TargetIcon}
                        color="text-indigo-600"
                        bg="bg-indigo-50"
@@ -157,7 +157,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Time" 
                        value={`${personal.summary.total_time_hours}h`} 
-                       sub="Thời gian học"
+                       sub="Study Duration"
                        icon={Clock}
                        color="text-emerald-600"
                        bg="bg-emerald-50"
@@ -165,7 +165,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Questions" 
                        value={personal.summary.total_questions} 
-                       sub="Tổng câu hỏi"
+                       sub="Total Questions"
                        icon={Layers}
                        color="text-amber-600"
                        bg="bg-amber-50"
@@ -173,7 +173,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Score" 
                        value={personal.summary.total_correct} 
-                       sub="Câu trả lời đúng"
+                       sub="Correct Answers"
                        icon={Zap}
                        color="text-rose-600"
                        bg="bg-rose-50"
@@ -307,7 +307,7 @@ export default function Stats() {
                   {/* DOMAIN MASTERY */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-10 shadow-sm">
-                        <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic mb-8">Lĩnh vực kiến thức</h3>
+                        <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic mb-8">Knowledge Domains</h3>
                         <div className="space-y-6">
                            {personal.category_performance.slice(0, 6).map((cat, idx) => (
                              <div key={idx}>
@@ -328,7 +328,7 @@ export default function Stats() {
                      </div>
 
                      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-10 shadow-sm">
-                        <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic mb-8">Lịch sử bài làm</h3>
+                        <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic mb-8">Attempt History</h3>
                         <div className="space-y-4">
                            {personal.recent_sessions.map((session, idx) => (
                              <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
@@ -361,7 +361,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Total Users" 
                        value={global.total_users} 
-                       sub="Người dùng"
+                       sub="Active Users"
                        icon={Users}
                        color="text-indigo-600"
                        bg="bg-indigo-50"
@@ -369,7 +369,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Total Quizzes" 
                        value={global.total_quizzes} 
-                       sub="Bộ câu hỏi"
+                       sub="Quiz Decks"
                        icon={BookOpen}
                        color="text-emerald-600"
                        bg="bg-emerald-50"
@@ -377,7 +377,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Total Items" 
                        value={global.total_questions} 
-                       sub="Tổng câu hỏi"
+                       sub="Total Questions"
                        icon={Layers}
                        color="text-amber-600"
                        bg="bg-amber-50"
@@ -385,7 +385,7 @@ export default function Stats() {
                      <MetricCard 
                        label="Platform Acc" 
                        value={`${global.platform_accuracy}%`} 
-                       sub="Độ chính xác"
+                       sub="Platform Accuracy"
                        icon={Globe}
                        color="text-rose-600"
                        bg="bg-rose-50"
@@ -399,20 +399,20 @@ export default function Stats() {
                         </div>
                         <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic tracking-tight">Knowledge Ecosystem</h3>
                         <p className="text-xs md:text-sm font-medium text-slate-400 leading-relaxed">
-                           Mạng lưới tri thức QuizMind đang không ngừng mở rộng. Trung bình mỗi câu hỏi được xử lý trong <strong>{global.avg_time_per_question} giây</strong> với tỷ lệ chính xác toàn hệ thống đạt mức <strong>{global.platform_accuracy}%</strong>.
+                           The QuizMind knowledge ecosystem is continuously expanding. On average, each question is solved in <strong>{global.avg_time_per_question} seconds</strong> with a platform-wide accuracy rate of <strong>{global.platform_accuracy}%</strong>.
                         </p>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-8">
                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Thời gian TB</h4>
+                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Time</h4>
                               <p className="text-lg font-black text-slate-900">{global.avg_time_per_question}s</p>
                            </div>
                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Trạng thái</h4>
-                              <p className="text-lg font-black text-emerald-600">Ổn định</p>
+                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</h4>
+                              <p className="text-lg font-black text-emerald-600">Stable</p>
                            </div>
                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tổng dữ liệu</h4>
+                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Items</h4>
                               <p className="text-lg font-black text-indigo-600">{global.total_questions}</p>
                            </div>
                         </div>

@@ -68,7 +68,7 @@ export default function QuizDetail() {
       setUserSearch('')
       setSearchResults([])
     } catch (e) {
-      alert("Lỗi khi thêm!")
+      alert("Error adding collaborator!")
     }
   }
 
@@ -77,7 +77,7 @@ export default function QuizDetail() {
       await axios.delete(`/api/v1/quiz/${id}/collaborators/${userId}`)
       fetchCollaborators()
     } catch (e) {
-      alert("Lỗi khi xóa!")
+      alert("Error removing collaborator!")
     }
   }
 
@@ -165,14 +165,14 @@ export default function QuizDetail() {
             <div className="flex-1 text-center md:text-left relative z-10">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-3">
                 <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest">
-                  {quiz?.questions_count || 0} CÂU HỎI
+                  {quiz?.questions_count || 0} QUESTIONS
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-widest">
-                  LUYỆN TẬP
+                  PRACTICE
                 </span>
               </div>
               <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-3 tracking-tighter">{quiz?.title}</h1>
-              <p className="text-slate-400 font-medium text-base leading-relaxed max-w-2xl">{quiz?.description || "Hệ thống trắc nghiệm thông minh QuizMind."}</p>
+              <p className="text-slate-400 font-medium text-base leading-relaxed max-w-2xl">{quiz?.description || "Smart gamified quiz learning platform."}</p>
             </div>
           </div>
         </div>
@@ -189,7 +189,7 @@ export default function QuizDetail() {
                   activeTab === tab ? 'text-indigo-600' : 'text-slate-400'
                 )}
               >
-                {tab === 'list' ? 'DANH SÁCH CÂU HỎI' : 'THỐNG KÊ CHI TIẾT'}
+                {tab === 'list' ? 'QUESTION LIST' : 'DETAILED STATISTICS'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full" />}
               </button>
             ))}
@@ -203,7 +203,7 @@ export default function QuizDetail() {
                   type="text" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Tìm kiếm nội dung câu hỏi..." 
+                  placeholder="Search questions by content..." 
                   className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all" 
                 />
               </div>
@@ -219,10 +219,10 @@ export default function QuizDetail() {
                         <h3 className="text-sm font-bold text-slate-700 leading-relaxed md:line-clamp-2">{q.content}</h3>
                       </div>
                       <div className="flex items-center gap-5 md:ml-auto flex-shrink-0 pt-2 md:pt-0">
-                        <StatItem label="LẦN LÀM" value={q.stats?.total || 0} color="slate" />
+                        <StatItem label="ATTEMPTS" value={q.stats?.total || 0} color="slate" />
                         <div className="w-px h-6 bg-slate-100" />
-                        <StatItem label="ĐÚNG" value={q.stats?.correct || 0} color="emerald" />
-                        <StatItem label="SAI" value={q.stats?.wrong || 0} color="rose" />
+                        <StatItem label="CORRECT" value={q.stats?.correct || 0} color="emerald" />
+                        <StatItem label="WRONG" value={q.stats?.wrong || 0} color="rose" />
                         {notes?.[q.id] && (
                           <>
                             <div className="w-px h-6 bg-slate-100" />
@@ -249,7 +249,7 @@ export default function QuizDetail() {
                     disabled={isFetchingNextPage}
                     className="px-8 py-3 bg-white border border-slate-100 rounded-xl text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm active:scale-95 disabled:opacity-50"
                   >
-                    {isFetchingNextPage ? 'ĐANG TẢI...' : 'TẢI THÊM'}
+                    {isFetchingNextPage ? 'LOADING...' : 'LOAD MORE'}
                   </button>
                 </div>
               )}
@@ -259,8 +259,8 @@ export default function QuizDetail() {
               <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-8 text-indigo-600">
                 <BarChart2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-4">Phân tích chuyên sâu</h3>
-              <p className="text-slate-500 font-medium mb-10 max-w-md mx-auto">Dữ liệu đang được tổng hợp.</p>
+              <h3 className="text-2xl font-black text-slate-900 mb-4">In-Depth Analytics</h3>
+              <p className="text-slate-500 font-medium mb-10 max-w-md mx-auto">Detailed statistics and learning metrics will populate once you start practicing this deck.</p>
             </div>
           )}
         </div>
@@ -280,13 +280,13 @@ export default function QuizDetail() {
                 }}
                 className="flex-1 py-5 bg-white border-2 border-indigo-100 text-indigo-600 font-black text-sm md:text-base rounded-2xl active:scale-95 transition-all tracking-widest uppercase"
               >
-                BẮT ĐẦU MỚI (RESET)
+                START FRESH (RESET)
               </button>
               <button 
                 onClick={() => navigate(`/quiz/${id}/play`)}
                 className="flex-[2] py-5 bg-indigo-600 text-white font-black text-sm md:text-base rounded-2xl shadow-xl shadow-indigo-500/30 active:scale-95 transition-all tracking-widest uppercase"
               >
-                TIẾP TỤC LUYỆN TẬP
+                CONTINUE LEARNING
               </button>
             </>
           ) : (
@@ -294,7 +294,7 @@ export default function QuizDetail() {
               onClick={() => navigate(`/quiz/${id}/play`)}
               className="w-full py-5 bg-indigo-600 text-white font-black text-sm md:text-base rounded-2xl shadow-xl shadow-indigo-500/30 active:scale-95 transition-all tracking-widest uppercase"
             >
-              BẮT ĐẦU LUYỆN TẬP
+              START LEARNING
             </button>
           )}
         </div>
@@ -414,14 +414,14 @@ export default function QuizDetail() {
                 ) : (
                   <div className="space-y-8">
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Thêm cộng tác viên</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Add Collaborator</label>
                       <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                         <input 
                           type="text"
                           value={userSearch}
                           onChange={(e) => handleSearchUsers(e.target.value)}
-                          placeholder="Tìm theo username hoặc tên..."
+                          placeholder="Search by username or name..."
                           className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                         />
                         {searchResults.length > 0 && (
@@ -445,7 +445,7 @@ export default function QuizDetail() {
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Danh sách cộng tác viên ({collaborators.length})</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Collaborator List ({collaborators.length})</label>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {collaborators.map(c => (
                           <div key={c.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl">
@@ -470,7 +470,7 @@ export default function QuizDetail() {
                         ))}
                         {collaborators.length === 0 && (
                           <div className="col-span-2 py-10 text-center bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
-                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Chưa có cộng tác viên</p>
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No Collaborators Assigned</p>
                           </div>
                         )}
                       </div>
@@ -485,7 +485,7 @@ export default function QuizDetail() {
                     onClick={() => setIsEditModalOpen(false)}
                     className="flex-1 py-4 bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl active:scale-95 transition-all"
                    >
-                     Hủy bỏ
+                     Cancel
                    </button>
                    <button 
                     disabled={isSavingEdit}
@@ -499,7 +499,7 @@ export default function QuizDetail() {
                          queryClient.invalidateQueries({ queryKey: ['quiz', id] })
                          setIsEditModalOpen(false)
                        } catch (e) {
-                         alert("Lỗi khi lưu!")
+                         alert("Error saving changes!")
                        } finally {
                          setIsSavingEdit(false)
                        }
@@ -507,11 +507,11 @@ export default function QuizDetail() {
                     className="flex-[2] py-4 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                    >
                      {isSavingEdit ? (
-                       <>Đang lưu...</>
+                       <>Saving...</>
                      ) : (
                        <>
                          <Save className="w-4 h-4" />
-                         Lưu thay đổi
+                         Save Changes
                        </>
                      )}
                    </button>
@@ -538,7 +538,7 @@ export default function QuizDetail() {
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Prompting Guide</h3>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Sử dụng các thẻ để cá nhân hóa prompt</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Use placeholder tags to personalize prompts</p>
                 </div>
               </div>
               <button onClick={() => setShowHelpModal(false)} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all">
@@ -548,21 +548,21 @@ export default function QuizDetail() {
 
             <div className="space-y-4">
               <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
-                Bạn có thể chèn các thẻ dưới đây vào nội dung AI System Prompt. Hệ thống sẽ tự động thay thế chúng bằng dữ liệu thực tế:
+                You can insert the following placeholder tags into the AI System Prompt. The system will dynamically replace them with actual values:
               </p>
               
               <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {[
-                  { tag: '{{question}}', desc: 'Nội dung câu hỏi hiện tại' },
-                  { tag: '{{options}}', desc: 'Danh sách đáp án (A. nội dung, B. nội dung...)' },
-                  { tag: '{{correct_answer}}', desc: 'Đáp án đúng (bao gồm chữ cái A/B/C/D)' },
-                  { tag: '{{global_instruction}}', desc: 'Yêu cầu chung của bộ đề' },
-                  { tag: '{{quiz_title}}', desc: 'Tiêu đề của bộ đề' },
-                  { tag: '{{quiz_description}}', desc: 'Mô tả của bộ đề' },
-                  { tag: '{{option_a}}', desc: 'Chỉ lấy nội dung đáp án A' },
-                  { tag: '{{option_b}}', desc: 'Chỉ lấy nội dung đáp án B' },
-                  { tag: '{{option_c}}', desc: 'Chỉ lấy nội dung đáp án C' },
-                  { tag: '{{option_d}}', desc: 'Chỉ lấy nội dung đáp án D' },
+                  { tag: '{{question}}', desc: 'Current question text content' },
+                  { tag: '{{options}}', desc: 'Formatted list of options (A. text, B. text...)' },
+                  { tag: '{{correct_answer}}', desc: 'Correct answer label (e.g. A, B, C, D)' },
+                  { tag: '{{global_instruction}}', desc: 'Global instructions for the quiz deck' },
+                  { tag: '{{quiz_title}}', desc: 'Title of the quiz deck' },
+                  { tag: '{{quiz_description}}', desc: 'Description of the quiz deck' },
+                  { tag: '{{option_a}}', desc: 'Raw text content of option A' },
+                  { tag: '{{option_b}}', desc: 'Raw text content of option B' },
+                  { tag: '{{option_c}}', desc: 'Raw text content of option C' },
+                  { tag: '{{option_d}}', desc: 'Raw text content of option D' },
                 ].map((item) => (
                   <div key={item.tag} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all group">
                     <code className="text-xs font-black text-indigo-600 group-hover:scale-105 transition-transform">{item.tag}</code>

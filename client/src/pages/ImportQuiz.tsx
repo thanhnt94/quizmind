@@ -104,7 +104,7 @@ const ImportQuiz = () => {
             </button>
             <div>
               <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight italic">Quiz Management Center</h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Bulk Flashcard Ingestion</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Bulk Quiz Ingestion</p>
             </div>
           </div>
           <a 
@@ -177,7 +177,7 @@ const ImportQuiz = () => {
                   <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-50 rounded-[1.5rem] md:rounded-[2rem] flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all mb-6 group-hover:scale-110">
                     <CloudUpload className="w-8 h-8 md:w-10 md:h-10" />
                   </div>
-                  <h3 className="text-lg md:text-xl font-black text-slate-900 uppercase tracking-tight italic mb-2">Upload Flashcards</h3>
+                  <h3 className="text-lg md:text-xl font-black text-slate-900 uppercase tracking-tight italic mb-2">Upload Quiz Decks</h3>
                   <p className="text-[9px] md:text-[10px] font-medium text-slate-400 max-w-[200px] mx-auto leading-relaxed uppercase tracking-widest">Select an Excel file (.xlsx) to preview your collection</p>
                   
                   <button 
@@ -304,7 +304,7 @@ const ImportQuiz = () => {
               {/* Questions Preview List */}
               <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-6 md:p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] italic">Flashcard Preview</h3>
+                  <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] italic">Quiz Preview</h3>
                   <div className="px-3 py-1 bg-white rounded-lg border border-slate-100">
                     <span className="text-[9px] font-black text-indigo-600">{previewData.questions.length} CARDS</span>
                   </div>

@@ -153,3 +153,27 @@ class QuizCollaborator(Base):
     
     quiz = relationship("Quiz", back_populates="collaborators")
     user = relationship("User")
+
+class UserQuizGoal(Base):
+    __tablename__ = "user_quiz_goals"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
+    daily_target = Column(Integer, default=5)
+    streak_count = Column(Integer, default=0)
+    last_completed_date = Column(String(50), nullable=True) # YYYY-MM-DD
+    status = Column(String(50), default="active") # active, paused, completed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    quiz = relationship("Quiz")
+
+class UserDailyProgress(Base):
+    __tablename__ = "user_daily_progress"
+    id = Column(Integer, primary_key=True, index=True)
+    goal_id = Column(Integer, ForeignKey("user_quiz_goals.id"), index=True)
+    date = Column(String(50), index=True) # YYYY-MM-DD
+    count_done = Column(Integer, default=0)
+    is_target_met = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    goal = relationship("UserQuizGoal")

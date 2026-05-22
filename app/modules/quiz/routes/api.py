@@ -165,16 +165,19 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
     from app.modules.gamification.interface import GamificationInterface
     from app.modules.stats.interface import StatsInterface
     from app.modules.notification.interface import NotificationInterface
-
+ 
     user_id = int(request.cookies.get("user_id", 1)) # Default to 1 for demo
     is_correct = data.get("is_correct", False)
     time_spent = int(data.get("time_spent", 0))
     question_id = int(data.get("question_id"))
     selected_option_id = int(data.get("option_id")) if data.get("option_id") else None
+    local_date = data.get("local_date")
 
     q_res = await db.execute(select(Question).filter(Question.id == question_id))
     question = q_res.scalar_one_or_none()
     
+    goal_update_info = None
+
     if question:
         attempt_res = await db.execute(select(QuizAttempt).filter(QuizAttempt.user_id == user_id, QuizAttempt.quiz_id == question.quiz_id).order_by(QuizAttempt.id.desc()))
         attempt = attempt_res.scalar()
@@ -191,26 +194,137 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
             active_time=float(time_spent)
         )
         db.add(db_answer)
+        
+        # --- Goal Progress Tracking Logic ---
+        from app.modules.quiz.models import UserQuizGoal, UserDailyProgress
+        goal_res = await db.execute(
+            select(UserQuizGoal).filter(
+                UserQuizGoal.user_id == user_id, 
+                UserQuizGoal.quiz_id == question.quiz_id, 
+                UserQuizGoal.status == "active"
+            )
+        )
+        goal = goal_res.scalar_one_or_none()
+        if goal:
+            from datetime import datetime, date, timedelta
+            today_str = local_date
+            if not today_str:
+                today_str = datetime.utcnow().strftime("%Y-%m-%d")
+            
+            prog_res = await db.execute(
+                select(UserDailyProgress).filter(
+                    UserDailyProgress.goal_id == goal.id,
+                    UserDailyProgress.date == today_str
+                )
+            )
+            progress = prog_res.scalar_one_or_none()
+            if not progress:
+                progress = UserDailyProgress(
+                    goal_id=goal.id,
+                    date=today_str,
+                    count_done=0,
+                    is_target_met=False
+                )
+                db.add(progress)
+                await db.flush()
+            # Only count toward goal if this is a BRAND NEW question (never answered before by this user)
+            prior_answer_res = await db.execute(
+                select(func.count(UserAnswer.id)).where(
+                    UserAnswer.question_id == question_id,
+                    UserAnswer.attempt_id.in_(
+                        select(QuizAttempt.id).where(
+                            QuizAttempt.user_id == user_id,
+                            QuizAttempt.quiz_id == question.quiz_id
+                        )
+                    ),
+                    UserAnswer.id != db_answer.id  # Exclude the answer we just inserted
+                )
+            )
+            prior_count = prior_answer_res.scalar() or 0
+            is_new_question = (prior_count == 0)
+            
+            if is_new_question:
+                progress.count_done += 1
+            just_completed = False
+            bonus_xp = 0
+            
+            if progress.count_done >= goal.daily_target and not progress.is_target_met:
+                progress.is_target_met = True
+                just_completed = True
+                
+                try:
+                    today_date = date.fromisoformat(today_str)
+                except Exception:
+                    today_date = datetime.utcnow().date()
+                
+                yesterday_str = (today_date - timedelta(days=1)).strftime("%Y-%m-%d")
+                
+                if goal.last_completed_date == yesterday_str:
+                    goal.streak_count += 1
+                elif goal.last_completed_date == today_str:
+                    pass
+                else:
+                    goal.streak_count = 1
+                
+                goal.last_completed_date = today_str
+                bonus_xp = 50
+
+            remaining = max(0, goal.daily_target - progress.count_done)
+            if just_completed:
+                msg = f"DAILY GOAL REACHED! 🎉 You're on a {goal.streak_count}-day streak & earned +50 Discipline XP! 💪"
+            elif progress.is_target_met:
+                msg = f"Limitless Learning! You are pushing limits today with {progress.count_done} questions! 🔥"
+            elif remaining == 1:
+                msg = "Outstanding! Just 1 question left to complete your daily goal! 🚀"
+            else:
+                msg = f"Excellent! You've done {progress.count_done}/{goal.daily_target} new questions today. Just {remaining} more to hit your goal, keep going! ⚡"
+            
+            # Only send goal toast update if this was a new question or target is already met (limitless mode)
+            if is_new_question or progress.is_target_met:
+                goal_update_info = {
+                    "goal_id": goal.id,
+                    "daily_target": goal.daily_target,
+                    "done_today": progress.count_done,
+                    "is_target_met": progress.is_target_met,
+                    "just_completed": just_completed,
+                    "streak_count": goal.streak_count,
+                    "remaining_today": remaining,
+                    "bonus_xp": bonus_xp,
+                    "motivational_message": msg,
+                    "is_new_question": is_new_question
+                }
+
         await db.commit()
 
     # --- Gamification Logic ---
     xp_gain = 10 if is_correct else 2
     gamify_res = await GamificationInterface.add_xp(db, user_id, xp_gain)
-    local_date = data.get("local_date")
-    await GamificationInterface.update_streak(db, user_id, local_date)
+    has_leveled_up = gamify_res["level_up"]
+    current_level = gamify_res["current_level"]
 
-    if gamify_res["level_up"]:
+    if goal_update_info and goal_update_info["bonus_xp"] > 0:
+        bonus_res = await GamificationInterface.add_xp(db, user_id, goal_update_info["bonus_xp"])
+        if bonus_res["level_up"]:
+            has_leveled_up = True
+        current_level = bonus_res["current_level"]
+
+    if has_leveled_up:
         await NotificationInterface.send(
             db, user_id, 
             "LEVEL UP! 🚀", 
-            f"Congratulations! You reached level {gamify_res['current_level']}!",
+            f"Congratulations! You reached level {current_level}!",
             "level_up"
         )
 
     # --- Stats Logic ---
     await StatsInterface.record_activity(db, user_id, is_correct, time_spent)
 
-    return {"status": "ok", "xp_gained": xp_gain, "level_up": gamify_res["level_up"]}
+    return {
+        "status": "ok", 
+        "xp_gained": xp_gain + (goal_update_info["bonus_xp"] if goal_update_info else 0), 
+        "level_up": has_leveled_up,
+        "goal_update": goal_update_info
+    }
 
 @router.get("/stats")
 async def get_quiz_stats(db: AsyncSession = Depends(get_db)):
@@ -754,5 +868,111 @@ async def update_question(question_id: int, data: dict, db: AsyncSession = Depen
 async def delete_question(question_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Question
     await db.execute(delete(Question).where(Question.id == question_id))
+    await db.commit()
+    return {"status": "ok"}
+
+@router.post("/goals")
+async def create_or_update_goal(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import UserQuizGoal
+    user_id = int(request.cookies.get("user_id", 1))
+    quiz_id = int(data.get("quiz_id"))
+    daily_target = int(data.get("daily_target", 5))
+
+    # Check if goal exists
+    res = await db.execute(
+        select(UserQuizGoal).filter(UserQuizGoal.user_id == user_id, UserQuizGoal.quiz_id == quiz_id)
+    )
+    goal = res.scalar_one_or_none()
+    if goal:
+        goal.daily_target = daily_target
+        goal.status = "active"
+    else:
+        goal = UserQuizGoal(
+            user_id=user_id,
+            quiz_id=quiz_id,
+            daily_target=daily_target,
+            status="active"
+        )
+        db.add(goal)
+    
+    await db.commit()
+    return {"status": "ok", "goal_id": goal.id, "daily_target": goal.daily_target}
+
+@router.get("/goals/active")
+async def get_active_goals(request: Request, local_date: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import UserQuizGoal, UserDailyProgress, Quiz, Question, UserAnswer, QuizAttempt
+    import math
+    from datetime import datetime
+    
+    user_id = int(request.cookies.get("user_id", 1))
+    if not local_date:
+        local_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+    res = await db.execute(
+        select(UserQuizGoal).filter(UserQuizGoal.user_id == user_id, UserQuizGoal.status == "active")
+    )
+    goals = res.scalars().all()
+
+    goals_data = []
+    for goal in goals:
+        # Fetch quiz info
+        quiz_res = await db.execute(select(Quiz).filter(Quiz.id == goal.quiz_id))
+        quiz = quiz_res.scalar_one_or_none()
+        if not quiz:
+            continue
+            
+        # Count total questions in quiz
+        q_count_res = await db.execute(select(func.count(Question.id)).filter(Question.quiz_id == goal.quiz_id))
+        total_questions = q_count_res.scalar() or 0
+        
+        # Count total learned/answered questions by user
+        learned_res = await db.execute(
+            select(func.count(func.distinct(Question.id)))
+            .join(UserAnswer, UserAnswer.question_id == Question.id)
+            .join(QuizAttempt, QuizAttempt.id == UserAnswer.attempt_id)
+            .filter(Question.quiz_id == goal.quiz_id, QuizAttempt.user_id == user_id)
+        )
+        total_learned = learned_res.scalar() or 0
+        
+        # Get today's progress
+        prog_res = await db.execute(
+            select(UserDailyProgress).filter(
+                UserDailyProgress.goal_id == goal.id,
+                UserDailyProgress.date == local_date
+            )
+        )
+        progress = prog_res.scalar_one_or_none()
+        
+        done_today = progress.count_done if progress else 0
+        is_target_met = progress.is_target_met if progress else False
+        
+        remaining_qs = max(0, total_questions - total_learned)
+        days_remaining_est = math.ceil(remaining_qs / goal.daily_target) if goal.daily_target > 0 else 0
+        
+        goals_data.append({
+            "goal_id": goal.id,
+            "quiz_id": goal.quiz_id,
+            "quiz_title": quiz.title,
+            "cover_image": quiz.cover_image,
+            "total_questions": total_questions,
+            "total_learned": total_learned,
+            "daily_target": goal.daily_target,
+            "done_today": done_today,
+            "is_target_met": is_target_met,
+            "streak_count": goal.streak_count,
+            "days_remaining_est": days_remaining_est
+        })
+        
+    return goals_data
+
+@router.post("/goals/remove")
+async def remove_goal(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import UserQuizGoal
+    user_id = int(request.cookies.get("user_id", 1))
+    quiz_id = int(data.get("quiz_id"))
+    
+    await db.execute(
+        delete(UserQuizGoal).where(UserQuizGoal.user_id == user_id, UserQuizGoal.quiz_id == quiz_id)
+    )
     await db.commit()
     return {"status": "ok"}

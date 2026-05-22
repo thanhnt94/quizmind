@@ -7,13 +7,13 @@ export default function Landing() {
 
   const slides = [
     {
-      title: "⚡ Tạo đề trắc nghiệm tức thì",
-      desc: "Tải file Excel câu hỏi hoặc nhập nội dung bài học để tự động tạo bộ trắc nghiệm sinh động. Ôn tập siêu nhanh, học siêu nhàn!",
+      title: "⚡ Instant Quiz Creation",
+      desc: "Upload Excel files or input lessons to instantly generate interactive quiz decks. Study smarter, learn faster!",
       bgGradient: "from-[#fff2eb] via-[#ffe5ec] to-[#fcddec]",
       shadowColor: "shadow-orange-200/40",
-      badgeText: "📂 QuizMind_Template.xlsx",
+      badgeText: "📂 Quiz_Template.xlsx",
       badgeColor: "bg-orange-500/10 border-orange-200 text-orange-600",
-      btnText: "Khám phá tiếp ➡️",
+      btnText: "Next Feature ➡️",
       icon: (
         <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -22,30 +22,30 @@ export default function Landing() {
       previewWidget: (
         <div className="w-full bg-white border border-orange-100 rounded-3xl p-5 flex flex-col gap-3 text-left shadow-lg shadow-orange-100/50">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">Câu Hỏi Ôn Tập</span>
-            <span className="text-[10px] font-black bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Dễ Dàng</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">Review Question</span>
+            <span className="text-[10px] font-black bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Easy</span>
           </div>
-          <p className="text-xs font-black leading-relaxed text-slate-800">Thủ đô của nước Việt Nam là gì?</p>
+          <p className="text-xs font-black leading-relaxed text-slate-800">What is the capital of Japan?</p>
           <div className="flex flex-col gap-2">
             <div className="px-3.5 py-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[11px] font-black flex items-center justify-between text-emerald-700 shadow-sm shadow-emerald-50">
-              <span>A. Hà Nội</span>
+              <span>A. Tokyo</span>
               <span>✅</span>
             </div>
             <div className="px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-100 text-[11px] font-bold text-slate-500">
-              <span>B. TP. Hồ Chí Minh</span>
+              <span>B. Kyoto</span>
             </div>
           </div>
         </div>
       )
     },
     {
-      title: "🎮 Đấu trường thời gian thực",
-      desc: "Mở phòng thi trắc nghiệm trực tiếp cùng bạn bè. Cạnh tranh trả lời nhanh, đua top leo bảng xếp hạng cực sôi động!",
+      title: "🎮 Real-time Live Arena",
+      desc: "Host live quiz rooms with your peers. Compete in real-time, climb the ranks, and race against the clock!",
       bgGradient: "from-[#e6fbf0] via-[#e0fcf7] to-[#eaf5ff]",
       shadowColor: "shadow-emerald-200/40",
-      badgeText: "🔴 PHÒNG ĐẤU TRỰC TIẾP",
+      badgeText: "🔴 LIVE ARENA ROOM",
       badgeColor: "bg-red-500/10 border-red-200 text-red-600",
-      btnText: "Khám phá tiếp ➡️",
+      btnText: "Next Feature ➡️",
       icon: (
         <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -54,21 +54,21 @@ export default function Landing() {
       previewWidget: (
         <div className="w-full bg-white border border-emerald-100 rounded-3xl p-5 flex flex-col gap-3 text-left shadow-lg shadow-emerald-100/50">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Bảng Xếp Hạng Live</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Live Leaderboard</span>
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-indigo-50 border border-indigo-100 shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="text-xs">🥇</span>
-                <span className="text-xs font-black text-indigo-700">Bạn (Đang dẫn đầu)</span>
+                <span className="text-xs font-black text-indigo-700">You (Leading)</span>
               </div>
               <span className="text-xs font-black text-indigo-600">1,200 XP</span>
             </div>
             <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="text-xs">🥈</span>
-                <span className="text-xs font-bold text-slate-600">Minh Hùng</span>
+                <span className="text-xs font-bold text-slate-600">Alex Hunt</span>
               </div>
               <span className="text-xs font-bold text-slate-500">1,050 XP</span>
             </div>
@@ -77,13 +77,13 @@ export default function Landing() {
       )
     },
     {
-      title: "🔥 Tích lũy Streak nhận thưởng",
-      desc: "Rèn luyện thói quen làm bài ôn luyện mỗi ngày. Giữ vững chuỗi Streak, nhận các huy chương dễ thương và thăng cấp nhanh chóng!",
+      title: "🔥 Keep Your Daily Streak",
+      desc: "Build an active daily learning habit. Maintain your streak, unlock cute milestone achievements, and level up quickly!",
       bgGradient: "from-[#f0f4ff] via-[#f7e8ff] to-[#ffebf7]",
       shadowColor: "shadow-indigo-200/40",
-      badgeText: "📅 THÓI QUEN HỌC TẬP",
+      badgeText: "📅 DAILY STUDY HABIT",
       badgeColor: "bg-indigo-500/10 border-indigo-200 text-indigo-600",
-      btnText: "Bắt đầu học ngay 🚀",
+      btnText: "Get Started Now 🚀",
       icon: (
         <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -95,8 +95,8 @@ export default function Landing() {
             <span className="text-3xl">🔥</span>
           </div>
           <div>
-            <h4 className="text-sm font-black text-slate-800">STREAK: 10 NGÀY</h4>
-            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mt-1">Xuất Sắc! Tiếp tục nhé</p>
+            <h4 className="text-sm font-black text-slate-800">STREAK: 10 DAYS</h4>
+            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mt-1">Excellent! Keep it up</p>
           </div>
         </div>
       )
@@ -153,13 +153,13 @@ export default function Landing() {
                 onClick={() => navigate('/login')}
                 className="px-4.5 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 transition-all border border-slate-200/80 shadow-inner"
               >
-                Đăng nhập
+                Sign In
               </button>
               <button 
                 onClick={() => navigate('/login?signup=true')}
                 className="px-4.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-gradient-to-r from-indigo-500 to-pink-500 hover:opacity-95 shadow-md shadow-indigo-400/20 active:scale-95 transition-all"
               >
-                Đăng ký
+                Sign Up
               </button>
             </div>
           </header>
@@ -177,20 +177,20 @@ export default function Landing() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75 animate-pulse"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
               </span>
-              ✨ KHÔNG GIAN TRI THỨC SIÊU DỄ THƯƠNG
+              ✨ SMART LEARNING ENVIRONMENT
             </div>
 
             {/* Headline */}
             <h1 className="text-4xl lg:text-[3.25rem] font-black tracking-tight mb-4 leading-[1.15] text-slate-800">
-              Chơi trắc nghiệm, <br />
+              Play Quizzes, <br />
               <span className="bg-gradient-to-r from-indigo-600 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                Nhớ bài cực lâu!
+                Retain Knowledge!
               </span>
             </h1>
 
             {/* Subtitle */}
             <p className="max-w-md text-sm lg:text-base font-semibold text-slate-500 mb-6 leading-relaxed">
-              Không gian ôn luyện thông minh giúp bạn làm đề trắc nghiệm sinh động. Tự động tạo câu hỏi từ Excel và chơi ngay cùng bạn bè nhé!
+              A smart gamified space where you study with engaging quizzes. Instantly create decks and compete with peers!
             </p>
 
             {/* Primary Action Buttons (Sign In & Sign Up) */}
@@ -199,19 +199,19 @@ export default function Landing() {
                 onClick={() => navigate('/login')}
                 className="px-6 py-3.5 rounded-2xl font-black text-white bg-gradient-to-r from-indigo-500 to-pink-500 hover:scale-[1.03] active:scale-[0.98] transition-all shadow-lg shadow-indigo-500/25 text-sm"
               >
-                Đăng nhập ngay 🚀
+                Get Started 🚀
               </button>
               <button 
                 onClick={() => navigate('/login?signup=true')}
                 className="px-6 py-3.5 rounded-2xl font-black text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 transition-all text-sm shadow-md shadow-slate-100"
               >
-                Đăng ký tài khoản
+                Create Account
               </button>
             </div>
 
             {/* Desktop Slide Tabs (Clickable cards to go next/prev and trigger phone updates!) */}
             <div className="flex flex-col gap-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Khám phá tính năng</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Features Guide</span>
               <div className="flex items-center gap-3">
                 
                 {/* 3 Interactive Selector Tabs */}
@@ -222,7 +222,7 @@ export default function Landing() {
                       onClick={() => setActiveSlide(index)}
                       className={`px-4 py-2.5 rounded-xl border text-[11px] font-black transition-all ${activeSlide === index ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}`}
                     >
-                      {index === 0 ? "⚡ Tạo đề nhanh" : index === 1 ? "🎮 Đấu trường" : "🔥 Giữ Streak"}
+                      {index === 0 ? "⚡ Quick Build" : index === 1 ? "🎮 Live Arena" : "🔥 Keep Streak"}
                     </button>
                   ))}
                 </div>
@@ -259,7 +259,7 @@ export default function Landing() {
             
             {/* Decorative float sticker in background */}
             <div className="absolute top-10 right-10 px-3.5 py-1.5 rounded-2xl bg-white/90 border border-slate-200 text-xs font-black shadow-lg animate-float-slow z-10 flex items-center gap-1">
-              🎉 Học vui ghê!
+              🎉 Happy Learning!
             </div>
 
             {/* Smart simulated phone container */}
@@ -300,10 +300,10 @@ export default function Landing() {
         {/* Floating Premium Bottom Footer */}
         <div className="w-full px-6 py-4 z-20">
           <footer className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between bg-white/50 backdrop-blur-md border border-slate-200/50 rounded-2xl text-slate-400 text-xs font-semibold shadow-sm">
-            <span>© {new Date().getFullYear()} QuizMind. Ôn thi thông minh & đáng yêu.</span>
+            <span>© {new Date().getFullYear()} QuizMind. Intelligent & Engaging Learning Platform.</span>
             <div className="flex gap-4">
-              <a href="#" className="hover:text-slate-600 transition-colors">Điều khoản</a>
-              <a href="#" className="hover:text-slate-600 transition-colors">Bảo mật</a>
+              <a href="#" className="hover:text-slate-600 transition-colors">Terms</a>
+              <a href="#" className="hover:text-slate-600 transition-colors">Privacy</a>
             </div>
           </footer>
         </div>
@@ -330,13 +330,13 @@ export default function Landing() {
               onClick={() => navigate('/login')}
               className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-white/80 border border-slate-200/50 hover:bg-slate-50 shadow-sm"
             >
-              Đăng nhập
+              Sign In
             </button>
             <button 
               onClick={() => navigate('/login?signup=true')}
               className="px-3.5 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 shadow-sm"
             >
-              Đăng ký
+              Sign Up
             </button>
           </div>
         </div>

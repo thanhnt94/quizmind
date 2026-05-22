@@ -11,7 +11,7 @@ from alembic import context
 from app.core.db import Base
 from app.core.config import settings
 from app.modules.auth.models import User
-from app.modules.quiz.models import Category, Quiz, Question, Option, QuizSession, QuizAttempt, UserAnswer, UserQuestionNote, QuizRoom, QuizRoomParticipant
+from app.modules.quiz.models import Category, Quiz, Question, Option, QuizSession, QuizAttempt, UserAnswer, UserQuestionNote, QuizRoom, QuizRoomParticipant, UserQuizGoal, UserDailyProgress
 from app.modules.gamification.models import UserGamification, Badge, UserDailyActivity
 from app.modules.notification.models import Notification
 from app.modules.stats.models import UserDailyStats

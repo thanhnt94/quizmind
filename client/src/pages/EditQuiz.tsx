@@ -321,9 +321,9 @@ const EditQuiz = () => {
                                />
                             </div>
 
-                            <div className="p-5 bg-white/5 border border-white/5 rounded-2xl border-dashed text-[10px] font-medium text-white/50 italic leading-relaxed">
-                               * Prompt này sẽ hướng dẫn AI cách giải thích khi người học nhấn nút AI Analysis. Sử dụng các thẻ như {"{{question}}"} để cá nhân hóa kết quả.
-                            </div>
+                             <div className="p-5 bg-white/5 border border-white/5 rounded-2xl border-dashed text-[10px] font-medium text-white/50 italic leading-relaxed">
+                               * This prompt will guide the AI on how to explain the answer when the learner clicks the AI Analysis button. Use tags like {"{{question}}"} to personalize the result.
+                             </div>
                          </div>
                        </div>
                     </motion.div>
@@ -447,24 +447,24 @@ const EditQuiz = () => {
                    </div>
                    <div>
                      <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Prompting Guide</h3>
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Cá nhân hóa hệ thống AI</p>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Personalize the AI system</p>
                    </div>
                  </div>
                  <button onClick={() => setShowHelpModal(false)} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all"><X className="w-5 h-5" /></button>
                </div>
 
                <div className="space-y-4">
-                 <p className="text-xs font-medium text-slate-600 leading-relaxed mb-6">Hệ thống sẽ tự động thay thế các thẻ sau bằng dữ liệu thực tế của từng câu hỏi:</p>
+                 <p className="text-xs font-medium text-slate-600 leading-relaxed mb-6">The system will automatically replace the following tags with actual data from each question:</p>
                  <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                     {[
-                      { tag: '{{question}}', desc: 'Nội dung câu hỏi' },
-                      { tag: '{{options}}', desc: 'Danh sách đáp án A, B, C, D' },
-                      { tag: '{{correct_answer}}', desc: 'Đáp án chính xác' },
-                      { tag: '{{quiz_title}}', desc: 'Tên bộ đề này' },
-                      { tag: '{{option_a}}', desc: 'Nội dung đáp án A' },
-                      { tag: '{{option_b}}', desc: 'Nội dung đáp án B' },
-                      { tag: '{{option_c}}', desc: 'Nội dung đáp án C' },
-                      { tag: '{{option_d}}', desc: 'Nội dung đáp án D' },
+                      { tag: '{{question}}', desc: 'Question content' },
+                      { tag: '{{options}}', desc: 'List of options A, B, C, D' },
+                      { tag: '{{correct_answer}}', desc: 'Correct answer' },
+                      { tag: '{{quiz_title}}', desc: 'Deck title' },
+                      { tag: '{{option_a}}', desc: 'Option A content' },
+                      { tag: '{{option_b}}', desc: 'Option B content' },
+                      { tag: '{{option_c}}', desc: 'Option C content' },
+                      { tag: '{{option_d}}', desc: 'Option D content' },
                     ].map((item) => (
                       <div key={item.tag} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-100 transition-all group">
                         <code className="text-[10px] font-black text-indigo-600">{item.tag}</code>
@@ -473,7 +473,7 @@ const EditQuiz = () => {
                     ))}
                  </div>
                  <div className="mt-8 p-4 bg-amber-50 rounded-2xl border border-amber-100 border-dashed text-center">
-                    <p className="text-[9px] font-bold text-amber-700 leading-relaxed italic uppercase tracking-wider">Sử dụng thẻ đúng cách sẽ giúp AI giải thích chính xác hơn!</p>
+                    <p className="text-[9px] font-bold text-amber-700 leading-relaxed italic uppercase tracking-wider">Using tags properly will help AI explain more accurately!</p>
                  </div>
                </div>
              </motion.div>
