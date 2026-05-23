@@ -84,16 +84,17 @@ async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_o
         
         print(f"DEBUG: Quiz created ID={db_quiz.id}. Adding {len(questions)} questions...")
         
+        question_schemas = []
         for q in questions:
-            question_data = QuestionSchema(
+            question_schemas.append(QuestionSchema(
                 content=q["content"],
                 image=q.get("image"),
                 audio=q.get("audio"),
                 question_type=q.get("question_type", "normal"),
                 explanation=q["explanation"],
                 options=[OptionSchema(content=o["content"], is_correct=o["is_correct"]) for o in q["options"]]
-            )
-            await QuizService.add_question(db, db_quiz.id, question_data)
+            ))
+        await QuizService.bulk_add_questions(db, db_quiz.id, question_schemas)
             
         # Add tags if present
         if metadata.get("tags"):
@@ -1427,5 +1428,164 @@ async def get_quiz_mastery(quiz_id: int, request: Request, db: AsyncSession = De
         "familiar": mastery_counts[3] + mastery_counts[4],
         "mastered": mastery_counts[5],
         "total": total_questions
+    }
+
+@router.get("/stats/leitner")
+async def get_global_leitner_stats(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.quiz.models import UserQuestionMastery, Question
+    
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else 1
+    
+    # Query count of questions grouped by box_level
+    stmt = select(
+        UserQuestionMastery.box_level,
+        func.count(UserQuestionMastery.id)
+    ).where(UserQuestionMastery.user_id == user_id).group_by(UserQuestionMastery.box_level)
+    
+    results = await db.execute(stmt)
+    
+    box_counts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for row in results.all():
+        lvl = row[0]
+        if lvl in box_counts:
+            box_counts[lvl] = row[1]
+            
+    total_tracked = sum(box_counts.values())
+    mastery_percentage = round((box_counts[5] / total_tracked * 100), 1) if total_tracked > 0 else 0
+    
+    # We can also get a list of the user's hardest cards (e.g. up to 5 cards in Box 1)
+    hardest_cards_stmt = select(Question)\
+        .join(UserQuestionMastery, Question.id == UserQuestionMastery.question_id)\
+        .where(UserQuestionMastery.user_id == user_id, UserQuestionMastery.box_level == 1)\
+        .limit(5)
+        
+    hardest_cards_res = await db.execute(hardest_cards_stmt)
+    hardest_cards = [{
+        "id": q.id,
+        "content": q.content,
+        "explanation": q.explanation,
+        "quiz_id": q.quiz_id
+    } for q in hardest_cards_res.scalars().all()]
+    
+    return {
+        "box_distribution": [
+            {"box": 1, "count": box_counts[1], "label": "Box 1: Hard"},
+            {"box": 2, "count": box_counts[2], "label": "Box 2: Learning"},
+            {"box": 3, "count": box_counts[3], "label": "Box 3: Familiar"},
+            {"box": 4, "count": box_counts[4], "label": "Box 4: Proficient"},
+            {"box": 5, "count": box_counts[5], "label": "Box 5: Mastered"}
+        ],
+        "total_tracked": total_tracked,
+        "mastery_percentage": mastery_percentage,
+        "hardest_cards": hardest_cards
+    }
+
+@router.get("/stats/speed-accuracy")
+async def get_speed_accuracy_stats(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.quiz.models import UserAnswer, QuizAttempt
+    from sqlalchemy import func, case
+    
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else 1
+    
+    # Run database-level aggregation to bin and summarize speeds
+    stmt = select(
+        func.sum(case((UserAnswer.active_time <= 3.0, 1), else_=0)).label("fast_total"),
+        func.sum(case(((UserAnswer.active_time <= 3.0) & UserAnswer.is_correct, 1), else_=0)).label("fast_correct"),
+        
+        func.sum(case(((UserAnswer.active_time > 3.0) & (UserAnswer.active_time <= 7.0), 1), else_=0)).label("optimal_total"),
+        func.sum(case(((UserAnswer.active_time > 3.0) & (UserAnswer.active_time <= 7.0) & UserAnswer.is_correct, 1), else_=0)).label("optimal_correct"),
+        
+        func.sum(case(((UserAnswer.active_time > 7.0) & (UserAnswer.active_time <= 15.0), 1), else_=0)).label("calculated_total"),
+        func.sum(case(((UserAnswer.active_time > 7.0) & (UserAnswer.active_time <= 15.0) & UserAnswer.is_correct, 1), else_=0)).label("calculated_correct"),
+        
+        func.sum(case((UserAnswer.active_time > 15.0, 1), else_=0)).label("deep_total"),
+        func.sum(case(((UserAnswer.active_time > 15.0) & UserAnswer.is_correct, 1), else_=0)).label("deep_correct"),
+        
+        func.sum(case((UserAnswer.is_correct, UserAnswer.active_time), else_=0.0)).label("sum_time_correct"),
+        func.sum(case((UserAnswer.is_correct, 1), else_=0)).label("count_correct"),
+        
+        func.sum(case((~UserAnswer.is_correct, UserAnswer.active_time), else_=0.0)).label("sum_time_wrong"),
+        func.sum(case((~UserAnswer.is_correct, 1), else_=0)).label("count_wrong"),
+        
+        func.count().label("total_answers_analyzed")
+    ).join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)\
+     .where(QuizAttempt.user_id == user_id, UserAnswer.active_time > 0)
+     
+    results = await db.execute(stmt)
+    row = results.first()
+    
+    # Safe fallback if there are no answers or SQLite returns all Nulls
+    if not row or not row.total_answers_analyzed:
+        return {
+            "bins": [
+                {"bin": "fast", "label": "Fast (0-3s)", "accuracy": 0.0, "total": 0, "correct": 0},
+                {"bin": "optimal", "label": "Optimal (3-7s)", "accuracy": 0.0, "total": 0, "correct": 0},
+                {"bin": "calculated", "label": "Calculated (7-15s)", "accuracy": 0.0, "total": 0, "correct": 0},
+                {"bin": "deep", "label": "Deep (15s+)", "accuracy": 0.0, "total": 0, "correct": 0}
+            ],
+            "avg_speed_correct": 0.0,
+            "avg_speed_wrong": 0.0,
+            "total_answers_analyzed": 0
+        }
+        
+    # Extract values
+    fast_total = row.fast_total or 0
+    fast_correct = row.fast_correct or 0
+    optimal_total = row.optimal_total or 0
+    optimal_correct = row.optimal_correct or 0
+    calculated_total = row.calculated_total or 0
+    calculated_correct = row.calculated_correct or 0
+    deep_total = row.deep_total or 0
+    deep_correct = row.deep_correct or 0
+    
+    sum_time_correct = row.sum_time_correct or 0.0
+    count_correct = row.count_correct or 0
+    sum_time_wrong = row.sum_time_wrong or 0.0
+    count_wrong = row.count_wrong or 0
+    total_answers_analyzed = row.total_answers_analyzed or 0
+    
+    bin_data = [
+        {
+            "bin": "fast",
+            "label": "Fast (0-3s)",
+            "accuracy": round((fast_correct / fast_total * 100), 1) if fast_total > 0 else 0.0,
+            "total": fast_total,
+            "correct": fast_correct
+        },
+        {
+            "bin": "optimal",
+            "label": "Optimal (3-7s)",
+            "accuracy": round((optimal_correct / optimal_total * 100), 1) if optimal_total > 0 else 0.0,
+            "total": optimal_total,
+            "correct": optimal_correct
+        },
+        {
+            "bin": "calculated",
+            "label": "Calculated (7-15s)",
+            "accuracy": round((calculated_correct / calculated_total * 100), 1) if calculated_total > 0 else 0.0,
+            "total": calculated_total,
+            "correct": calculated_correct
+        },
+        {
+            "bin": "deep",
+            "label": "Deep (15s+)",
+            "accuracy": round((deep_correct / deep_total * 100), 1) if deep_total > 0 else 0.0,
+            "total": deep_total,
+            "correct": deep_correct
+        }
+    ]
+    
+    avg_speed_correct = round(sum_time_correct / count_correct, 1) if count_correct > 0 else 0.0
+    avg_speed_wrong = round(sum_time_wrong / count_wrong, 1) if count_wrong > 0 else 0.0
+    
+    return {
+        "bins": bin_data,
+        "avg_speed_correct": avg_speed_correct,
+        "avg_speed_wrong": avg_speed_wrong,
+        "total_answers_analyzed": total_answers_analyzed
     }
 

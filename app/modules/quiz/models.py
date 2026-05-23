@@ -145,6 +145,17 @@ class QuizRoomParticipant(Base):
     room = relationship("QuizRoom", back_populates="participants")
     user = relationship("User")
 
+class QuizRoomChat(Base):
+    __tablename__ = "quiz_room_chats"
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(Integer, ForeignKey("quiz_rooms.id", ondelete="CASCADE"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    room = relationship("QuizRoom")
+    user = relationship("User")
+
 class QuizCollaborator(Base):
     __tablename__ = "quiz_collaborators"
     quiz_id = Column(Integer, ForeignKey("quizzes.id"), primary_key=True)

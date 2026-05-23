@@ -50,6 +50,32 @@ class QuizService:
         return db_question
 
     @staticmethod
+    async def bulk_add_questions(db: AsyncSession, quiz_id: int, questions_data: list[QuestionSchema]):
+        db_questions = []
+        for q_data in questions_data:
+            db_question = Question(
+                quiz_id=quiz_id,
+                content=q_data.content,
+                image=q_data.image,
+                audio=q_data.audio,
+                question_type=q_data.question_type,
+                explanation=q_data.explanation,
+                ai_explanation=q_data.ai_explanation,
+                others=q_data.others,
+                points=q_data.points
+            )
+            # Associate Option objects using the options relationship
+            db_question.options = [
+                Option(content=opt.content, is_correct=opt.is_correct)
+                for opt in q_data.options
+            ]
+            db_questions.append(db_question)
+            
+        db.add_all(db_questions)
+        await db.commit()
+        return db_questions
+
+    @staticmethod
     async def get_quizzes(db: AsyncSession, skip: int = 0, limit: int = 100):
         from sqlalchemy import func
         from app.modules.quiz.models import Question, Tag

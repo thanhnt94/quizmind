@@ -248,6 +248,63 @@ export default function QuizPlay() {
   }, [id, showFeedback])
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Ignore if typing inside input, textarea, or contentEditable elements
+      const activeElement = document.activeElement;
+      if (activeElement) {
+        const tagName = activeElement.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || activeElement.getAttribute('contenteditable') === 'true') {
+          return;
+        }
+      }
+
+      // 2. Ignore if any modal or dialog overlay is active
+      if (isSessionSummaryOpen || isQuitModalOpen || isEditModalOpen || isMapOpen || isFeedbackOpen) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      // 3. Handle next / advance question when feedback is showing
+      if (showFeedback) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          handleNext();
+        }
+      } else if (currentQuestion && currentQuestion.options) {
+        // 4. Handle option choosing (1-9, a-z)
+        let optionIndex = -1;
+        if (key >= '1' && key <= '9') {
+          optionIndex = parseInt(key) - 1;
+        } else if (key >= 'a' && key <= 'z') {
+          optionIndex = key.charCodeAt(0) - 97; // 'a' is 97
+        }
+
+        if (optionIndex >= 0 && optionIndex < currentQuestion.options.length) {
+          e.preventDefault();
+          handleAnswer(optionIndex);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    showFeedback,
+    currentQuestion,
+    isSessionSummaryOpen,
+    isQuitModalOpen,
+    isEditModalOpen,
+    isMapOpen,
+    isFeedbackOpen,
+    currentIndex,
+    sessionAnswers,
+    activeMode
+  ])
+
+  useEffect(() => {
     if (currentQuestion) {
       fetchNote()
     }

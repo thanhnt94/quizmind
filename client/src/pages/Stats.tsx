@@ -86,6 +86,22 @@ export default function Stats() {
     }
   })
 
+  const { data: leitnerStats } = useQuery({
+    queryKey: ['stats-leitner'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/quiz/stats/leitner')
+      return res.data
+    }
+  })
+
+  const { data: speedAccuracyStats } = useQuery({
+    queryKey: ['stats-speed-accuracy'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/quiz/stats/speed-accuracy')
+      return res.data
+    }
+  })
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-8">
@@ -455,6 +471,182 @@ export default function Stats() {
                     </div>
                   </div>
 
+                  {/* Leitner Box Spaced Repetition Mastery */}
+                  {leitnerStats && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Box distribution & KPI card */}
+                      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm lg:col-span-2 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                <Layers className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">Spaced Repetition Mastery</h3>
+                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Leitner memory box card distribution</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                {leitnerStats.mastery_percentage}% Mastered
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Leitner distribution chart */}
+                          <div className="h-[200px] w-full mt-4 -ml-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={leitnerStats.box_distribution}>
+                                <defs>
+                                  <linearGradient id="leitnerGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.9}/>
+                                    <stop offset="95%" stopColor="#4338ca" stopOpacity={0.9}/>
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis 
+                                  dataKey="label" 
+                                  axisLine={false} 
+                                  tickLine={false} 
+                                  tick={{ fontSize: 8, fontWeight: 900, fill: '#94a3b8' }} 
+                                />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#94a3b8' }} />
+                                <Tooltip 
+                                  cursor={{fill: '#f8fafc'}}
+                                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 900 }}
+                                />
+                                <Bar dataKey="count" fill="url(#leitnerGrad)" radius={[6, 6, 0, 0]} barSize={40} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          <span>Cards in System: <strong>{leitnerStats.total_tracked}</strong></span>
+                          <span>Retention Level: <strong>{leitnerStats.mastery_percentage > 70 ? 'Excellent' : leitnerStats.mastery_percentage > 40 ? 'Moderate' : 'Starter'}</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Hardest Box 1 Cards (Focus Drawer) */}
+                      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500">
+                              <Flame className="w-4.5 h-4.5" />
+                            </div>
+                            <div>
+                              <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">Cards Needing Focus</h3>
+                              <p className="text-[9px] font-bold text-rose-500 mt-0.5 uppercase tracking-widest">Box 1 Hardest questions</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {leitnerStats.hardest_cards.length === 0 ? (
+                              <div className="py-10 text-center text-slate-300 font-bold text-xs">
+                                No Box 1 cards found. Great job! 🎉
+                              </div>
+                            ) : (
+                              leitnerStats.hardest_cards.map((card: any) => (
+                                <FocusCardRow key={card.id} card={card} />
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Speed vs. Accuracy Correlation */}
+                  {speedAccuracyStats && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Chart */}
+                      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm lg:col-span-2">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                            <Activity className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">Speed vs. Accuracy Profile</h3>
+                            <p className="text-[9px] font-bold text-slate-400 mt-0.5">Accuracy rate relative to response speed bins</p>
+                          </div>
+                        </div>
+
+                        <div className="h-[200px] w-full -ml-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={speedAccuracyStats.bins}>
+                              <defs>
+                                <linearGradient id="speedAccGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis 
+                                dataKey="label" 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{ fontSize: 8, fontWeight: 900, fill: '#94a3b8' }} 
+                              />
+                              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#94a3b8' }} />
+                              <Tooltip 
+                                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 900 }}
+                              />
+                              <Area type="monotone" dataKey="accuracy" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#speedAccGrad)" name="Accuracy (%)" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Metric speed comparison cards */}
+                      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500">
+                              <Timer className="w-4.5 h-4.5" />
+                            </div>
+                            <div>
+                              <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">Solve Velocity</h3>
+                              <p className="text-[9px] font-bold text-amber-500 mt-0.5 uppercase tracking-widest">Average response time comparison</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="p-4 bg-slate-50 border border-slate-100 rounded-3xl">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Correct Solve Speed</span>
+                              <div className="flex items-baseline gap-2 mt-1">
+                                <span className="text-2xl font-black text-emerald-600 leading-none">
+                                  {speedAccuracyStats.avg_speed_correct}s
+                                </span>
+                              </div>
+                              <p className="text-[7px] font-medium text-slate-400 mt-1.5 uppercase">Average time spent per correct answer</p>
+                            </div>
+
+                            <div className="p-4 bg-slate-50 border border-slate-100 rounded-3xl">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Wrong Attempt Speed</span>
+                              <div className="flex items-baseline gap-2 mt-1">
+                                <span className="text-2xl font-black text-rose-600 leading-none">
+                                  {speedAccuracyStats.avg_speed_wrong}s
+                                </span>
+                              </div>
+                              <p className="text-[7px] font-medium text-slate-400 mt-1.5 uppercase">Average time spent per wrong attempt</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/30">
+                          <p className="text-[9px] font-semibold text-indigo-700 leading-relaxed">
+                            {speedAccuracyStats.avg_speed_correct < speedAccuracyStats.avg_speed_wrong ? (
+                              "💡 Insight: Your retrieval is faster on correct answers! This shows strong cognitive memory paths and confidence when you know the subject."
+                            ) : (
+                              "💡 Insight: You take more time on questions you get correct. Taking a moment to analyze options pays off!"
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* CHART CAROUSEL */}
                   <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-10 shadow-sm overflow-hidden group">
                      <div className="flex items-center justify-between mb-8 overflow-x-auto no-scrollbar pb-4 md:pb-0">
@@ -715,6 +907,39 @@ function MetricCard({ label, value, sub, icon: Icon, color, bg }: any) {
           <div className="text-lg md:text-2xl font-black text-slate-900 tracking-tighter italic leading-none">{value}</div>
           <p className="text-[7px] md:text-[8px] font-black text-slate-300 uppercase tracking-widest mt-1">{sub}</p>
        </div>
+    </div>
+  )
+}
+
+function FocusCardRow({ card }: { card: any }) {
+  const [isOpen, setIsOpen] = useState(false)
+  return (
+    <div className="bg-slate-50 rounded-2xl border border-slate-100 p-3 transition-all hover:border-rose-100">
+      <div 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="flex items-center justify-between cursor-pointer"
+      >
+        <span className="text-[10px] font-semibold text-slate-700 truncate max-w-[200px]">
+          {card.content.replace(/<[^>]*>/g, '')}
+        </span>
+        <span className="text-[8px] font-black uppercase text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-md shrink-0">
+          Box 1
+        </span>
+      </div>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="mt-2 pt-2 border-t border-slate-100 overflow-hidden"
+          >
+            <p className="text-[9px] font-medium text-slate-500 leading-relaxed italic">
+              <strong>Explanation:</strong> {card.explanation || "No explanation provided for this question."}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
