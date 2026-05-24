@@ -730,6 +730,15 @@ export default function QuizPlay() {
 
   const navigateToQuestion = (idx: number) => {
     setCurrentIndex(idx)
+
+    // Đóng toàn bộ các popup, toast, thông báo thành tựu khi chuyển sang câu mới
+    setGoalToast(prev => prev ? { ...prev, visible: false } : null)
+    setShowGoalCelebration(false)
+    setBadgeVisible(false)
+    setActiveUnlockedBadge(null)
+    setActiveMasteryUpgrade(null)
+    setLearningModeAlert(null)
+
     const prevOpt = sessionAnswers[idx]
     if (typeof prevOpt === 'number') {
       setSelectedOption(prevOpt)
