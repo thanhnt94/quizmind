@@ -806,6 +806,148 @@ async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depe
     notes = result.scalars().all()
     return {n.question_id: n.content for n in notes}
 
+@router.get("/{quiz_id}/export")
+async def export_quiz(quiz_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+        
+    from app.modules.quiz.models import Question
+    q_stmt = select(Question).where(Question.quiz_id == quiz_id).options(selectinload(Question.options))
+    res = await db.execute(q_stmt)
+    questions = res.scalars().all()
+    
+    category_name = quiz.category.name if quiz.category else "General"
+    tags = [t.name for t in quiz.tags]
+    
+    excel_bytes = ExcelQuizService.export_quiz_to_excel(
+        quiz_title=quiz.title,
+        quiz_description=quiz.description,
+        category_name=category_name,
+        tags=tags,
+        questions=questions
+    )
+    
+    from fastapi.responses import Response
+    import urllib.parse
+    encoded_filename = urllib.parse.quote(f"{quiz.title}.xlsx")
+    
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+    )
+
+@router.post("/{quiz_id}/import-update")
+async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    try:
+        user_id = int(request.cookies.get("user_id", 1))
+        quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+        if not quiz:
+            return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+            
+        from app.modules.quiz.models import QuizCollaborator
+        is_owner = quiz.creator_id == user_id
+        collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+        is_collaborator = collab_res.scalar() is not None
+        
+        if not (is_owner or is_collaborator or user_id == 1):
+            return JSONResponse(status_code=403, content={"error": "No permission to update this quiz"})
+            
+        content = await file.read()
+        import asyncio
+        metadata, questions = await asyncio.to_thread(ExcelQuizService.parse_quiz_excel, content)
+        
+        if not questions:
+            return JSONResponse(status_code=400, content={"error": "No valid questions found in Excel file."})
+            
+        quiz.title = metadata.get("title", quiz.title)
+        quiz.description = metadata.get("description", quiz.description)
+        if metadata.get("time_limit") is not None:
+            quiz.time_limit = metadata["time_limit"]
+            
+        category_name = metadata.get("category")
+        if category_name:
+            from app.modules.quiz.models import Category
+            cat_res = await db.execute(select(Category).filter(Category.name == category_name))
+            db_cat = cat_res.scalar_one_or_none()
+            if not db_cat:
+                db_cat = Category(name=category_name, description=f"Imported from {file.filename}")
+                db.add(db_cat)
+                await db.flush()
+            quiz.category_id = db_cat.id
+            
+        if metadata.get("tags"):
+            await QuizService.set_quiz_tags(db, quiz_id, metadata["tags"])
+            
+        from app.modules.quiz.models import Question, Option
+        existing_q_res = await db.execute(
+            select(Question).filter(Question.quiz_id == quiz_id).options(selectinload(Question.options))
+        )
+        existing_q_map = {q.id: q for q in existing_q_res.scalars().all()}
+        
+        for q_data in questions:
+            q_id = q_data.get("id")
+            
+            if q_id and q_id in existing_q_map:
+                db_q = existing_q_map[q_id]
+                db_q.content = q_data["content"]
+                db_q.explanation = q_data["explanation"]
+                db_q.ai_explanation = q_data.get("ai_explanation")
+                db_q.image = q_data.get("image")
+                db_q.audio = q_data.get("audio")
+                db_q.question_type = q_data.get("question_type", db_q.question_type)
+                db_q.others = q_data.get("others")
+                
+                old_options = db_q.options
+                new_options = q_data.get("options", [])
+                
+                max_len = max(len(old_options), len(new_options))
+                for i in range(max_len):
+                    if i < len(old_options) and i < len(new_options):
+                        old_options[i].content = new_options[i]["content"]
+                        old_options[i].is_correct = new_options[i]["is_correct"]
+                    elif i >= len(old_options):
+                        new_opt = Option(
+                            question_id=db_q.id,
+                            content=new_options[i]["content"],
+                            is_correct=new_options[i]["is_correct"]
+                        )
+                        db.add(new_opt)
+                    elif i >= len(new_options):
+                        await db.delete(old_options[i])
+            else:
+                db_q = Question(
+                    quiz_id=quiz_id,
+                    content=q_data["content"],
+                    explanation=q_data["explanation"],
+                    ai_explanation=q_data.get("ai_explanation"),
+                    image=q_data.get("image"),
+                    audio=q_data.get("audio"),
+                    question_type=q_data.get("question_type", "single_choice"),
+                    others=q_data.get("others")
+                )
+                db.add(db_q)
+                await db.flush()
+                
+                for opt_data in q_data.get("options", []):
+                    new_opt = Option(
+                        question_id=db_q.id,
+                        content=opt_data["content"],
+                        is_correct=opt_data["is_correct"]
+                    )
+                    db.add(new_opt)
+                    
+        await db.commit()
+        return {"status": "ok", "message": "Quiz updated successfully."}
+        
+    except Exception as e:
+        import traceback
+        print(f"CRITICAL: Excel update error: {traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @router.get("/{quiz_id}/questions")
 async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search: str = "", db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Question, Option

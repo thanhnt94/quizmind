@@ -81,12 +81,22 @@ class ExcelQuizService:
             # Find the answer column (it could be named 'answer', 'correct_answer', 'correct_answer_text', etc.)
             ans_col = next((c for c in ["answer", "correct_answer", "correct_answer_text", "correct"] if c in df_data.columns), "answer")
 
+            # Get ID if present
+            id_val = get_val("id") or get_val("item_id") or get_val("id câu hỏi") or get_val("id item")
+            q_id = None
+            if id_val and id_val.lower() != "nan":
+                try:
+                    q_id = int(float(id_val))
+                except:
+                    pass
+
             # Get question type
             q_type = get_val("type") or get_val("question_type") or "normal"
             q_type = q_type.lower().strip()
             if q_type == "nan": q_type = "normal"
 
             question_data = {
+                "id": q_id,
                 "content": question_text,
                 "explanation": get_val("guidance") or get_val("explanation"),
                 "ai_explanation": get_val(ai_col) if ai_col else "",
@@ -132,3 +142,76 @@ class ExcelQuizService:
                 questions.append(question_data)
                 
         return metadata, questions
+
+    @staticmethod
+    def export_quiz_to_excel(quiz_title: str, quiz_description: str, category_name: str, tags: List[str], questions: List[Any]) -> bytes:
+        """
+        Generates an Excel workbook (bytes) containing Info and Data sheets
+        for exporting a QuizMind quiz.
+        """
+        from io import BytesIO
+        output = BytesIO()
+        
+        # 1. Prepare Info sheet key-value data
+        info_data = [
+            {"key": "title", "value": quiz_title},
+            {"key": "description", "value": quiz_description or ""},
+            {"key": "category", "value": category_name or "General"},
+            {"key": "tags", "value": ", ".join(tags) if tags else ""}
+        ]
+        df_info = pd.DataFrame(info_data)
+        
+        # 2. Prepare Data sheet rows
+        # Discover all custom keys present in any question's others dict
+        custom_cols = set()
+        for q in questions:
+            if q.others and isinstance(q.others, dict):
+                for k in q.others.keys():
+                    if k not in ("id", "item_id", "order_in_container", "question", "option_a", "option_b", "option_c", "option_d", "answer", "correct_answer", "correct_answer_text", "question_image_file", "question_audio_file", "guidance", "explanation", "image", "audio"):
+                        custom_cols.add(k)
+                        
+        custom_cols = sorted(list(custom_cols))
+        
+        rows = []
+        for q in questions:
+            # Extract options
+            opt_a = q.options[0].content if len(q.options) > 0 else ""
+            opt_b = q.options[1].content if len(q.options) > 1 else ""
+            opt_c = q.options[2].content if len(q.options) > 2 else ""
+            opt_d = q.options[3].content if len(q.options) > 3 else ""
+            
+            # The correct answer text:
+            correct_opt = next((o.content for o in q.options if o.is_correct), "")
+            
+            row = {
+                "id": q.id,
+                "question": q.content,
+                "option_a": opt_a,
+                "option_b": opt_b,
+                "option_c": opt_c,
+                "option_d": opt_d,
+                "answer": correct_opt,
+                "explanation": q.explanation or "",
+                "ai_explanation": q.ai_explanation or "",
+                "image": q.image or "",
+                "audio": q.audio or "",
+                "type": q.question_type or "normal"
+            }
+            
+            # Add custom columns
+            if q.others and isinstance(q.others, dict):
+                for col in custom_cols:
+                    row[col] = q.others.get(col, "")
+            else:
+                for col in custom_cols:
+                    row[col] = ""
+            rows.append(row)
+            
+        df_data = pd.DataFrame(rows)
+        
+        # Write to Excel
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_info.to_excel(writer, sheet_name="Info", index=False)
+            df_data.to_excel(writer, sheet_name="Data", index=False)
+            
+        return output.getvalue()

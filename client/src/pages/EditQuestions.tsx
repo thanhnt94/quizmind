@@ -19,7 +19,9 @@ import {
   Layers,
   Image as ImageIcon,
   Music,
-  Sparkles
+  Sparkles,
+  Download,
+  Upload
 } from 'lucide-react'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
@@ -36,6 +38,39 @@ const EditQuestions = () => {
   
   const [editingQuestion, setEditingQuestion] = useState<any>(null)
   const [isSaving, setIsSaving] = useState(false)
+
+  const [isUpdatingExcel, setIsUpdatingExcel] = useState(false)
+  const [excelUpdateError, setExcelUpdateError] = useState<string | null>(null)
+  const [excelUpdateSuccess, setExcelUpdateSuccess] = useState(false)
+
+  const handleExcelUpdateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    setIsUpdatingExcel(true)
+    setExcelUpdateError(null)
+    setExcelUpdateSuccess(false)
+    
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    try {
+      const res = await axios.post(`/api/v1/quiz/${id}/import-update`, formData)
+      if (res.data.status === 'ok') {
+        setExcelUpdateSuccess(true)
+        fetchQuestions()
+        setTimeout(() => setExcelUpdateSuccess(false), 3000)
+      } else {
+        throw new Error(res.data.error || "Cập nhật thất bại.")
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || "Lỗi khi đồng bộ đề từ file Excel."
+      setExcelUpdateError(msg)
+    } finally {
+      setIsUpdatingExcel(false)
+      e.target.value = ''
+    }
+  }
 
   const fetchQuestions = async () => {
     setIsLoading(true)
@@ -127,7 +162,31 @@ const EditQuestions = () => {
                    <span className="text-[7px] font-black text-slate-400 uppercase">AI</span>
                 </div>
              </div>
-             <button className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shadow-lg active:scale-90 transition-all">
+             
+             <a 
+                href={`/api/v1/quiz/${id}/export`}
+                className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shadow-lg hover:bg-indigo-700 active:scale-90 transition-all"
+                title="Xuất Excel"
+             >
+                <Download className="w-3.5 h-3.5" />
+             </a>
+             
+             <button 
+                onClick={() => document.getElementById('excel-update-upload')?.click()}
+                className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shadow-lg hover:bg-slate-800 active:scale-90 transition-all"
+                title="Sửa nhanh từ Excel"
+             >
+                <Upload className="w-3.5 h-3.5" />
+             </button>
+             <input 
+                id="excel-update-upload"
+                type="file"
+                className="hidden"
+                accept=".xlsx,.xls"
+                onChange={handleExcelUpdateUpload}
+             />
+
+             <button className="w-8 h-8 bg-slate-50 text-slate-600 border border-slate-100 rounded-lg flex items-center justify-center shadow-sm active:scale-90 transition-all">
                 <Layers className="w-3.5 h-3.5" />
              </button>
           </div>
@@ -307,6 +366,50 @@ const EditQuestions = () => {
                </motion.div>
             </div>
          )}
+      </AnimatePresence>
+      {/* Floating Status Notification for Excel Import/Update */}
+      <AnimatePresence>
+        {(isUpdatingExcel || excelUpdateError || excelUpdateSuccess) && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -50, scale: 0.9 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] max-w-md w-full px-4"
+          >
+            <div className={cn(
+              "p-4 rounded-2xl border backdrop-blur-xl shadow-2xl flex items-center gap-3",
+              isUpdatingExcel && "bg-white/90 border-indigo-100 text-indigo-600",
+              excelUpdateError && "bg-rose-50/90 border-rose-100 text-rose-600",
+              excelUpdateSuccess && "bg-emerald-50/90 border-emerald-100 text-emerald-600"
+            )}>
+              {isUpdatingExcel && <Zap className="w-5 h-5 animate-bounce shrink-0" />}
+              {excelUpdateError && <AlertCircle className="w-5 h-5 shrink-0" />}
+              {excelUpdateSuccess && <CheckCircle2 className="w-5 h-5 shrink-0" />}
+              
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-wider">
+                  {isUpdatingExcel && "Đang cập nhật từ Excel..."}
+                  {excelUpdateError && "Lỗi cập nhật"}
+                  {excelUpdateSuccess && "Cập nhật thành công!"}
+                </p>
+                <p className="text-[9px] font-bold opacity-80 mt-0.5 truncate">
+                  {isUpdatingExcel && "Đang xử lý cấu trúc và đồng bộ hóa câu hỏi..."}
+                  {excelUpdateError && excelUpdateError}
+                  {excelUpdateSuccess && "Toàn bộ bộ đề thi đã được đồng bộ & cập nhật thành công."}
+                </p>
+              </div>
+              
+              {(excelUpdateError || excelUpdateSuccess) && (
+                <button 
+                  onClick={() => { setExcelUpdateError(null); setExcelUpdateSuccess(false); }}
+                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors flex items-center justify-center text-slate-500"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )
