@@ -311,6 +311,18 @@ export default function QuizPlay() {
     }
   }, [currentIndex, currentQuestion])
 
+  // Tự động đóng toàn bộ các popup/toast khi người dùng click mở bất kỳ khung thông tin hoặc modal phụ nào
+  useEffect(() => {
+    if (isFeedbackOpen || isMapOpen || isEditModalOpen || isQuitModalOpen || isSessionSummaryOpen) {
+      setGoalToast(prev => prev ? { ...prev, visible: false } : null)
+      setShowGoalCelebration(false)
+      setBadgeVisible(false)
+      setActiveUnlockedBadge(null)
+      setActiveMasteryUpgrade(null)
+      setLearningModeAlert(null)
+    }
+  }, [isFeedbackOpen, isMapOpen, isEditModalOpen, isQuitModalOpen, isSessionSummaryOpen])
+
   useEffect(() => {
     const fetchUser = async () => {
       if (!user) {
