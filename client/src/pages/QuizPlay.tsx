@@ -173,6 +173,7 @@ export default function QuizPlay() {
     message: string;
     type?: 'info' | 'warning';
   } | null>(null)
+  const [justAnswered, setJustAnswered] = useState(false)
 
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
@@ -454,6 +455,7 @@ export default function QuizPlay() {
   const handleAnswer = async (optIdx: number) => {
     if (showFeedback || !currentQuestion) return
     setSelectedOption(optIdx)
+    setJustAnswered(true)
     const correct = currentQuestion.options[optIdx].is_correct
     setShowFeedback(true)
 
@@ -730,6 +732,7 @@ export default function QuizPlay() {
 
   const navigateToQuestion = (idx: number) => {
     setCurrentIndex(idx)
+    setJustAnswered(false)
 
     // Đóng toàn bộ các popup, toast, thông báo thành tựu khi chuyển sang câu mới
     setGoalToast(prev => prev ? { ...prev, visible: false } : null)
@@ -2162,7 +2165,15 @@ export default function QuizPlay() {
           </button>
           
           {showFeedback && (
-            <button onClick={() => setIsFeedbackOpen(true)} className="xl:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-indigo-50 border border-indigo-200 rounded-2xl text-indigo-600 shadow-sm active:scale-95 transition-all relative hover:bg-indigo-100">
+            <button 
+              onClick={() => setIsFeedbackOpen(true)} 
+              className={`xl:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl shadow-sm active:scale-95 transition-all relative ${
+                justAnswered 
+                  ? 'bg-indigo-600 border border-indigo-600 text-white animate-[pulse_1.5s_infinite] ring-4 ring-indigo-300 ring-offset-1 drop-shadow-[0_0_12px_rgba(99,102,241,0.6)]' 
+                  : 'bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100'
+              }`}
+              title="Xem giải thích và hướng dẫn"
+            >
               <BookOpen className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
             </button>
@@ -2185,6 +2196,26 @@ export default function QuizPlay() {
           )}
         </div>
       </footer>
+
+      {/* 💡 CHỒI LÊN BÊN DƯỚI - QUICK SWIPE-UP/CLICK HANDLE */}
+      {justAnswered && !isFeedbackOpen && (
+        <div 
+          onClick={() => setIsFeedbackOpen(true)}
+          className="fixed bottom-[76px] left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-gradient-to-r from-indigo-600/95 to-purple-600/95 text-white py-2.5 px-4 rounded-2xl shadow-[0_-8px_20px_rgba(99,102,241,0.25)] flex items-center justify-between cursor-pointer border border-indigo-400/20 backdrop-blur-md active:scale-98 transition-all hover:from-indigo-600 hover:to-purple-600 group select-none animate-[bounce_2s_infinite] xl:hidden"
+        >
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-black tracking-wide uppercase">💡 Xem hướng dẫn & Giải thích chi tiết</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold bg-white/10 px-2.5 py-1 rounded-lg border border-white/15">
+            <span>CLICK / VUỐT LÊN</span>
+            <ChevronRight className="w-3 h-3 animate-[translate-x_1s_infinite] group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </div>
+      )}
       {/* ✅ SESSION COMPLETE SUMMARY MODAL */}
       <AnimatePresence>
         {isSessionSummaryOpen && (() => {
