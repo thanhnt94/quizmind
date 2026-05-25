@@ -1591,7 +1591,7 @@ export default function QuizPlay() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={cn(
-              "fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-[0.1em] shadow-xl flex items-center gap-3 backdrop-blur-md border whitespace-nowrap",
+              "fixed bottom-[136px] left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-[0.1em] shadow-xl flex items-center gap-3 backdrop-blur-md border whitespace-nowrap",
               currentQuestion.options[selectedOption].is_correct 
                 ? "bg-emerald-500/90 text-white border-emerald-400/30 shadow-emerald-200/20" 
                 : "bg-amber-400/90 text-slate-800 border-amber-300/30 shadow-amber-200/20"
@@ -2213,19 +2213,16 @@ export default function QuizPlay() {
       {justAnswered && !isFeedbackOpen && (
         <div 
           onClick={() => setIsFeedbackOpen(true)}
-          className="fixed bottom-[76px] left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-gradient-to-r from-indigo-600/95 to-purple-600/95 text-white py-2.5 px-4 rounded-2xl shadow-[0_-8px_20px_rgba(99,102,241,0.25)] flex items-center justify-between cursor-pointer border border-indigo-400/20 backdrop-blur-md active:scale-98 transition-all hover:from-indigo-600 hover:to-purple-600 group select-none animate-[bounce_2s_infinite] xl:hidden"
+          className="fixed bottom-[76px] left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-gradient-to-r from-indigo-600/95 to-purple-600/95 text-white py-2.5 px-5 rounded-2xl shadow-[0_-8px_20px_rgba(99,102,241,0.25)] flex items-center justify-between cursor-pointer border border-indigo-400/20 backdrop-blur-md active:scale-98 transition-all hover:from-indigo-600 hover:to-purple-600 group select-none animate-[bounce_2s_infinite] xl:hidden"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="flex h-2.5 w-2.5 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
             <span className="text-xs font-black tracking-wide uppercase">💡 Xem hướng dẫn & Giải thích chi tiết</span>
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] font-bold bg-white/10 px-2.5 py-1 rounded-lg border border-white/15">
-            <span>CLICK / VUỐT LÊN</span>
-            <ChevronRight className="w-3 h-3 animate-[translate-x_1s_infinite] group-hover:translate-x-0.5 transition-transform" />
-          </div>
+          <ChevronRight className="w-4 h-4 animate-[translate-x_1s_infinite] group-hover:translate-x-0.5 transition-transform opacity-85" />
         </div>
       )}
       {/* ✅ SESSION COMPLETE SUMMARY MODAL */}
