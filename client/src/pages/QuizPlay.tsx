@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, AlertCircle, TrendingUp, Award } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, AlertCircle, TrendingUp, Award, Volume2, VolumeX } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -15,6 +15,27 @@ interface Option {
   content: string
   is_correct: boolean
 }
+
+const playCorrectSound = () => {
+  try {
+    const audio = new Audio(`${import.meta.env.BASE_URL}sounds/correct.mp3`);
+    audio.volume = 0.4;
+    audio.play().catch(e => console.log("SFX autoplay blocked:", e));
+  } catch (e) {
+    console.error("Audio SFX failed:", e);
+  }
+};
+
+const playIncorrectSound = () => {
+  try {
+    const audio = new Audio(`${import.meta.env.BASE_URL}sounds/incorrect.mp3`);
+    audio.volume = 0.4;
+    audio.play().catch(e => console.log("SFX autoplay blocked:", e));
+  } catch (e) {
+    console.error("Audio SFX failed:", e);
+  }
+};
+
 
 interface Question {
   id: number
@@ -110,6 +131,13 @@ export default function QuizPlay() {
   const navigate = useNavigate()
   const { user, setUser, setGamify } = useAppStore()
   const [session, setSession] = useState<any>(null)
+  const [sfxEnabled, setSfxEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('quizmind_sfx_enabled');
+      return saved === null ? true : saved === 'true';
+    }
+    return true;
+  });
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -487,6 +515,7 @@ export default function QuizPlay() {
     const usuallyCorrect = prevRatio >= 0.7 && prevTotal >= 2
 
     if (correct) {
+      if (sfxEnabled) playCorrectSound()
       updatedStreak = streak + 1
       setStreak(updatedStreak)
       const xpGained = isFirstEver ? 15 : (updatedStreak >= 5 ? 20 : 10)
@@ -516,6 +545,7 @@ export default function QuizPlay() {
 
       setAnswerContext({ wasCorrect: true, prevTotal, prevCorrect, timeTaken, avgTime, newStreak: updatedStreak, xpGained })
     } else {
+      if (sfxEnabled) playIncorrectSound()
       updatedStreak = 0
       setStreak(0)
       const xpGained = 0
@@ -1788,6 +1818,23 @@ export default function QuizPlay() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button 
+             onClick={() => {
+                const nextSfx = !sfxEnabled;
+                setSfxEnabled(nextSfx);
+                localStorage.setItem('quizmind_sfx_enabled', nextSfx ? 'true' : 'false');
+             }}
+             className={cn(
+                "w-9 h-9 flex items-center justify-center rounded-xl border transition-all active:scale-90 shadow-sm",
+                sfxEnabled 
+                   ? "bg-emerald-50 border-emerald-100 text-emerald-500 hover:bg-emerald-100" 
+                   : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100"
+             )}
+             title={sfxEnabled ? "Tắt âm thanh hiệu ứng" : "Bật âm thanh hiệu ứng"}
+          >
+             {sfxEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
           <div className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white shadow-md text-[11px] font-black transition-all",
             !showFeedback ? "bg-gradient-to-r from-slate-800 to-slate-900 shadow-slate-300" : "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-200"

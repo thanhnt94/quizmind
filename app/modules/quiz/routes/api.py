@@ -549,9 +549,12 @@ async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depen
     }
 
 @router.get("/{quiz_id}/play-data")
-async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     user_id = int(request.cookies.get("user_id", 1))
-    quiz = await QuizService.get_quiz_with_stats(db, quiz_id, user_id=user_id)
+    if mode in ("mcq", "typing", "listening"):
+        quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    else:
+        quiz = await QuizService.get_quiz_with_stats(db, quiz_id, user_id=user_id)
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
     from app.modules.gamification.interface import GamificationInterface
@@ -586,7 +589,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, db: AsyncSession = 
                 "content": q.content,
                 "explanation": q.explanation,
                 "ai_explanation": q.ai_explanation,
-                "stats": q.stats,
+                "stats": getattr(q, 'stats', None),
                 "box_level": mastery_map.get(q.id, 1),
                 "options": [
                     {"id": o.id, "content": o.content, "is_correct": o.is_correct}
@@ -1217,6 +1220,7 @@ async def create_or_update_goal(request: Request, data: dict, db: AsyncSession =
 @router.get("/goals/active")
 async def get_active_goals(request: Request, local_date: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuizGoal, UserDailyProgress, Quiz, Question, UserAnswer, QuizAttempt
+    from sqlalchemy.orm import joinedload
     import math
     from datetime import datetime
     
@@ -1224,41 +1228,57 @@ async def get_active_goals(request: Request, local_date: Optional[str] = None, d
     if not local_date:
         local_date = datetime.utcnow().strftime("%Y-%m-%d")
 
+    # Fetch active goals with joinedload of Quiz to avoid N+1
     res = await db.execute(
-        select(UserQuizGoal).filter(UserQuizGoal.user_id == user_id, UserQuizGoal.status == "active")
+        select(UserQuizGoal)
+        .options(joinedload(UserQuizGoal.quiz))
+        .filter(UserQuizGoal.user_id == user_id, UserQuizGoal.status == "active")
     )
     goals = res.scalars().all()
 
+    if not goals:
+        return []
+
+    goal_ids = [goal.id for goal in goals]
+    quiz_ids = [goal.quiz_id for goal in goals]
+
+    # Bulk query daily progress
+    prog_res = await db.execute(
+        select(UserDailyProgress).filter(
+            UserDailyProgress.goal_id.in_(goal_ids),
+            UserDailyProgress.date == local_date
+        )
+    )
+    progress_map = {p.goal_id: p for p in prog_res.scalars().all()}
+
+    # Bulk query total questions count grouped by quiz_id
+    q_count_res = await db.execute(
+        select(Question.quiz_id, func.count(Question.id))
+        .filter(Question.quiz_id.in_(quiz_ids))
+        .group_by(Question.quiz_id)
+    )
+    q_count_map = {r[0]: r[1] for r in q_count_res.all()}
+
+    # Bulk query learned count grouped by quiz_id
+    learned_res = await db.execute(
+        select(Question.quiz_id, func.count(func.distinct(Question.id)))
+        .join(UserAnswer, UserAnswer.question_id == Question.id)
+        .join(QuizAttempt, QuizAttempt.id == UserAnswer.attempt_id)
+        .filter(Question.quiz_id.in_(quiz_ids), QuizAttempt.user_id == user_id)
+        .group_by(Question.quiz_id)
+    )
+    learned_map = {r[0]: r[1] for r in learned_res.all()}
+
     goals_data = []
     for goal in goals:
-        # Fetch quiz info
-        quiz_res = await db.execute(select(Quiz).filter(Quiz.id == goal.quiz_id))
-        quiz = quiz_res.scalar_one_or_none()
+        quiz = goal.quiz
         if not quiz:
             continue
             
-        # Count total questions in quiz
-        q_count_res = await db.execute(select(func.count(Question.id)).filter(Question.quiz_id == goal.quiz_id))
-        total_questions = q_count_res.scalar() or 0
+        total_questions = q_count_map.get(goal.quiz_id, 0)
+        total_learned = learned_map.get(goal.quiz_id, 0)
         
-        # Count total learned/answered questions by user
-        learned_res = await db.execute(
-            select(func.count(func.distinct(Question.id)))
-            .join(UserAnswer, UserAnswer.question_id == Question.id)
-            .join(QuizAttempt, QuizAttempt.id == UserAnswer.attempt_id)
-            .filter(Question.quiz_id == goal.quiz_id, QuizAttempt.user_id == user_id)
-        )
-        total_learned = learned_res.scalar() or 0
-        
-        # Get today's progress
-        prog_res = await db.execute(
-            select(UserDailyProgress).filter(
-                UserDailyProgress.goal_id == goal.id,
-                UserDailyProgress.date == local_date
-            )
-        )
-        progress = prog_res.scalar_one_or_none()
-        
+        progress = progress_map.get(goal.id)
         done_today = progress.count_done if progress else 0
         is_target_met = progress.is_target_met if progress else False
         

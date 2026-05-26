@@ -6,7 +6,7 @@ import {
   TrendingUp, Clock, Target, Award, BrainCircuit, ChevronRight, Zap, 
   Flame, BarChart3, Layers, Calendar, Activity, ChevronLeft, 
   Target as TargetIcon, Users, Globe, BookOpen, ChevronDown, Timer,
-  Sparkles, Lock, ArrowUpRight, ArrowDownRight, Info
+  Sparkles, Lock, ArrowUpRight, ArrowDownRight, Info, Trophy, Crown
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
@@ -61,11 +61,20 @@ export default function Stats() {
   const [activeTab, setActiveTab] = useState<'personal' | 'global'>('personal')
   const [activeChart, setActiveChart] = useState(0)
   const [hoveredDay, setHoveredDay] = useState<{ dateStr: string, count: number, x: number, y: number } | null>(null)
+  const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<'xp' | 'streak' | 'questions' | 'accuracy'>('xp')
   
   const { data, isLoading } = useQuery<StatsData>({
     queryKey: ['detailed-stats'],
     queryFn: async () => {
       const res = await axios.get('/api/v1/stats/detailed')
+      return res.data
+    }
+  })
+
+  const { data: leaderboardData, isLoading: isLeaderboardLoading } = useQuery({
+    queryKey: ['stats-leaderboard'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/stats/leaderboard')
       return res.data
     }
   })
@@ -101,6 +110,10 @@ export default function Stats() {
       return res.data
     }
   })
+
+  const currentLeaderboard = leaderboardData?.[activeLeaderboardTab] || { list: [], user_rank: -1, user_value: 0 }
+  const topThree = currentLeaderboard.list.slice(0, 3)
+  const remainingUsers = currentLeaderboard.list.slice(3)
 
   if (isLoading) {
     return (
@@ -860,34 +873,201 @@ export default function Stats() {
                        color="text-rose-600"
                        bg="bg-rose-50"
                      />
-                  </div>
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Leaderboard Column */}
+                      <div className="lg:col-span-2 space-y-6">
+                         <div className="bg-white rounded-[2.5rem] border border-slate-100 p-6 md:p-8 shadow-sm flex flex-col justify-between overflow-hidden relative">
+                            {/* Header */}
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                               <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                     <Trophy className="w-4.5 h-4.5" />
+                                  </div>
+                                  <div>
+                                     <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">Bảng Vinh Danh Thành Viên</h3>
+                                     <p className="text-[9px] font-bold text-slate-400 mt-0.5">Đua top học tập, nâng cao trình độ</p>
+                                  </div>
+                               </div>
 
-                  <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 md:p-12 shadow-sm text-center">
-                     <div className="max-w-2xl mx-auto space-y-6">
-                        <div className="w-20 h-20 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 mx-auto mb-8 shadow-xl shadow-indigo-100">
-                           <Globe className="w-10 h-10" />
-                        </div>
-                        <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic tracking-tight">Knowledge Ecosystem</h3>
-                        <p className="text-xs md:text-sm font-medium text-slate-400 leading-relaxed">
-                           The QuizMind knowledge ecosystem is continuously expanding. On average, each question is solved in <strong>{global.avg_time_per_question} seconds</strong> with a platform-wide accuracy rate of <strong>{global.platform_accuracy}%</strong>.
-                        </p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-8">
-                           <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Time</h4>
-                              <p className="text-lg font-black text-slate-900">{global.avg_time_per_question}s</p>
-                           </div>
-                           <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</h4>
-                              <p className="text-lg font-black text-emerald-600">Stable</p>
-                           </div>
-                           <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Items</h4>
-                              <p className="text-lg font-black text-indigo-600">{global.total_questions}</p>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
+                               {/* Leaderboard Tab switcher */}
+                               <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 overflow-x-auto no-scrollbar max-w-full">
+                                  {(['xp', 'streak', 'questions', 'accuracy'] as const).map((tab) => (
+                                     <button
+                                        key={tab}
+                                        onClick={() => setActiveLeaderboardTab(tab)}
+                                        className={cn(
+                                           "px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
+                                           activeLeaderboardTab === tab ? "bg-white text-indigo-600 shadow-sm border border-slate-100/50" : "text-slate-400"
+                                        )}
+                                     >
+                                        {tab === 'xp' ? 'XP' : tab === 'streak' ? 'Streak' : tab === 'questions' ? 'Questions' : 'Accuracy'}
+                                     </button>
+                                  ))}
+                               </div>
+                            </div>
+
+                            {isLeaderboardLoading ? (
+                               <div className="py-20 text-center flex flex-col items-center justify-center gap-3">
+                                  <Zap className="w-8 h-8 text-indigo-500 animate-pulse" />
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đang tải bảng xếp hạng...</span>
+                               </div>
+                            ) : (
+                               <>
+                                  {/* Podium Top 3 */}
+                                  {topThree.length > 0 && (
+                                     <div className="flex items-end justify-center gap-2 md:gap-6 py-6 md:py-10 border-b border-slate-50 bg-gradient-to-b from-indigo-50/10 to-transparent rounded-3xl mb-4 px-2">
+                                        {(() => {
+                                           const topThreePositions = [
+                                              { item: topThree[1], index: 1, pos: 2, height: 'h-24 md:h-28', color: 'from-slate-100 to-slate-200 border-slate-300', text: 'text-slate-500', bg: 'bg-slate-100' }, // 2nd place
+                                              { item: topThree[0], index: 0, pos: 1, height: 'h-32 md:h-36', color: 'from-amber-100 to-amber-200 border-amber-300', text: 'text-amber-600', bg: 'bg-amber-100' }, // 1st place
+                                              { item: topThree[2], index: 2, pos: 3, height: 'h-20 md:h-24', color: 'from-orange-100 to-orange-200 border-orange-300', text: 'text-orange-700', bg: 'bg-orange-100' }  // 3rd place
+                                           ].filter(p => p.item)
+
+                                           return topThreePositions.map((pod) => {
+                                              const user = pod.item
+                                              const initial = (user.full_name || user.username || '?').charAt(0).toUpperCase()
+                                              return (
+                                                 <div key={user.user_id} className="flex flex-col items-center w-24 md:w-32 shrink-0">
+                                                    {/* Avatar & Badge */}
+                                                    <div className="relative mb-2">
+                                                       {pod.pos === 1 && (
+                                                          <Crown className="w-5 h-5 text-amber-500 absolute -top-4.5 left-1/2 -translate-x-1/2 drop-shadow-sm animate-bounce" />
+                                                       )}
+                                                       <div className={cn(
+                                                          "w-12 h-12 md:w-16 md:h-16 rounded-full border-2 flex items-center justify-center text-sm md:text-lg font-black bg-white shadow-md relative",
+                                                          pod.pos === 1 ? "border-amber-400 ring-4 ring-amber-50" : pod.pos === 2 ? "border-slate-300" : "border-orange-300"
+                                                       )}>
+                                                          {initial}
+                                                          {/* Rank Badge */}
+                                                          <div className={cn(
+                                                             "absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full border flex items-center justify-center text-[9px] md:text-[10px] font-black text-white shadow-sm",
+                                                             pod.pos === 1 ? "bg-amber-500 border-amber-400" : pod.pos === 2 ? "bg-slate-400 border-slate-300" : "bg-orange-500 border-orange-400"
+                                                          )}>
+                                                             {pod.pos}
+                                                          </div>
+                                                       </div>
+                                                    </div>
+
+                                                    {/* User Details */}
+                                                    <div className="text-center w-full px-1">
+                                                       <div className="text-[10px] font-black text-slate-900 truncate leading-tight">{user.full_name}</div>
+                                                       <div className="text-[8px] font-black text-slate-400 uppercase mt-0.5 tracking-wider">Lv.{user.level}</div>
+                                                    </div>
+
+                                                    {/* Podium pillar */}
+                                                    <div className={cn(
+                                                       "w-full mt-3 rounded-t-2xl flex flex-col justify-end items-center pb-2 bg-gradient-to-t shadow-sm",
+                                                       pod.height, pod.color
+                                                    )}>
+                                                       <span className={cn("text-[9px] md:text-[10px] font-black tracking-tighter leading-none mb-1", pod.text)}>
+                                                          {activeLeaderboardTab === 'xp' ? `${user.value.toLocaleString()}` : activeLeaderboardTab === 'streak' ? `${user.value} ngày` : activeLeaderboardTab === 'questions' ? `${user.value.toLocaleString()}` : `${user.value}%`}
+                                                       </span>
+                                                       <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                          {activeLeaderboardTab === 'xp' ? 'XP' : activeLeaderboardTab === 'streak' ? 'Streak' : activeLeaderboardTab === 'questions' ? 'câu' : 'Chính xác'}
+                                                       </span>
+                                                    </div>
+                                                 </div>
+                                              )
+                                           })
+                                        })()}
+                                     </div>
+                                  )}
+
+                                  {/* List Ranks 4+ */}
+                                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
+                                     {remainingUsers.length === 0 && topThree.length === 0 ? (
+                                        <div className="py-10 text-center text-slate-300 font-bold text-xs">
+                                           Chưa có dữ liệu xếp hạng nào.
+                                        </div>
+                                     ) : remainingUsers.length === 0 ? (
+                                        <div className="py-4 text-center text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                                           Đã hiển thị hết danh sách
+                                        </div>
+                                     ) : (
+                                        remainingUsers.map((user: any) => {
+                                           const initial = (user.full_name || user.username || '?').charAt(0).toUpperCase()
+                                           return (
+                                              <div key={user.user_id} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:border-indigo-100 transition-all hover:scale-[1.005]">
+                                                 <div className="w-6 text-[10px] font-black text-slate-400 text-center">
+                                                    #{user.rank}
+                                                 </div>
+                                                 <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-700 shrink-0">
+                                                    {initial}
+                                                 </div>
+                                                 <div className="flex-1 min-w-0">
+                                                    <h4 className="text-[11px] font-black text-slate-900 truncate uppercase">{user.full_name}</h4>
+                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Cấp độ {user.level}</p>
+                                                 </div>
+                                                 <div className="text-right shrink-0">
+                                                    <div className="text-[11px] font-black text-indigo-600 tracking-tighter">
+                                                       {activeLeaderboardTab === 'xp' ? `${user.value.toLocaleString()} XP` : activeLeaderboardTab === 'streak' ? `${user.value} ngày` : activeLeaderboardTab === 'questions' ? `${user.value.toLocaleString()} câu` : `${user.value}%`}
+                                                    </div>
+                                                 </div>
+                                              </div>
+                                           )
+                                        })
+                                     )}
+                                  </div>
+
+                                  {/* Current User rank banner */}
+                                  {currentLeaderboard.user_rank !== -1 && (
+                                     <div className="mt-4 p-4 bg-indigo-600 rounded-3xl border border-indigo-500 shadow-lg shadow-indigo-600/20 text-white flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                           <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-white shrink-0">
+                                              <Trophy className="w-4 h-4 text-amber-300" />
+                                           </div>
+                                           <div className="min-w-0">
+                                              <p className="text-[9px] font-black uppercase tracking-widest text-indigo-200">Xếp hạng của bạn</p>
+                                              <h4 className="text-[11px] font-black truncate uppercase leading-tight">
+                                                 Bạn đang đứng thứ <span className="text-amber-300">#{currentLeaderboard.user_rank}</span>
+                                              </h4>
+                                           </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                           <div className="text-[11px] font-black text-amber-300 tracking-tighter leading-none">
+                                              {activeLeaderboardTab === 'xp' ? `${currentLeaderboard.user_value.toLocaleString()} XP` : activeLeaderboardTab === 'streak' ? `${currentLeaderboard.user_value} ngày` : activeLeaderboardTab === 'questions' ? `${currentLeaderboard.user_value.toLocaleString()} câu` : `${currentLeaderboard.user_value}%`}
+                                           </div>
+                                           <span className="text-[7px] font-bold uppercase tracking-wider text-indigo-200 mt-0.5 block">
+                                              {activeLeaderboardTab === 'xp' ? 'Tích lũy' : activeLeaderboardTab === 'streak' ? 'Liên tục' : activeLeaderboardTab === 'questions' ? 'Đã làm' : 'Độ chính xác'}
+                                           </span>
+                                        </div>
+                                     </div>
+                                  )}
+                               </>
+                            )}
+                         </div>
+                      </div>
+
+                      {/* Global details & platform health column */}
+                      <div className="space-y-6">
+                         <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm text-center h-full flex flex-col justify-between">
+                            <div className="space-y-6">
+                               <div className="w-16 h-16 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-600 mx-auto shadow-lg shadow-indigo-100">
+                                  <Globe className="w-8 h-8" />
+                               </div>
+                               <h3 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">Hệ sinh thái học tập</h3>
+                               <p className="text-[11px] font-medium text-slate-400 leading-relaxed">
+                                  Hệ sinh thái QuizMind đang phát triển không ngừng. Trung bình, mỗi câu hỏi được giải trong <strong>{global.avg_time_per_question} giây</strong> với tỷ lệ chính xác toàn nền tảng là <strong>{global.platform_accuracy}%</strong>.
+                               </p>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 gap-3 pt-6 mt-6 border-t border-slate-50">
+                               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Thời gian TB</span>
+                                  <p className="text-xs font-black text-slate-900">{global.avg_time_per_question} giây/câu</p>
+                               </div>
+                               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Trạng thái</span>
+                                  <p className="text-xs font-black text-emerald-600 uppercase tracking-wider">Ổn định</p>
+                               </div>
+                               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tổng câu hỏi</span>
+                                  <p className="text-xs font-black text-indigo-600">{global.total_questions.toLocaleString()}</p>
+                               </div>
+                            </div>
+                         </div>
+                      </div>
+                   </div>         </div>
                </motion.div>
             )}
          </AnimatePresence>

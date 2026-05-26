@@ -1,8 +1,9 @@
-from sqlalchemy import select, func, desc, extract, case
+from sqlalchemy import select, func, desc, extract, case, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.quiz.models import UserAnswer, Quiz, Question, Category, QuizAttempt
 from app.modules.auth.models import User
 from app.modules.stats.models import UserDailyStats
+from app.modules.gamification.models import UserGamification
 from datetime import datetime, timedelta
 
 class AnalyticsService:
@@ -185,4 +186,154 @@ class AnalyticsService:
             "hourly_distribution": hourly_formatted,
             "recent_sessions": recent_sessions,
             "summary": summary
+        }
+
+    @staticmethod
+    async def get_leaderboard(db: AsyncSession, current_user_id: int):
+        # 1. Fetch current user's baseline data
+        curr_game_res = await db.execute(
+            select(UserGamification).where(UserGamification.user_id == current_user_id)
+        )
+        curr_game = curr_game_res.scalar_one_or_none()
+        curr_xp = curr_game.xp if curr_game else 0
+        curr_streak = curr_game.streak_count if curr_game else 0
+
+        # Current user's daily stats aggregates
+        curr_stats_res = await db.execute(
+            select(
+                func.sum(UserDailyStats.questions_attempted).label("total_q"),
+                func.sum(UserDailyStats.correct_answers).label("total_c")
+            ).where(UserDailyStats.user_id == current_user_id)
+        )
+        curr_stats = curr_stats_res.one_or_none()
+        curr_total_q = curr_stats.total_q if curr_stats else 0
+        curr_total_c = curr_stats.total_c if curr_stats else 0
+        curr_acc = (curr_total_c * 100.0 / curr_total_q) if curr_total_q > 0 else 0.0
+
+        # Helper to format rows
+        async def execute_and_format_leaderboard(stmt):
+            res = await db.execute(stmt)
+            out = []
+            for rank_idx, row in enumerate(res.all(), 1):
+                out.append({
+                    "rank": rank_idx,
+                    "user_id": row[0],
+                    "username": row[1],
+                    "full_name": row[2] or row[1],
+                    "value": row[3] or 0,
+                    "level": row[4] or 1
+                })
+            return out
+
+        # --- XP LEADERBOARD ---
+        xp_stmt = select(
+            User.id, User.username, User.full_name,
+            UserGamification.xp.label("value"), UserGamification.level
+        ).select_from(User).join(UserGamification, User.id == UserGamification.user_id)\
+         .order_by(desc(UserGamification.xp)).limit(50)
+        xp_list = await execute_and_format_leaderboard(xp_stmt)
+
+        xp_rank_res = await db.execute(
+            select(func.count(User.id)).select_from(User)
+            .join(UserGamification, User.id == UserGamification.user_id)
+            .where(UserGamification.xp > curr_xp)
+        )
+        xp_rank = xp_rank_res.scalar() + 1
+
+        # --- STREAK LEADERBOARD ---
+        streak_stmt = select(
+            User.id, User.username, User.full_name,
+            UserGamification.streak_count.label("value"), UserGamification.level
+        ).select_from(User).join(UserGamification, User.id == UserGamification.user_id)\
+         .order_by(desc(UserGamification.streak_count)).limit(50)
+        streak_list = await execute_and_format_leaderboard(streak_stmt)
+
+        streak_rank_res = await db.execute(
+            select(func.count(User.id)).select_from(User)
+            .join(UserGamification, User.id == UserGamification.user_id)
+            .where(UserGamification.streak_count > curr_streak)
+        )
+        streak_rank = streak_rank_res.scalar() + 1
+
+        # --- QUESTIONS LEADERBOARD ---
+        q_subq = select(
+            UserDailyStats.user_id,
+            func.sum(UserDailyStats.questions_attempted).label("total_q")
+        ).group_by(UserDailyStats.user_id).subquery()
+
+        q_stmt = select(
+            User.id, User.username, User.full_name,
+            q_subq.c.total_q.label("value"), UserGamification.level
+        ).select_from(User).join(q_subq, User.id == q_subq.c.user_id)\
+         .outerjoin(UserGamification, User.id == UserGamification.user_id)\
+         .order_by(desc(q_subq.c.total_q)).limit(50)
+        q_list = await execute_and_format_leaderboard(q_stmt)
+
+        q_rank_sub = select(
+            UserDailyStats.user_id
+        ).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.questions_attempted) > curr_total_q).subquery()
+        q_rank_res = await db.execute(select(func.count()).select_from(q_rank_sub))
+        q_rank = q_rank_res.scalar() + 1
+
+        # --- ACCURACY LEADERBOARD (min 20 questions) ---
+        acc_subq = select(
+            UserDailyStats.user_id,
+            (func.sum(UserDailyStats.correct_answers) * 100.0 / func.sum(UserDailyStats.questions_attempted)).label("acc")
+        ).group_by(UserDailyStats.user_id)\
+         .having(func.sum(UserDailyStats.questions_attempted) >= 20)\
+         .subquery()
+
+        acc_stmt = select(
+            User.id, User.username, User.full_name,
+            acc_subq.c.acc.label("value"), UserGamification.level
+        ).select_from(User).join(acc_subq, User.id == acc_subq.c.user_id)\
+         .outerjoin(UserGamification, User.id == UserGamification.user_id)\
+         .order_by(desc(acc_subq.c.acc)).limit(50)
+        
+        acc_res = await db.execute(acc_stmt)
+        acc_list = []
+        for rank_idx, row in enumerate(acc_res.all(), 1):
+            acc_list.append({
+                "rank": rank_idx,
+                "user_id": row[0],
+                "username": row[1],
+                "full_name": row[2] or row[1],
+                "value": round(row[3] or 0.0, 1),
+                "level": row[4] or 1
+            })
+
+        if curr_total_q >= 20:
+            acc_rank_sub = select(
+                UserDailyStats.user_id
+            ).group_by(UserDailyStats.user_id)\
+             .having(and_(
+                 func.sum(UserDailyStats.questions_attempted) >= 20,
+                 (func.sum(UserDailyStats.correct_answers) * 100.0 / func.sum(UserDailyStats.questions_attempted)) > curr_acc
+             )).subquery()
+            acc_rank_res = await db.execute(select(func.count()).select_from(acc_rank_sub))
+            acc_rank = acc_rank_res.scalar() + 1
+        else:
+            acc_rank = -1
+
+        return {
+            "xp": {
+                "list": xp_list,
+                "user_rank": xp_rank,
+                "user_value": curr_xp
+            },
+            "streak": {
+                "list": streak_list,
+                "user_rank": streak_rank,
+                "user_value": curr_streak
+            },
+            "questions": {
+                "list": q_list,
+                "user_rank": q_rank,
+                "user_value": curr_total_q
+            },
+            "accuracy": {
+                "list": acc_list,
+                "user_rank": acc_rank,
+                "user_value": round(curr_acc, 1)
+            }
         }

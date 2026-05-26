@@ -178,6 +178,16 @@ async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/api/v1/stats/leaderboard")
+async def get_leaderboard(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return await AnalyticsService.get_leaderboard(db, user.id)
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/v1/dashboard/data")
 async def get_dashboard_data(request: Request, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
