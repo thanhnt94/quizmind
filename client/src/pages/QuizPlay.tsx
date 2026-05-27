@@ -1397,7 +1397,7 @@ export default function QuizPlay() {
          </div>
          
          <div className={cn(
-             "flex items-center justify-between gap-3 py-4 border-t border-slate-100 bg-white/95 backdrop-blur-xl sticky bottom-0 z-50 px-6"
+             "flex items-center justify-between gap-1.5 sm:gap-3 py-4 border-t border-slate-100 bg-white/95 backdrop-blur-xl sticky bottom-0 z-50 px-2 sm:px-6"
           )}>
              {isMobile && (
                <button 
@@ -1411,20 +1411,20 @@ export default function QuizPlay() {
              <button 
                onClick={handleEditCurrentTab}
                className={cn(
-                 "w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all duration-300 active:scale-90",
+                 "w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-xl sm:rounded-2xl border transition-all duration-300 active:scale-90",
                  ((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight))
                    ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-lg shadow-emerald-100 scale-105"
                    : "bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 shadow-sm"
                )}
              >
                {((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight)) ? (
-                 <Check className="w-5 h-5 stroke-[3] animate-pulse" />
+                 <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3] animate-pulse" />
                ) : (
-                 <Edit3 className="w-5 h-5" />
+                 <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
                )}
              </button>
 
-             <div className="flex items-center bg-slate-50 p-1 rounded-2xl h-14 border border-slate-200/60 shadow-inner gap-1">
+             <div className="flex items-center bg-slate-50 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl h-11 sm:h-14 border border-slate-200/60 shadow-inner gap-0.5 sm:gap-1">
                {tabs.map((tab: any) => {
                  const isActive = activeFeedbackTab === tab.id
                  return (
@@ -1432,7 +1432,7 @@ export default function QuizPlay() {
                      key={tab.id}
                      onClick={() => setActiveFeedbackTab(tab.id)}
                      className={cn(
-                       "w-12 h-11 flex items-center justify-center rounded-xl transition-all duration-300 relative",
+                       "w-9 sm:w-12 h-9 sm:h-11 flex items-center justify-center rounded-lg sm:rounded-xl transition-all duration-300 relative",
                        isActive 
                          ? (
                              tab.id === 'insight' ? "text-amber-500 bg-white shadow-md border border-amber-100/60 scale-105" :
@@ -1443,10 +1443,10 @@ export default function QuizPlay() {
                      )}
                    >
                      <div className="relative">
-                       <tab.icon className={cn("w-5 h-5 transition-transform duration-300", isActive && "scale-110")} />
+                       <tab.icon className={cn("w-4.5 h-4.5 sm:w-5 sm:h-5 transition-transform duration-300", isActive && "scale-110")} />
                        {tab.hasContent && (
                          <span className={cn(
-                           "absolute -top-1 -right-1 w-2 h-2 rounded-full border border-white animate-pulse",
+                           "absolute -top-1 -right-1 w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full border border-white animate-pulse",
                            tab.id === 'insight' ? "bg-amber-500" :
                            tab.id === 'ai' ? "bg-indigo-600" :
                            "bg-emerald-500"
@@ -1498,13 +1498,13 @@ export default function QuizPlay() {
                    else copyCurrentTabContent()
                  }}
                  className={cn(
-                   "w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all duration-300 active:scale-90 shadow-sm",
+                   "w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-xl sm:rounded-2xl border transition-all duration-300 active:scale-90 shadow-sm",
                    isCopied 
                      ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-lg shadow-emerald-100 scale-105" 
                      : "bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600"
                  )}
                >
-                 {isCopied ? <Check className="w-5 h-5 stroke-[3]" /> : <Copy className="w-5 h-5" />}
+                 {isCopied ? <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3]" /> : <Copy className="w-4 h-4 sm:w-5 sm:h-5" />}
                </button>
              </div>
 
