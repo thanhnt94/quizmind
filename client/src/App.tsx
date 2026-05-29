@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAppStore } from './store/useAppStore'
 import Dashboard from './pages/Dashboard'
+import Library from './pages/Library'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Admin from './pages/Admin'
@@ -63,6 +64,7 @@ function AppContent() {
           <Route path="/profile" element={isLoggedIn ? <Profile /> : <Navigate to="/login" replace />} />
           <Route path="/stats" element={isLoggedIn ? <Stats /> : <Navigate to="/login" replace />} />
           <Route path="/settings" element={isLoggedIn ? <Settings /> : <Navigate to="/login" replace />} />
+          <Route path="/library" element={isLoggedIn ? <Library /> : <Navigate to="/login" replace />} />
           <Route path="/manage" element={isLoggedIn ? <ManageQuizzes /> : <Navigate to="/login" replace />} />
           <Route path="/manage/import" element={isLoggedIn ? <ImportQuiz /> : <Navigate to="/login" replace />} />
           <Route path="/manage/edit/:id" element={isLoggedIn ? <EditQuiz /> : <Navigate to="/login" replace />} />

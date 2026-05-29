@@ -26,7 +26,7 @@ export default function Layout() {
   const navItems = [
     { label: 'Home', path: '/', icon: LayoutGrid },
     { label: 'Stats', path: '/stats', icon: BarChart3 },
-    { label: 'Manage', path: '/manage', icon: Library },
+    { label: 'Library', path: '/library', icon: Library },
     { label: 'Room', path: '/room/join', icon: Users },
     { label: 'Settings', path: '/profile', icon: Settings },
   ]

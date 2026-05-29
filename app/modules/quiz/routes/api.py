@@ -1403,6 +1403,94 @@ async def get_user_badges(request: Request, db: AsyncSession = Depends(get_db)):
         "total_count": len(all_badges)
     }
 
+@router.get("/goals/global")
+async def get_global_goals(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import UserGlobalGoal
+    from app.modules.stats.models import UserDailyStats
+    from app.modules.auth.services.auth_service import AuthService
+    from fastapi import HTTPException
+    from datetime import datetime
+    
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
+    
+    # Get or create user global goals
+    res = await db.execute(select(UserGlobalGoal).filter(UserGlobalGoal.user_id == user_id))
+    goal = res.scalar_one_or_none()
+    if not goal:
+        goal = UserGlobalGoal(user_id=user_id, daily_time_target=20, daily_card_target=20)
+        db.add(goal)
+        await db.commit()
+        await db.refresh(goal)
+        
+    # Get today's stats (time and cards studied)
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    stats_res = await db.execute(
+        select(UserDailyStats).where(
+            UserDailyStats.user_id == user_id,
+            UserDailyStats.date >= today
+        )
+    )
+    stats = stats_res.scalar_one_or_none()
+    
+    actual_seconds = stats.total_time_seconds if stats else 0
+    actual_minutes = round(actual_seconds / 60, 1)
+    actual_cards = stats.questions_attempted if stats else 0
+    
+    return {
+        "daily_time_target": goal.daily_time_target,
+        "daily_card_target": goal.daily_card_target,
+        "actual_time_minutes": actual_minutes,
+        "actual_cards_completed": actual_cards
+    }
+
+@router.post("/goals/global")
+async def update_global_goals(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import UserGlobalGoal
+    from app.modules.auth.services.auth_service import AuthService
+    from fastapi import HTTPException
+    
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
+    
+    daily_time_target = int(data.get("daily_time_target", 20))
+    daily_card_target = int(data.get("daily_card_target", 20))
+    
+    res = await db.execute(select(UserGlobalGoal).filter(UserGlobalGoal.user_id == user_id))
+    goal = res.scalar_one_or_none()
+    if not goal:
+        goal = UserGlobalGoal(
+            user_id=user_id,
+            daily_time_target=daily_time_target,
+            daily_card_target=daily_card_target
+        )
+        db.add(goal)
+    else:
+        goal.daily_time_target = daily_time_target
+        goal.daily_card_target = daily_card_target
+        
+    await db.commit()
+    return {
+        "status": "ok",
+        "daily_time_target": goal.daily_time_target,
+        "daily_card_target": goal.daily_card_target
+    }
+
+@router.get("/today-review")
+async def get_today_review_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.services.quiz_service import QuizService
+    from fastapi import HTTPException
+    user_id = int(request.cookies.get("user_id", 1))
+    try:
+        return await QuizService.get_today_review(db, user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/stats/heatmap")
 async def get_heatmap_stats(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.auth.services.auth_service import AuthService
