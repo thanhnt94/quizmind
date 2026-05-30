@@ -30,3 +30,4 @@ email-validator
 google-genai
 pywebpush
 cryptography
+python-telegram-bot
