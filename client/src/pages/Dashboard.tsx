@@ -261,8 +261,10 @@ function BadgeProgressWidget({ data }: { data: BadgeProgress[] }) {
 interface GlobalGoals {
   daily_time_target: number
   daily_card_target: number
+  daily_new_card_target: number
   actual_time_minutes: number
   actual_cards_completed: number
+  actual_new_cards_completed?: number
 }
 
 // ─── Today Focus Widget ────────────────────────────────────────────────────────
@@ -281,11 +283,12 @@ function TodayFocusWidget({
   onStartPractice: (quiz: any) => void;
   navigate: any;
 }) {
-  const timePercentage = Math.min(100, Math.round((data.actual_time_minutes / data.daily_time_target) * 100))
-  const cardPercentage = Math.min(100, Math.round((data.actual_cards_completed / data.daily_card_target) * 100))
+  const timePercentage = Math.min(100, Math.round((data.actual_time_minutes / (data.daily_time_target || 1)) * 100))
+  const cardPercentage = Math.min(100, Math.round((data.actual_cards_completed / (data.daily_card_target || 1)) * 100))
+  const newCardPercentage = Math.min(100, Math.round(((data.actual_new_cards_completed || 0) / (data.daily_new_card_target || 1)) * 100))
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-[2.5rem] p-6 shadow-sm relative overflow-hidden text-left mb-5">
+    <div className="bg-white border border-slate-200/60 rounded-[2.5rem] p-6 shadow-sm relative overflow-hidden text-left mb-5 flex-shrink-0">
       <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-indigo-50/30 blur-md pointer-events-none" />
       
       <div className="flex items-center justify-between mb-5 relative z-10">
@@ -302,7 +305,7 @@ function TodayFocusWidget({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 relative z-10 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10 mb-6">
         <div className="flex items-center gap-3 bg-slate-50/60 p-3.5 rounded-[1.5rem] border border-slate-100">
           <div className="relative w-14 h-14 flex-shrink-0 flex items-center justify-center rounded-full bg-white shadow-sm">
             <svg className="w-14 h-14 transform -rotate-90">
@@ -349,6 +352,31 @@ function TodayFocusWidget({
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Câu đã trả lời</span>
             <span className="text-xs font-black text-slate-850 block mt-0.5">
               {data.actual_cards_completed} / {data.daily_card_target}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 bg-slate-50/60 p-3.5 rounded-[1.5rem] border border-slate-100">
+          <div className="relative w-14 h-14 flex-shrink-0 flex items-center justify-center rounded-full bg-white shadow-sm">
+            <svg className="w-14 h-14 transform -rotate-90">
+              <circle cx="28" cy="28" r="23" className="stroke-slate-100 fill-none" strokeWidth="4" />
+              <circle
+                cx="28" cy="28" r="23"
+                className="stroke-rose-500 fill-none transition-all duration-500 ease-out"
+                strokeWidth="4"
+                strokeDasharray={2 * Math.PI * 23}
+                strokeDashoffset={2 * Math.PI * 23 - (newCardPercentage / 100) * 2 * Math.PI * 23}
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="absolute text-[10px] font-black text-rose-600">
+              {newCardPercentage}%
+            </span>
+          </div>
+          <div>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Câu hỏi mới</span>
+            <span className="text-xs font-black text-slate-850 block mt-0.5">
+              {data.actual_new_cards_completed || 0} / {data.daily_new_card_target || 0}
             </span>
           </div>
         </div>
@@ -451,32 +479,37 @@ function GoalSettingsModal({
   onClose,
   initialTime,
   initialCard,
+  initialNewCard,
   onSave
 }: {
   isOpen: boolean;
   onClose: () => void;
   initialTime: number;
   initialCard: number;
-  onSave: (time: number, card: number) => Promise<void>;
+  initialNewCard: number;
+  onSave: (time: number, card: number, newCard: number) => Promise<void>;
 }) {
   const [timeTarget, setTimeTarget] = useState(initialTime)
   const [cardTarget, setCardTarget] = useState(initialCard)
+  const [newCardTarget, setNewCardTarget] = useState(initialNewCard)
   const [isSaving, setIsSaving] = useState(false)
 
   const timePresets = [10, 20, 30, 60]
   const cardPresets = [10, 20, 30, 50]
+  const newCardPresets = [5, 10, 20, 30]
 
   useEffect(() => {
     if (isOpen) {
       setTimeTarget(initialTime)
       setCardTarget(initialCard)
+      setNewCardTarget(initialNewCard)
     }
-  }, [isOpen, initialTime, initialCard])
+  }, [isOpen, initialTime, initialCard, initialNewCard])
 
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      await onSave(timeTarget, cardTarget)
+      await onSave(timeTarget, cardTarget, newCardTarget)
       onClose()
     } catch (e) {
       alert("Lỗi khi lưu mục tiêu")
@@ -570,6 +603,36 @@ function GoalSettingsModal({
                 />
               </div>
 
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Mục tiêu câu hỏi mới (câu/ngày)</label>
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {newCardPresets.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setNewCardTarget(preset)}
+                      className={cn(
+                        "py-2.5 rounded-xl text-[10px] font-black tracking-wider transition-all border",
+                        newCardTarget === preset
+                          ? "bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-100"
+                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      {preset} Câu
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={newCardTarget}
+                  onChange={(e) => setNewCardTarget(Math.max(1, parseInt(e.target.value) || 0))}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-750 focus:border-indigo-500 focus:bg-white outline-none transition-all"
+                  placeholder="Nhập số câu mới tùy chọn..."
+                />
+              </div>
+
               <button
                 onClick={handleSave}
                 disabled={isSaving}
@@ -606,10 +669,11 @@ export default function Dashboard() {
     }
   })
 
-  const handleSaveGlobalGoals = async (timeTarget: number, cardTarget: number) => {
+  const handleSaveGlobalGoals = async (timeTarget: number, cardTarget: number, newCardTarget: number) => {
     await axios.post('/api/v1/quiz/goals/global', {
       daily_time_target: timeTarget,
-      daily_card_target: cardTarget
+      daily_card_target: cardTarget,
+      daily_new_card_target: newCardTarget
     })
     refetchGlobalGoals()
   }
@@ -712,7 +776,7 @@ export default function Dashboard() {
   )
 
   return (
-    <div className="flex flex-col bg-gradient-to-br from-[#f8fafc] via-[#f1f6fa] to-[#f8fafc] min-h-[calc(100vh-6rem)] md:min-h-0 md:h-full md:overflow-hidden">
+    <div className="flex flex-col bg-gradient-to-br from-[#f8fafc] via-[#f1f6fa] to-[#f8fafc] min-h-[calc(100vh-6rem)] relative overflow-x-hidden md:overflow-hidden md:min-h-0 md:h-full">
       
       {/* Soft blobs */}
       <div className="absolute top-[20%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-indigo-200/10 blur-[130px] pointer-events-none" />
@@ -1013,6 +1077,7 @@ export default function Dashboard() {
             onClose={() => setIsGoalModalOpen(false)}
             initialTime={globalGoals.daily_time_target}
             initialCard={globalGoals.daily_card_target}
+            initialNewCard={globalGoals.daily_new_card_target}
             onSave={handleSaveGlobalGoals}
           />
         )}

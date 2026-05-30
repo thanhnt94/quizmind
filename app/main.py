@@ -23,7 +23,21 @@ import asyncio
 async def lifespan(app: FastAPI):
     # Initialize DB on startup
     await init_db()
+    
+    # Initialize Telegram Bot if enabled
+    from app.core.db import SessionLocal
+    from app.modules.admin.interface import AdminInterface
+    from app.modules.notification.services.bot_service import init_bot_app, stop_bot_app
+    
+    async with SessionLocal() as session:
+        tele_config = await AdminInterface.get_telegram_config(session)
+        if tele_config and tele_config.get("enabled") and tele_config.get("bot_token"):
+            asyncio.create_task(init_bot_app())
+
     yield
+    
+    # Shutdown Telegram Bot
+    await stop_bot_app()
 
 app = FastAPI(
     title="QuizMind API",
@@ -53,9 +67,11 @@ app.add_middleware(
 from app.modules.quiz.routes.api import router as quiz_api_router
 from app.modules.quiz.routes.room import router as room_router
 from app.modules.sso_module.routes import router as sso_api_router
+from app.modules.notification.routes.api import router as notification_router
 
 app.include_router(quiz_api_router, prefix=settings.API_V1_STR)
 app.include_router(room_router, prefix=settings.API_V1_STR)
+app.include_router(notification_router, prefix=settings.API_V1_STR)
 app.include_router(sso_api_router)
 
 # --- Health Checks for Ecosystem ---
@@ -169,6 +185,14 @@ async def serve_spa(request: Request, db: AsyncSession = Depends(get_db)):
         content={"status": "error", "message": "SPA assets not found. Please compile the Vite frontend client first."}
     )
 
+
+@app.get("/sw.js")
+async def serve_sw():
+    sw_path = os.path.join(DIST_DIR, "sw.js")
+    if os.path.exists(sw_path):
+        from fastapi.responses import FileResponse
+        return FileResponse(sw_path, media_type="application/javascript")
+    return JSONResponse(status_code=404, content={"error": "Not found"})
 
 @app.get("/api/v1/stats/detailed")
 async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db)):
@@ -571,6 +595,97 @@ async def list_ai_models(request: Request, db: AsyncSession = Depends(get_db)):
         if "API_KEY_INVALID" in error_msg:
             error_msg = "Invalid API Key. Please check your Google AI Studio settings."
         return JSONResponse(status_code=500, content={"error": error_msg})
+
+@app.get("/api/v1/admin/telegram")
+async def api_admin_telegram(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
+    from app.modules.admin.interface import AdminInterface
+    tele_config = await AdminInterface.get_telegram_config(db)
+    return {
+        "bot_token": tele_config.get("bot_token", "") if isinstance(tele_config, dict) else getattr(tele_config, "bot_token", ""),
+        "bot_username": tele_config.get("bot_username", "") if isinstance(tele_config, dict) else getattr(tele_config, "bot_username", ""),
+        "enabled": tele_config.get("enabled", False) if isinstance(tele_config, dict) else getattr(tele_config, "enabled", False)
+    }
+
+@app.post("/api/v1/admin/telegram")
+async def api_admin_telegram_update(
+    request: Request,
+    data: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
+    from app.modules.admin.interface import AdminInterface
+    config_data = {
+        "bot_token": data.get("bot_token"),
+        "bot_username": data.get("bot_username"),
+        "enabled": data.get("enabled", False)
+    }
+    await AdminInterface.update_telegram_config(db, config_data, user.id)
+    return {"status": "success", "message": "Telegram configuration updated successfully!"}
+
+@app.post("/api/v1/admin/telegram/test")
+async def test_telegram_bot(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
+    from app.modules.admin.interface import AdminInterface
+    tele_config = await AdminInterface.get_telegram_config(db)
+    token = tele_config.get("bot_token") if isinstance(tele_config, dict) else getattr(tele_config, "bot_token", "")
+    
+    if not token:
+        return {"status": "error", "message": "Bot token not configured"}
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+            data = resp.json()
+            if data.get("ok"):
+                bot_info = data["result"]
+                return {
+                    "status": "success",
+                    "message": f"Connected to bot: {bot_info.get('first_name')} (@{bot_info.get('username')})"
+                }
+            else:
+                return {"status": "error", "message": data.get("description", "Unknown error")}
+    except Exception as e:
+        return {"status": "error", "message": f"Connection error: {e}"}
+
+@app.post("/api/v1/admin/telegram/broadcast")
+async def broadcast_telegram_message(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        
+    message = data.get("message")
+    if not message or not message.strip():
+        return {"status": "error", "message": "Message cannot be empty"}
+        
+    from app.modules.notification.models import UserTelegramConfig
+    from app.modules.notification.services.telegram_service import TelegramService
+    
+    res = await db.execute(select(UserTelegramConfig).where(
+        UserTelegramConfig.telegram_chat_id.isnot(None),
+        UserTelegramConfig.is_active == True
+    ))
+    configs = res.scalars().all()
+    
+    success_count = 0
+    for config in configs:
+        if await TelegramService.send_message(db, config.telegram_chat_id, message):
+            success_count += 1
+            
+    return {"status": "success", "message": f"Broadcast sent successfully to {success_count} user(s)."}
 
 @app.get("/api/v1/admin/users")
 async def api_admin_users(request: Request, db: AsyncSession = Depends(get_db)):

@@ -1420,7 +1420,7 @@ async def get_global_goals(request: Request, db: AsyncSession = Depends(get_db))
     res = await db.execute(select(UserGlobalGoal).filter(UserGlobalGoal.user_id == user_id))
     goal = res.scalar_one_or_none()
     if not goal:
-        goal = UserGlobalGoal(user_id=user_id, daily_time_target=20, daily_card_target=20)
+        goal = UserGlobalGoal(user_id=user_id, daily_time_target=20, daily_card_target=20, daily_new_card_target=10)
         db.add(goal)
         await db.commit()
         await db.refresh(goal)
@@ -1442,6 +1442,7 @@ async def get_global_goals(request: Request, db: AsyncSession = Depends(get_db))
     return {
         "daily_time_target": goal.daily_time_target,
         "daily_card_target": goal.daily_card_target,
+        "daily_new_card_target": getattr(goal, 'daily_new_card_target', 10),
         "actual_time_minutes": actual_minutes,
         "actual_cards_completed": actual_cards
     }
@@ -1459,6 +1460,7 @@ async def update_global_goals(request: Request, data: dict, db: AsyncSession = D
     
     daily_time_target = int(data.get("daily_time_target", 20))
     daily_card_target = int(data.get("daily_card_target", 20))
+    daily_new_card_target = int(data.get("daily_new_card_target", 10))
     
     res = await db.execute(select(UserGlobalGoal).filter(UserGlobalGoal.user_id == user_id))
     goal = res.scalar_one_or_none()
@@ -1466,18 +1468,21 @@ async def update_global_goals(request: Request, data: dict, db: AsyncSession = D
         goal = UserGlobalGoal(
             user_id=user_id,
             daily_time_target=daily_time_target,
-            daily_card_target=daily_card_target
+            daily_card_target=daily_card_target,
+            daily_new_card_target=daily_new_card_target
         )
         db.add(goal)
     else:
         goal.daily_time_target = daily_time_target
         goal.daily_card_target = daily_card_target
+        goal.daily_new_card_target = daily_new_card_target
         
     await db.commit()
     return {
         "status": "ok",
         "daily_time_target": goal.daily_time_target,
-        "daily_card_target": goal.daily_card_target
+        "daily_card_target": goal.daily_card_target,
+        "daily_new_card_target": goal.daily_new_card_target
     }
 
 @router.get("/today-review")

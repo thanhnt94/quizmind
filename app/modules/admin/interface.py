@@ -76,3 +76,40 @@ class AdminInterface:
         db.add(log)
         await db.commit()
         return True
+
+    @staticmethod
+    async def get_telegram_config(db: AsyncSession):
+        result = await db.execute(select(SystemConfig).where(SystemConfig.id == "telegram_bot_config"))
+        config = result.scalar_one_or_none()
+        if not config:
+            return {
+                "bot_token": "",
+                "bot_username": "",
+                "enabled": False
+            }
+        return config.value
+
+    @staticmethod
+    async def update_telegram_config(db: AsyncSession, config_data: dict, admin_id: int):
+        result = await db.execute(select(SystemConfig).where(SystemConfig.id == "telegram_bot_config"))
+        config = result.scalar_one_or_none()
+        if not config:
+            config = SystemConfig(id="telegram_bot_config")
+            db.add(config)
+        
+        config.value = config_data
+        
+        # Log action
+        log = AdminLog(admin_id=admin_id, action="UPDATE_TELEGRAM", details=f"Updated Telegram Bot settings")
+        db.add(log)
+        await db.commit()
+        
+        # Also re-initialize the bot if it's enabled
+        from app.modules.notification.services.bot_service import init_bot_app, stop_bot_app
+        if config_data.get("enabled") and config_data.get("bot_token"):
+            await stop_bot_app()
+            asyncio.create_task(init_bot_app())
+        else:
+            await stop_bot_app()
+            
+        return True

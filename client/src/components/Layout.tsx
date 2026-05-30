@@ -28,7 +28,7 @@ export default function Layout() {
     { label: 'Stats', path: '/stats', icon: BarChart3 },
     { label: 'Library', path: '/library', icon: Library },
     { label: 'Room', path: '/room/join', icon: Users },
-    { label: 'Settings', path: '/profile', icon: Settings },
+    { label: 'Settings', path: '/settings', icon: Settings },
   ]
 
   if (user?.role === 'admin') {

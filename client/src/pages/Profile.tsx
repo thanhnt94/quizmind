@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface BadgeData {
@@ -188,7 +189,7 @@ export default function Profile() {
         <div className="space-y-4">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4 ml-4">ACCOUNT SETTINGS</h3>
           
-          <MenuLink icon={Settings} label="Account Preferences" />
+          <MenuLink icon={Settings} label="Account Preferences" href="/settings" />
           <MenuLink icon={Shield} label="Security & Privacy" />
           <MenuLink icon={LogOut} label="Sign Out" variant="danger" href="/logout" />
         </div>
@@ -299,11 +300,8 @@ export default function Profile() {
 }
 
 function MenuLink({ icon: Icon, label, variant = 'default', href = '#' }: any) {
-  return (
-    <a href={href} className={cn(
-      "bg-white rounded-[2.5rem] p-6 border border-slate-100 flex items-center justify-between group transition-all",
-      variant === 'danger' && "border-rose-50 hover:bg-rose-50/30"
-    )}>
+  const content = (
+    <>
       <div className="flex items-center gap-4">
         <div className={cn(
           "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
@@ -320,6 +318,21 @@ function MenuLink({ icon: Icon, label, variant = 'default', href = '#' }: any) {
         "w-4 h-4 transition-all",
         variant === 'danger' ? "text-rose-200" : "text-slate-300"
       )} />
+    </>
+  )
+
+  const className = cn(
+    "bg-white rounded-[2.5rem] p-6 border border-slate-100 flex items-center justify-between group transition-all cursor-pointer",
+    variant === 'danger' && "border-rose-50 hover:bg-rose-50/30"
+  )
+
+  if (href.startsWith('/settings') || href.startsWith('/security')) {
+    return <Link to={href} className={className}>{content}</Link>
+  }
+
+  return (
+    <a href={href} className={className}>
+      {content}
     </a>
   )
 }
