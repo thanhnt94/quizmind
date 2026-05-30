@@ -20,6 +20,18 @@ depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # =========================================================================
+    # ECOSYSTEM MIGRATION GUIDELINE:
+    # Always write IDEMPOTENT migrations. Check if a table/column exists before 
+    # creating/adding it. This prevents crashes if the DB is in an out-of-sync state.
+    # 
+    # Example helper for table check:
+    # conn = op.get_bind()
+    # inspector = sa.inspect(conn)
+    # tables = inspector.get_table_names()
+    # if 'my_table' not in tables:
+    #     op.create_table(...)
+    # =========================================================================
     ${upgrades if upgrades else "pass"}
 
 
