@@ -28,3 +28,4 @@ email-validator
 
 # AI Integration
 google-genai
+pywebpush
