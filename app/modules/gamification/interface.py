@@ -6,7 +6,7 @@ from typing import Optional
 
 class GamificationInterface:
     @staticmethod
-    async def add_xp(db: AsyncSession, user_id: int, amount: int):
+    async def add_xp(db: AsyncSession, user_id: int, amount: int, source: str = "general"):
         result = await db.execute(select(UserGamification).where(UserGamification.user_id == user_id))
         user_stats = result.scalar_one_or_none()
         if not user_stats:
@@ -18,6 +18,11 @@ class GamificationInterface:
         new_level = (user_stats.xp // 1000) + 1
         level_up = new_level > user_stats.level
         user_stats.level = new_level
+        
+        # Log transaction
+        from .models import XPTransaction
+        tx = XPTransaction(user_id=user_id, amount=amount, source=source)
+        db.add(tx)
         
         await db.commit()
         return {"level_up": level_up, "current_level": user_stats.level, "current_xp": user_stats.xp}

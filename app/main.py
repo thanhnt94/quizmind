@@ -205,12 +205,12 @@ async def get_detailed_stats(request: Request, db: AsyncSession = Depends(get_db
         return {"error": str(e)}
 
 @app.get("/api/v1/gamification/leaderboard")
-async def get_gamification_leaderboard(request: Request, db: AsyncSession = Depends(get_db)):
+async def get_gamification_leaderboard(request: Request, time_filter: str = "all_time", db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        return await AnalyticsService.get_leaderboard(db, user.id)
+        return await AnalyticsService.get_leaderboard(db, user.id, time_filter)
     except Exception as e:
         return {"error": str(e)}
 

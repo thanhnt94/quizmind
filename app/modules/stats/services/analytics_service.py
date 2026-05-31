@@ -189,151 +189,152 @@ class AnalyticsService:
         }
 
     @staticmethod
-    async def get_leaderboard(db: AsyncSession, current_user_id: int):
-        # 1. Fetch current user's baseline data
-        curr_game_res = await db.execute(
-            select(UserGamification).where(UserGamification.user_id == current_user_id)
-        )
-        curr_game = curr_game_res.scalar_one_or_none()
-        curr_xp = curr_game.xp if curr_game else 0
-        curr_streak = curr_game.streak_count if curr_game else 0
-
-        # Current user's daily stats aggregates
-        curr_stats_res = await db.execute(
-            select(
-                func.sum(UserDailyStats.questions_attempted).label("total_q"),
-                func.sum(UserDailyStats.correct_answers).label("total_c")
-            ).where(UserDailyStats.user_id == current_user_id)
-        )
-        curr_stats = curr_stats_res.one_or_none()
-        curr_total_q = curr_stats.total_q if curr_stats else 0
-        curr_total_c = curr_stats.total_c if curr_stats else 0
-        curr_acc = (curr_total_c * 100.0 / curr_total_q) if curr_total_q > 0 else 0.0
-
-        # Helper to format rows
-        async def execute_and_format_leaderboard(stmt):
-            res = await db.execute(stmt)
-            out = []
-            for rank_idx, row in enumerate(res.all(), 1):
-                out.append({
-                    "rank": rank_idx,
-                    "user_id": row[0],
-                    "username": row[1],
-                    "full_name": row[2] or row[1],
-                    "value": row[3] or 0,
-                    "level": row[4] or 1
-                })
-            return out
-
-        # --- XP LEADERBOARD ---
-        xp_stmt = select(
-            User.id, User.username, User.full_name,
-            UserGamification.xp.label("value"), UserGamification.level
-        ).select_from(User).join(UserGamification, User.id == UserGamification.user_id)\
-         .order_by(desc(UserGamification.xp)).limit(50)
-        xp_list = await execute_and_format_leaderboard(xp_stmt)
-
-        xp_rank_res = await db.execute(
-            select(func.count(User.id)).select_from(User)
-            .join(UserGamification, User.id == UserGamification.user_id)
-            .where(UserGamification.xp > curr_xp)
-        )
-        xp_rank = xp_rank_res.scalar() + 1
-
-        # --- STREAK LEADERBOARD ---
-        streak_stmt = select(
-            User.id, User.username, User.full_name,
-            UserGamification.streak_count.label("value"), UserGamification.level
-        ).select_from(User).join(UserGamification, User.id == UserGamification.user_id)\
-         .order_by(desc(UserGamification.streak_count)).limit(50)
-        streak_list = await execute_and_format_leaderboard(streak_stmt)
-
-        streak_rank_res = await db.execute(
-            select(func.count(User.id)).select_from(User)
-            .join(UserGamification, User.id == UserGamification.user_id)
-            .where(UserGamification.streak_count > curr_streak)
-        )
-        streak_rank = streak_rank_res.scalar() + 1
-
-        # --- QUESTIONS LEADERBOARD ---
-        q_subq = select(
-            UserDailyStats.user_id,
-            func.sum(UserDailyStats.questions_attempted).label("total_q")
-        ).group_by(UserDailyStats.user_id).subquery()
-
-        q_stmt = select(
-            User.id, User.username, User.full_name,
-            q_subq.c.total_q.label("value"), UserGamification.level
-        ).select_from(User).join(q_subq, User.id == q_subq.c.user_id)\
-         .outerjoin(UserGamification, User.id == UserGamification.user_id)\
-         .order_by(desc(q_subq.c.total_q)).limit(50)
-        q_list = await execute_and_format_leaderboard(q_stmt)
-
-        q_rank_sub = select(
-            UserDailyStats.user_id
-        ).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.questions_attempted) > curr_total_q).subquery()
-        q_rank_res = await db.execute(select(func.count()).select_from(q_rank_sub))
-        q_rank = q_rank_res.scalar() + 1
-
-        # --- ACCURACY LEADERBOARD (min 20 questions) ---
-        acc_subq = select(
-            UserDailyStats.user_id,
-            (func.sum(UserDailyStats.correct_answers) * 100.0 / func.sum(UserDailyStats.questions_attempted)).label("acc")
-        ).group_by(UserDailyStats.user_id)\
-         .having(func.sum(UserDailyStats.questions_attempted) >= 20)\
-         .subquery()
-
-        acc_stmt = select(
-            User.id, User.username, User.full_name,
-            acc_subq.c.acc.label("value"), UserGamification.level
-        ).select_from(User).join(acc_subq, User.id == acc_subq.c.user_id)\
-         .outerjoin(UserGamification, User.id == UserGamification.user_id)\
-         .order_by(desc(acc_subq.c.acc)).limit(50)
+    async def get_leaderboard(db: AsyncSession, current_user_id: int, time_filter: str = "all_time"):
+        from app.modules.gamification.models import XPTransaction
         
-        acc_res = await db.execute(acc_stmt)
-        acc_list = []
-        for rank_idx, row in enumerate(acc_res.all(), 1):
-            acc_list.append({
-                "rank": rank_idx,
-                "user_id": row[0],
-                "username": row[1],
-                "full_name": row[2] or row[1],
-                "value": round(row[3] or 0.0, 1),
-                "level": row[4] or 1
+        # Determine date range based on time_filter
+        start_date = None
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        if time_filter == "today":
+            start_date = today
+        elif time_filter == "week":
+            start_date = today - timedelta(days=today.weekday())
+
+        # 1. Fetch XP Leaderboard
+        if time_filter == "all_time":
+            stmt_xp = (
+                select(UserGamification.user_id, User.username, UserGamification.xp.label("xp"), UserGamification.level, UserGamification.streak_count)
+                .join(User, User.id == UserGamification.user_id)
+                .order_by(desc(UserGamification.xp))
+                .limit(5)
+            )
+        else:
+            stmt_xp = (
+                select(
+                    XPTransaction.user_id, 
+                    User.username, 
+                    func.sum(XPTransaction.amount).label("xp"),
+                    UserGamification.level,
+                    UserGamification.streak_count
+                )
+                .join(User, User.id == XPTransaction.user_id)
+                .outerjoin(UserGamification, UserGamification.user_id == XPTransaction.user_id)
+                .where(XPTransaction.created_at >= start_date)
+                .group_by(XPTransaction.user_id, User.username, UserGamification.level, UserGamification.streak_count)
+                .order_by(desc(func.sum(XPTransaction.amount)))
+                .limit(5)
+            )
+            
+        results_xp = await db.execute(stmt_xp)
+        rows_xp = results_xp.all()
+
+        leaderboard = []
+        current_user_rank = None
+        current_user_obj = await db.execute(select(User).where(User.id == current_user_id))
+        current_user = current_user_obj.scalar_one_or_none()
+
+        for rank, row in enumerate(rows_xp, start=1):
+            entry = {
+                "rank": rank,
+                "user_id": row.user_id,
+                "username": row.username,
+                "xp": row.xp,
+                "level": row.level or 1,
+                "streak": row.streak_count or 0,
+                "is_current_user": row.user_id == current_user_id,
+            }
+            leaderboard.append(entry)
+            if row.user_id == current_user_id:
+                current_user_rank = rank
+
+        # If current user isn't in top 5, find their rank
+        if current_user_id and current_user_rank is None and current_user:
+            user_xp = 0
+            ahead_count = 0
+            if time_filter == "all_time":
+                uxp_res = await db.execute(select(UserGamification.xp).where(UserGamification.user_id == current_user_id))
+                user_xp = uxp_res.scalar() or 0
+                cnt_res = await db.execute(select(func.count(UserGamification.user_id)).where(UserGamification.xp > user_xp))
+                ahead_count = cnt_res.scalar() or 0
+            else:
+                uxp_res = await db.execute(select(func.sum(XPTransaction.amount)).where(XPTransaction.user_id == current_user_id, XPTransaction.created_at >= start_date))
+                user_xp = uxp_res.scalar() or 0
+                cnt_res = await db.execute(
+                    select(func.count(func.distinct(XPTransaction.user_id)))
+                    .where(XPTransaction.created_at >= start_date)
+                    .group_by(XPTransaction.user_id)
+                    .having(func.sum(XPTransaction.amount) > user_xp)
+                )
+                ahead_count = len(cnt_res.all())
+
+            current_user_rank = ahead_count + 1
+            
+            cur_gam_res = await db.execute(select(UserGamification).where(UserGamification.user_id == current_user_id))
+            cur_gam = cur_gam_res.scalar_one_or_none()
+            leaderboard.append({
+                "rank": current_user_rank,
+                "user_id": current_user_id,
+                "username": current_user.username,
+                "xp": user_xp,
+                "level": cur_gam.level if cur_gam else 1,
+                "streak": cur_gam.streak_count if cur_gam else 0,
+                "is_current_user": True,
+                "out_of_top_5": True,
             })
 
-        if curr_total_q >= 20:
-            acc_rank_sub = select(
-                UserDailyStats.user_id
-            ).group_by(UserDailyStats.user_id)\
-             .having(and_(
-                 func.sum(UserDailyStats.questions_attempted) >= 20,
-                 (func.sum(UserDailyStats.correct_answers) * 100.0 / func.sum(UserDailyStats.questions_attempted)) > curr_acc
-             )).subquery()
-            acc_rank_res = await db.execute(select(func.count()).select_from(acc_rank_sub))
-            acc_rank = acc_rank_res.scalar() + 1
-        else:
-            acc_rank = -1
+        # 2. Fetch Time Leaderboard
+        stmt_time = (
+            select(UserDailyStats.user_id, User.username, func.sum(UserDailyStats.total_time_seconds).label("total_time"))
+            .join(User, User.id == UserDailyStats.user_id)
+        )
+        if start_date:
+            stmt_time = stmt_time.where(UserDailyStats.date >= start_date.date())
+            
+        stmt_time = stmt_time.group_by(UserDailyStats.user_id, User.username).order_by(desc(func.sum(UserDailyStats.total_time_seconds))).limit(5)
+        
+        time_results = await db.execute(stmt_time)
+        time_rows = time_results.all()
+
+        time_leaderboard = []
+        current_user_time_rank = None
+        for rank, row in enumerate(time_rows, start=1):
+            uid = row.user_id
+            time_leaderboard.append({
+                "rank": rank,
+                "user_id": uid,
+                "username": row.username,
+                "total_time": int(row.total_time or 0),
+                "is_current_user": uid == current_user_id,
+            })
+            if uid == current_user_id:
+                current_user_time_rank = rank
+
+        if current_user_id and current_user_time_rank is None and current_user:
+            stmt_my_time = select(func.sum(UserDailyStats.total_time_seconds)).where(UserDailyStats.user_id == current_user_id)
+            if start_date:
+                stmt_my_time = stmt_my_time.where(UserDailyStats.date >= start_date.date())
+            user_time_res = await db.execute(stmt_my_time)
+            user_time = int(user_time_res.scalar() or 0)
+            
+            stmt_ahead_time = select(func.count(func.distinct(UserDailyStats.user_id))).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.total_time_seconds) > user_time)
+            if start_date:
+                stmt_ahead_time = select(func.count(func.distinct(UserDailyStats.user_id))).where(UserDailyStats.date >= start_date.date()).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.total_time_seconds) > user_time)
+            
+            ahead_time_res = await db.execute(stmt_ahead_time)
+            current_user_time_rank = len(ahead_time_res.all()) + 1
+            
+            time_leaderboard.append({
+                "rank": current_user_time_rank,
+                "user_id": current_user_id,
+                "username": current_user.username,
+                "total_time": user_time,
+                "is_current_user": True,
+                "out_of_top_5": True,
+            })
 
         return {
-            "xp": {
-                "list": xp_list,
-                "user_rank": xp_rank,
-                "user_value": curr_xp
-            },
-            "streak": {
-                "list": streak_list,
-                "user_rank": streak_rank,
-                "user_value": curr_streak
-            },
-            "questions": {
-                "list": q_list,
-                "user_rank": q_rank,
-                "user_value": curr_total_q
-            },
-            "accuracy": {
-                "list": acc_list,
-                "user_rank": acc_rank,
-                "user_value": round(curr_acc, 1)
-            }
+            "leaderboard": leaderboard,
+            "current_user_rank": current_user_rank,
+            "time_leaderboard": time_leaderboard,
+            "current_user_time_rank": current_user_time_rank,
         }

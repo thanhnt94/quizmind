@@ -31,3 +31,12 @@ class UserDailyActivity(Base):
     activity_date = Column(Date, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class XPTransaction(Base):
+    __tablename__ = "xp_transactions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    amount = Column(Integer, nullable=False)
+    source = Column(String(50), nullable=False) # e.g. "quiz_answer", "daily_goal", "badge_earned"
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
