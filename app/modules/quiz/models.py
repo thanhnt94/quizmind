@@ -196,6 +196,7 @@ class UserQuestionMastery(Base):
     question_id = Column(Integer, ForeignKey("questions.id"), index=True)
     box_level = Column(Integer, default=1)  # Leitner system box 1-5 (Mastery level)
     consecutive_correct = Column(Integer, default=0)
+    is_ignored = Column(Boolean, default=False)
     last_answered = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     question = relationship("Question")

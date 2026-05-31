@@ -239,7 +239,8 @@ class QuizService:
             ).where(
                 Question.quiz_id == quiz_id,
                 UserQuestionMastery.user_id == user_id,
-                UserQuestionMastery.box_level < 5
+                UserQuestionMastery.box_level < 5,
+                UserQuestionMastery.is_ignored == False
             )
             due_reviews_res = await db.execute(due_reviews_stmt)
             due_reviews_count = due_reviews_res.scalar() or 0

@@ -565,14 +565,16 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
     is_collaborator = collab_res.scalar() is not None
     
     from app.modules.quiz.models import UserQuestionMastery
-    mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.box_level).where(
+    mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.box_level, UserQuestionMastery.is_ignored).where(
         UserQuestionMastery.user_id == user_id,
         UserQuestionMastery.question_id.in_([q.id for q in quiz.questions])
     )
     mastery_res = await db.execute(mastery_stmt)
-    mastery_map = {row[0]: row[1] for row in mastery_res.all()}
+    mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
     
-    # Format for frontend
+    # Format for frontend, excluding ignored questions
+    filtered_questions = [q for q in quiz.questions if not mastery_map.get(q.id, {}).get("is_ignored", False)]
+    
     return {
         "id": quiz.id,
         "title": quiz.title,
@@ -590,12 +592,12 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 "explanation": q.explanation,
                 "ai_explanation": q.ai_explanation,
                 "stats": getattr(q, 'stats', None),
-                "box_level": mastery_map.get(q.id, 1),
+                "box_level": mastery_map.get(q.id, {}).get("box_level", 1),
                 "options": [
                     {"id": o.id, "content": o.content, "is_correct": o.is_correct}
                     for o in q.options
                 ]
-            } for q in quiz.questions
+            } for q in filtered_questions
         ]
     }
 
@@ -799,6 +801,26 @@ async def save_question_note(request: Request, question_id: int, data: dict, db:
     await db.commit()
     return {"status": "ok"}
 
+@router.post("/question/{question_id}/ignore")
+async def toggle_question_ignore(request: Request, question_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import UserQuestionMastery
+    user_id = int(request.cookies.get("user_id", 1))
+    is_ignored = data.get("is_ignored", True)
+    
+    result = await db.execute(
+        select(UserQuestionMastery).where(UserQuestionMastery.user_id == user_id, UserQuestionMastery.question_id == question_id)
+    )
+    mastery = result.scalar_one_or_none()
+    
+    if mastery:
+        mastery.is_ignored = is_ignored
+    else:
+        mastery = UserQuestionMastery(user_id=user_id, question_id=question_id, is_ignored=is_ignored)
+        db.add(mastery)
+        
+    await db.commit()
+    return {"status": "ok", "is_ignored": is_ignored}
+
 @router.get("/{quiz_id}/notes")
 async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuestionNote, Question
@@ -952,7 +974,8 @@ async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = 
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @router.get("/{quiz_id}/questions")
-async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search: str = "", db: AsyncSession = Depends(get_db)):
+async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size: int = 50, search: str = "", db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
     from app.modules.quiz.models import Question, Option
     
     query = select(Question).where(Question.quiz_id == quiz_id).options(selectinload(Question.options))
@@ -969,7 +992,7 @@ async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search
     qs = result.scalars().all()
     
     # Fetch stats for these questions
-    from app.modules.quiz.models import UserAnswer
+    from app.modules.quiz.models import UserAnswer, UserQuestionMastery
     q_ids = [q.id for q in qs]
     stats_query = select(
         UserAnswer.question_id,
@@ -978,6 +1001,13 @@ async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search
     ).where(UserAnswer.question_id.in_(q_ids)).group_by(UserAnswer.question_id)
     stats_res = await db.execute(stats_query)
     stats_map = {r.question_id: {"total": r.total, "correct": r.correct, "wrong": r.total - r.correct} for r in stats_res}
+    
+    mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.is_ignored).where(
+        UserQuestionMastery.user_id == user_id,
+        UserQuestionMastery.question_id.in_(q_ids)
+    )
+    mastery_res = await db.execute(mastery_stmt)
+    ignored_map = {row[0]: row[1] for row in mastery_res.all()}
     
     return {
         "questions": [
@@ -991,6 +1021,7 @@ async def get_quiz_questions(quiz_id: int, page: int = 1, size: int = 50, search
                 "image": q.image,
                 "audio": q.audio,
                 "stats": stats_map.get(q.id, {"total": 0, "correct": 0, "wrong": 0}),
+                "is_ignored": ignored_map.get(q.id, False),
                 "options": [
                     {
                         "id": o.id,

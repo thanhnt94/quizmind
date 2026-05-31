@@ -12,6 +12,7 @@ interface Question {
   content: string
   orig_index: number
   stats: { total: number, correct: number, wrong: number }
+  is_ignored?: boolean
 }
 
 export default function QuizDetail() {
@@ -304,7 +305,10 @@ export default function QuizDetail() {
 
               <div className="space-y-2">
                 {allQuestions.map((q) => (
-                  <div key={q.id} className="group bg-white p-5 rounded-2xl border border-transparent hover:border-indigo-100 hover:bg-indigo-50/10 hover:shadow-sm transition-all">
+                  <div key={q.id} className={cn(
+                    "group bg-white p-5 rounded-2xl border border-transparent hover:border-indigo-100 hover:bg-indigo-50/10 hover:shadow-sm transition-all",
+                    q.is_ignored ? "opacity-50 grayscale" : ""
+                  )}>
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
                       <div className="flex-shrink-0 min-w-[40px]">
                         <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">#{q.orig_index}</span>

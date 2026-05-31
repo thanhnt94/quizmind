@@ -1122,6 +1122,17 @@ export default function QuizPlay() {
     }
   }
 
+  const handleIgnoreQuestion = async () => {
+    if (!currentQuestion) return
+    try {
+      await axios.post(`/api/v1/quiz/question/${currentQuestion.id}/ignore`, { is_ignored: true })
+      // Move to next question automatically
+      handleNext()
+    } catch (e) {
+      alert("Failed to ignore question.")
+    }
+  }
+
   const copyCurrentTabContent = (type: 'default' | 'prompt' | 'question' = 'default') => {
     let content = ''
     if (activeFeedbackTab === 'insight') content = currentQuestion?.explanation || ''
@@ -1857,6 +1868,13 @@ export default function QuizPlay() {
             )}
           </AnimatePresence>
 
+          <button 
+            onClick={handleIgnoreQuestion}
+            className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 shadow-sm active:scale-90 transition-all"
+            title="Ignore question"
+          >
+            <EyeOff className="w-4 h-4" />
+          </button>
           <button 
             onClick={openEditModal}
             className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm active:scale-90 transition-all"
