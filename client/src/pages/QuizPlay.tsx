@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, AlertCircle, TrendingUp, Award, Volume2, VolumeX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -45,6 +45,7 @@ interface Question {
   options: Option[]
   stats?: { total: number, correct: number, avg_time: number }
   box_level?: number
+  is_ignored?: boolean
 }
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('')
@@ -399,15 +400,16 @@ export default function QuizPlay() {
             if (savedMode !== 'sequential') {
               let modeIdx = -1
               if (savedMode === 'unseen') {
-                modeIdx = questions.findIndex((q: any, i: number) => (q.stats?.total || 0) === 0 && restoredAnswers[i] === undefined)
+                modeIdx = questions.findIndex((q: any, i: number) => (q.stats?.total || 0) === 0 && restoredAnswers[i] === undefined && !q.is_ignored)
               } else if (savedMode === 'review') {
-                modeIdx = questions.findIndex((q: any, i: number) => ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && restoredAnswers[i] === undefined)
+                modeIdx = questions.findIndex((q: any, i: number) => ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && restoredAnswers[i] === undefined && !q.is_ignored)
               } else if (savedMode === 'hardest') {
                 let minRatio = Infinity
                 let maxWrongs = -1
                 for (let i = 0; i < questions.length; i++) {
                   if (restoredAnswers[i] !== undefined) continue
                   const q = questions[i]
+                  if (q.is_ignored) continue
                   const t = q.stats?.total || 0
                   const c = q.stats?.correct || 0
                   const wrongs = t - c
@@ -424,7 +426,7 @@ export default function QuizPlay() {
                   }
                 }
               } else if (savedMode === 'random') {
-                const pool = questions.map((_: any, i: number) => i).filter((i: number) => restoredAnswers[i] === undefined)
+                const pool = questions.map((_: any, i: number) => i).filter((i: number) => restoredAnswers[i] === undefined && !questions[i].is_ignored)
                 if (pool.length > 0) {
                   modeIdx = pool[Math.floor(Math.random() * pool.length)]
                 }
@@ -807,7 +809,7 @@ export default function QuizPlay() {
     // Fallback function to find the first unanswered question index in this session
     const getFirstUnanswered = () => {
       for (let i = 0; i < total; i++) {
-        if (sessionAnswers[i] === undefined) return i
+        if (sessionAnswers[i] === undefined && !questions[i].is_ignored) return i
       }
       return -1
     }
@@ -815,10 +817,15 @@ export default function QuizPlay() {
     let nextIdx = -1
 
     if (activeMode === 'sequential') {
-      nextIdx = Math.min(currentIndex + 1, total - 1)
+      for (let i = currentIndex + 1; i < total; i++) {
+        if (!questions[i].is_ignored) {
+          nextIdx = i
+          break
+        }
+      }
     } else if (activeMode === 'random') {
       // Find a random index not answered in THIS session
-      const pool = questions.map((_: any, i: number) => i).filter((i: number) => sessionAnswers[i] === undefined)
+      const pool = questions.map((_: any, i: number) => i).filter((i: number) => sessionAnswers[i] === undefined && !questions[i].is_ignored)
       if (pool.length > 0) {
         nextIdx = pool[Math.floor(Math.random() * pool.length)]
       }
@@ -827,13 +834,15 @@ export default function QuizPlay() {
       nextIdx = questions.findIndex((q: any, i: number) => 
         i > currentIndex && 
         (q.stats?.total || 0) === 0 && 
-        sessionAnswers[i] === undefined
+        sessionAnswers[i] === undefined &&
+        !q.is_ignored
       )
       if (nextIdx === -1) {
         // Loop back to find any unseen
         nextIdx = questions.findIndex((q: any, i: number) => 
           (q.stats?.total || 0) === 0 && 
-          sessionAnswers[i] === undefined
+          sessionAnswers[i] === undefined &&
+          !q.is_ignored
         )
       }
     } else if (activeMode === 'review') {
@@ -841,13 +850,15 @@ export default function QuizPlay() {
       nextIdx = questions.findIndex((q: any, i: number) => 
         i > currentIndex && 
         ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && 
-        sessionAnswers[i] === undefined
+        sessionAnswers[i] === undefined &&
+        !q.is_ignored
       )
       if (nextIdx === -1) {
         // Loop back to find any mistake question not answered in THIS session
         nextIdx = questions.findIndex((q: any, i: number) => 
           ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && 
-          sessionAnswers[i] === undefined
+          sessionAnswers[i] === undefined &&
+          !q.is_ignored
         )
       }
     } else if (activeMode === 'hardest') {
@@ -859,8 +870,9 @@ export default function QuizPlay() {
 
       for (let i = 0; i < total; i++) {
         if (sessionAnswers[i] !== undefined) continue
-
         const q = questions[i]
+        if (q.is_ignored) continue
+        
         const t = q.stats?.total || 0
         const c = q.stats?.correct || 0
         const wrongs = t - c
@@ -886,6 +898,14 @@ export default function QuizPlay() {
     // or simply currentIndex + 1 if everything is answered
     if (nextIdx === -1) {
       nextIdx = getFirstUnanswered()
+    }
+    if (nextIdx === -1) {
+      for (let i = currentIndex + 1; i < total; i++) {
+        if (!questions[i].is_ignored) {
+          nextIdx = i
+          break
+        }
+      }
     }
     if (nextIdx === -1) {
       nextIdx = Math.min(currentIndex + 1, total - 1)
@@ -1124,17 +1144,20 @@ export default function QuizPlay() {
 
   const handleIgnoreQuestion = async () => {
     if (!currentQuestion) return
+    const newIgnoreState = !currentQuestion.is_ignored
     try {
-      await axios.post(`/api/v1/quiz/question/${currentQuestion.id}/ignore`, { is_ignored: true })
+      await axios.post(`/api/v1/quiz/question/${currentQuestion.id}/ignore`, { is_ignored: newIgnoreState })
       
       setSession((prev: any) => {
         const newQs = [...prev.questions]
-        newQs[currentIndex] = { ...newQs[currentIndex], is_ignored: true }
+        newQs[currentIndex] = { ...newQs[currentIndex], is_ignored: newIgnoreState }
         return { ...prev, questions: newQs }
       })
 
-      // Move to next question automatically
-      handleNext()
+      // Move to next question automatically if ignoring
+      if (newIgnoreState) {
+        handleNext()
+      }
     } catch (e) {
       alert("Failed to ignore question.")
     }
@@ -1594,14 +1617,12 @@ export default function QuizPlay() {
           <button 
             key={i} 
             onClick={() => {
-              if (q.is_ignored) return
               navigateToQuestion(i)
               setIsMapOpen(false)
             }}
-            disabled={q.is_ignored}
             className={cn(
               "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
-              q.is_ignored ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 grayscale cursor-not-allowed" :
+              q.is_ignored ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 grayscale hover:opacity-100 hover:grayscale-0" :
               isActive 
                 ? "border-indigo-400 bg-indigo-50/30 z-10 scale-105 shadow-sm" 
                 : "border-slate-100 hover:border-indigo-200 bg-white",
@@ -1882,10 +1903,15 @@ export default function QuizPlay() {
 
           <button 
             onClick={handleIgnoreQuestion}
-            className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 shadow-sm active:scale-90 transition-all"
-            title="Ignore question"
+            className={cn(
+              "w-9 h-9 flex items-center justify-center rounded-xl shadow-sm active:scale-90 transition-all",
+              currentQuestion?.is_ignored 
+                ? "bg-slate-700 border border-slate-800 text-white hover:bg-slate-600"
+                : "bg-slate-50 border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200"
+            )}
+            title={currentQuestion?.is_ignored ? "Restore question" : "Ignore question"}
           >
-            <EyeOff className="w-4 h-4" />
+            {currentQuestion?.is_ignored ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
           <button 
             onClick={openEditModal}

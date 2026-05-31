@@ -572,9 +572,6 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
     mastery_res = await db.execute(mastery_stmt)
     mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
     
-    # Format for frontend, excluding ignored questions
-    filtered_questions = [q for q in quiz.questions if not mastery_map.get(q.id, {}).get("is_ignored", False)]
-    
     return {
         "id": quiz.id,
         "title": quiz.title,
@@ -593,11 +590,12 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 "ai_explanation": q.ai_explanation,
                 "stats": getattr(q, 'stats', None),
                 "box_level": mastery_map.get(q.id, {}).get("box_level", 1),
+                "is_ignored": mastery_map.get(q.id, {}).get("is_ignored", False),
                 "options": [
                     {"id": o.id, "content": o.content, "is_correct": o.is_correct}
                     for o in q.options
                 ]
-            } for q in filtered_questions
+            } for q in quiz.questions
         ]
     }
 
