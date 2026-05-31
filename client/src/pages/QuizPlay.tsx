@@ -1126,6 +1126,13 @@ export default function QuizPlay() {
     if (!currentQuestion) return
     try {
       await axios.post(`/api/v1/quiz/question/${currentQuestion.id}/ignore`, { is_ignored: true })
+      
+      setSession((prev: any) => {
+        const newQs = [...prev.questions]
+        newQs[currentIndex] = { ...newQs[currentIndex], is_ignored: true }
+        return { ...prev, questions: newQs }
+      })
+
       // Move to next question automatically
       handleNext()
     } catch (e) {
@@ -1587,23 +1594,28 @@ export default function QuizPlay() {
           <button 
             key={i} 
             onClick={() => {
+              if (q.is_ignored) return
               navigateToQuestion(i)
               setIsMapOpen(false)
             }}
+            disabled={q.is_ignored}
             className={cn(
               "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
+              q.is_ignored ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 grayscale cursor-not-allowed" :
               isActive 
                 ? "border-indigo-400 bg-indigo-50/30 z-10 scale-105 shadow-sm" 
                 : "border-slate-100 hover:border-indigo-200 bg-white",
-              totalStats === 0 ? "text-slate-400" : "text-slate-700"
+              !q.is_ignored && (totalStats === 0 ? "text-slate-400" : "text-slate-700")
             )}
             style={
-              totalStats > 0 
+              !q.is_ignored && totalStats > 0 
                 ? { background: `linear-gradient(to top, #DCFCE7 0%, #DCFCE7 ${ratio}%, #FEE2E2 ${ratio}%, #FEE2E2 100%)` } 
                 : {}
             }
           >
-            {!hasAttemptedThisSession ? (
+            {q.is_ignored ? (
+              <EyeOff className="w-5 h-5 text-slate-400 absolute inset-0 m-auto z-20 pointer-events-none" />
+            ) : !hasAttemptedThisSession ? (
               <span className="relative z-10">{i + 1}</span>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
