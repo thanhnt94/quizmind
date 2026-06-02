@@ -284,7 +284,7 @@ export default function QuizRoom() {
   const mode = room.settings?.game_mode || 'chill'
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row overflow-hidden">
+    <div className="min-h-screen min-h-[100dvh] bg-[#F8FAFC] flex flex-col lg:flex-row overflow-hidden">
       
       {/* LEFT/MAIN GAME SECTION */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
@@ -587,7 +587,7 @@ export default function QuizRoom() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 320, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="border-l border-slate-100 bg-white flex flex-col h-screen shrink-0 shadow-xl lg:shadow-none z-[140] relative"
+            className="border-l border-slate-100 bg-white flex flex-col h-screen h-[100dvh] shrink-0 shadow-xl lg:shadow-none z-[140] relative"
           >
             {/* Chat header */}
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">

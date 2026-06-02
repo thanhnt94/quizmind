@@ -57,7 +57,7 @@ async def init_bot_app():
         
         await app.initialize()
         await app.start()
-        await app.updater.start_polling()
+        await app.updater.start_polling(poll_interval=60.0)
         
         _bot_app = app
         logger.info("Telegram Bot Application initialized with POLLING.")

@@ -1656,7 +1656,7 @@ export default function QuizPlay() {
   if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/20 to-slate-50 text-slate-900 font-sans overflow-hidden relative">
+    <div className="h-screen h-[100dvh] flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/20 to-slate-50 text-slate-900 font-sans overflow-hidden relative">
       {/* Animated Feedback Badge (Floating Toast at bottom) */}
       <AnimatePresence>
         {badgeVisible && selectedOption !== null && currentQuestion && (
@@ -2414,7 +2414,7 @@ export default function QuizPlay() {
             initial={{ opacity: 0, y: 50 }} 
             animate={{ opacity: 1, y: 0 }} 
             exit={{ opacity: 0, y: 50 }} 
-            className="fixed inset-0 z-[200] bg-[#F8FAFC] lg:hidden flex flex-col h-screen"
+            className="fixed inset-0 z-[200] bg-[#F8FAFC] lg:hidden flex flex-col h-screen h-[100dvh]"
           >
             <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-white shadow-sm flex-shrink-0">
               <h4 className="text-[12px] font-black text-indigo-600 uppercase tracking-[0.3em]">QUESTION MAP</h4>
@@ -2437,7 +2437,7 @@ export default function QuizPlay() {
             initial={{ opacity: 0, y: 50 }} 
             animate={{ opacity: 1, y: 0 }} 
             exit={{ opacity: 0, y: 50 }} 
-            className="fixed inset-0 z-[200] bg-[#F8FAFC] xl:hidden flex flex-col h-screen"
+            className="fixed inset-0 z-[200] bg-[#F8FAFC] xl:hidden flex flex-col h-screen h-[100dvh]"
           >
             <div className="flex items-center justify-center p-3 border-b border-slate-100 bg-white shadow-sm flex-shrink-0">
               <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.4em]">
