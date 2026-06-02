@@ -2024,7 +2024,7 @@ export default function QuizPlay() {
         </aside>
 
         <div className="w-full max-w-4xl min-w-0 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10">
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-24 xl:pb-10">
             
 
           <AnimatePresence mode="wait">
@@ -2261,7 +2261,7 @@ export default function QuizPlay() {
       </main>
 
       {/* Bottom Controls - Fixed to bottom (same pattern as Layout bottom nav) */}
-      <footer className="flex-shrink-0 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 px-4 py-3 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
+      <footer className="fixed bottom-0 left-0 right-0 xl:relative flex-shrink-0 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 px-4 py-3 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
         <div className="max-w-2xl mx-auto w-full flex items-center gap-3 h-13">
           <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all">
             <LayoutGrid className="w-5 h-5" />

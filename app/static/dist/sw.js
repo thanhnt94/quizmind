@@ -1,26 +1,18 @@
-const CACHE_NAME = 'quizmind-v1';
-const urlsToCache = [
-  '/',
-  '/static/dist/favicon.png'
-];
+const CACHE_NAME = 'quizmind-cleanup-v1';
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        return cache.addAll(urlsToCache);
-      })
-  );
+  self.skipWaiting();
 });
 
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cache => {
+          console.log('Clearing old cache:', cache);
+          return caches.delete(cache);
+        })
+      );
+    }).then(() => self.clients.claim())
   );
 });
