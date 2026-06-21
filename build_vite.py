@@ -2,9 +2,36 @@ import os
 import subprocess
 import sys
 
+def fix_lookbehinds(project_dir):
+    """Replaces all positive lookbehinds with non-capturing groups to support older WebKit/iOS versions."""
+    assets_dir = os.path.join(project_dir, "app", "static", "dist", "assets")
+    if not os.path.exists(assets_dir):
+        print(" [!] Assets directory not found for lookbehind fix.")
+        return
+    
+    print(" [VITE] Post-processing assets to remove Regex Lookbehinds...")
+    found = False
+    for f in os.listdir(assets_dir):
+        if f.endswith(".js"):
+            path = os.path.join(assets_dir, f)
+            try:
+                with open(path, "r", encoding="utf-8") as file_obj:
+                    content = file_obj.read()
+                if "(?<=" in content:
+                    print(f"  [+] Replacing lookbehinds in {f}")
+                    content = content.replace("(?<=", "(?:")
+                    with open(path, "w", encoding="utf-8") as file_obj:
+                        file_obj.write(content)
+                    found = True
+            except Exception as e:
+                print(f"  [-] Failed to process {f}: {e}")
+    if not found:
+        print("  [+] No lookbehinds found in assets.")
+
 def build_frontend():
     """Builds the Vite frontend and outputs it to app/static/dist."""
-    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client")
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    frontend_dir = os.path.join(project_dir, "client")
     
     if not os.path.exists(frontend_dir):
         print(" [!] Client directory not found.")
@@ -20,6 +47,10 @@ def build_frontend():
             
         # Run build
         subprocess.run(["npm", "run", "build"], cwd=frontend_dir, shell=True, check=True)
+        
+        # Run lookbehind fix directly
+        fix_lookbehinds(project_dir)
+        
         print(" [VITE] Build successful!")
         return True
     except subprocess.CalledProcessError as e:
@@ -32,3 +63,4 @@ def build_frontend():
 if __name__ == "__main__":
     success = build_frontend()
     sys.exit(0 if success else 1)
+

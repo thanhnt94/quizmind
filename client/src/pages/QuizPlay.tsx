@@ -2846,30 +2846,7 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
-      {/* Card Mastery Level Up Toast */}
-      <AnimatePresence>
-        {activeMasteryUpgrade && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className="fixed bottom-24 left-6 z-[1002] max-w-sm backdrop-blur-xl rounded-[2rem] p-5 flex items-center gap-4 border bg-gradient-to-r from-emerald-500/95 to-teal-600/95 border-emerald-400/60 text-white shadow-[0_20px_50px_rgba(16,185,129,0.35)]"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shadow-inner flex-shrink-0">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <span className="text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md bg-white/20 text-white mb-1 inline-block">
-                CARD UPGRADED! ⚡
-              </span>
-              <h4 className="font-black text-sm text-white">Mastery Level Increased!</h4>
-              <p className="text-[11px] text-emerald-100/90 font-bold mt-0.5">
-                Box {activeMasteryUpgrade.old_level} → Box {activeMasteryUpgrade.new_level} (Consecutive Correct 🎉)
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
 
       {/* Full-Screen Achievement Celebration Overlay */}
       <AnimatePresence>
