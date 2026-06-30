@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         return f"sqlite+aiosqlite:///{db_path}"
     
     # SSO / CentralAuth
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "quizmind_default_secret_key_change_me_123456789")
     CENTRAL_AUTH_URL: str = os.getenv("CENTRAL_AUTH_URL", "http://localhost:5000")
     CLIENT_ID: str = os.getenv("CLIENT_ID", "quizmind-v1")
     CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "quizmind_secret_123")

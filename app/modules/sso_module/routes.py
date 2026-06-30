@@ -124,7 +124,10 @@ async def sso_callback(request: Request, code: Optional[str] = None, db: AsyncSe
     logger.info(f"SSO login success for user: {user.username} (id={user.id})")
     
     res = RedirectResponse(url="/", status_code=303)
-    res.set_cookie(key="user_id", value=str(user.id), httponly=True, path="/", samesite="lax")
+    from app.modules.sso_module.cookie_signer import sign_cookie
+    from app.core.config import settings
+    signed_id = sign_cookie(str(user.id), settings.SECRET_KEY)
+    res.set_cookie(key="user_id", value=signed_id, httponly=True, path="/", samesite="lax", max_age=1800)
     return res
 
 from pydantic import BaseModel

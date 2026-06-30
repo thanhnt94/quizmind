@@ -412,7 +412,10 @@ async def login_api(
         if user.role != "admin":
             return {"status": "error", "message": "Security Alert: SSO is active. Local login bypass is strictly restricted to Administrators only."}
             
-    response.set_cookie(key="user_id", value=str(user.id), httponly=True, path="/", samesite="lax")
+    from app.modules.sso_module.cookie_signer import sign_cookie
+    from app.core.config import settings
+    signed_id = sign_cookie(str(user.id), settings.SECRET_KEY)
+    response.set_cookie(key="user_id", value=signed_id, httponly=True, path="/", samesite="lax", max_age=1800)
     return {
         "status": "success",
         "user": {
@@ -763,8 +766,9 @@ async def mark_notifications_read(request: Request, db: AsyncSession = Depends(g
 async def logout(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.sso_module.service import SSOService
     sso_config = await SSOService.get_config(db)
+    local_only = request.query_params.get("local_only") == "1"
     
-    if sso_config.is_enabled:
+    if sso_config.is_enabled and not local_only:
         # Logout from both systems, then land on CentralAuth portal
         ca_logout_url = f"{sso_config.server_url.rstrip('/')}/api/auth/logout"
         response = RedirectResponse(url=ca_logout_url, status_code=303)
