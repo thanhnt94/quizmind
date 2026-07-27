@@ -63,6 +63,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.middleware("http")
+async def clean_user_id_cookie(request: Request, call_next):
+    headers = request.scope.get("headers", [])
+    cookie_idx = -1
+    cookie_val = None
+    for i, (k, v) in enumerate(headers):
+        if k == b"cookie":
+            cookie_idx = i
+            cookie_val = v.decode("utf-8", errors="ignore")
+            break
+            
+    if cookie_idx != -1 and cookie_val:
+        from app.modules.sso_module.cookie_signer import verify_cookie
+        from app.core.config import settings
+        items = cookie_val.split(";")
+        new_items = []
+        modified = False
+        for item in items:
+            parts = item.strip().split("=", 1)
+            if len(parts) == 2 and parts[0] == "user_id":
+                val = parts[1]
+                verified_id = verify_cookie(val, settings.SECRET_KEY)
+                if verified_id:
+                    new_items.append(f"user_id={verified_id}")
+                modified = True
+                continue
+            new_items.append(item.strip())
+            
+        if modified:
+            new_cookie_str = "; ".join(new_items)
+            new_headers = list(headers)
+            new_headers[cookie_idx] = (b"cookie", new_cookie_str.encode("utf-8"))
+            request.scope["headers"] = new_headers
+            if hasattr(request, "_cookies"):
+                delattr(request, "_cookies")
+
+    return await call_next(request)
 
 from app.modules.quiz.routes.api import router as quiz_api_router
 from app.modules.quiz.routes.room import router as room_router

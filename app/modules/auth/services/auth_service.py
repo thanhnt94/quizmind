@@ -40,12 +40,7 @@ class AuthService:
 
     @staticmethod
     async def get_current_user(request, db: AsyncSession) -> Optional[User]:
-        user_id = None
-        cookie_val = request.cookies.get("user_id")
-        if cookie_val:
-            from app.modules.sso_module.cookie_signer import verify_cookie
-            from app.core.config import settings
-            user_id = verify_cookie(cookie_val, settings.SECRET_KEY)
+        user_id = request.cookies.get("user_id")
             
         # Graceful fallback to Authorization Header for pure SPA API requests
         if not user_id:
