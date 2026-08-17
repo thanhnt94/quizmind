@@ -9,6 +9,8 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
+import { useRoadmapStatus } from '@/hooks/useRoadmapStatus'
+import { RoadmapHeaderTracker } from '@/components/RoadmapHeaderTracker'
 
 interface Option {
   id: number
@@ -132,6 +134,10 @@ export default function QuizPlay() {
   const navigate = useNavigate()
   const { user, setUser, setGamify } = useAppStore()
   const [session, setSession] = useState<any>(null)
+  const { status: roadmapStatus } = useRoadmapStatus(id)
+  const [timeMode, setTimeMode] = useState<'card' | 'today' | 'all'>('card')
+  const [scoreMode, setScoreMode] = useState<'all' | 'today'>('today')
+  const sessionStudyTimeRef = useRef<number>(0)
   const [sfxEnabled, setSfxEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('quizmind_sfx_enabled');
@@ -1840,27 +1846,60 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
-      <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/90 backdrop-blur-2xl border-b border-slate-100/80 px-4 py-2.5 flex items-center justify-between shadow-[0_1px_20px_rgba(99,102,241,0.06)]">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="w-9 h-9 flex items-center justify-center bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600 shadow-sm hover:bg-indigo-100 active:scale-90 transition-all">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="flex flex-col">
-            <h1 className="text-[11px] font-black text-slate-700 truncate max-w-[200px] md:max-w-md leading-tight">{session.title}</h1>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[11px] font-black text-indigo-600">{initialTotalXP} XP</span>
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[8px] font-black shadow-sm shadow-indigo-200">
-                 <span>+{sessionXP}</span>
-              </div>
-              {streak >= 2 && (
-                <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-[8px] font-black shadow-sm shadow-orange-200">
-                  <Flame className="w-3 h-3 fill-white" />
-                  <span>{streak}🔥</span>
+      {roadmapStatus && roadmapStatus.pipeline && roadmapStatus.pipeline.length > 0 ? (
+        <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/95 backdrop-blur-2xl border-b border-slate-100/80 px-2 sm:px-4 py-2 flex items-center shadow-xs">
+          <div className="w-full">
+            <RoadmapHeaderTracker
+              pipeline={roadmapStatus.pipeline}
+              currentStepIndex={roadmapStatus.current_step_index ?? 0}
+              allDone={Boolean(roadmapStatus.all_done)}
+              quizId={id || ''}
+              quizTitle={session.title}
+              subProgressCurr={Object.keys(sessionAnswers).length}
+              subProgressTotal={session.questions?.length || 1}
+              streakCount={roadmapStatus.streak || streak || 0}
+              onExit={() => navigate(`/quiz/${id}/roadmap`)}
+              timeMode={timeMode}
+              onToggleTimeMode={() => setTimeMode(prev => prev === 'card' ? 'today' : prev === 'today' ? 'all' : 'card')}
+              scoreMode={scoreMode}
+              onToggleScoreMode={() => setScoreMode(prev => prev === 'today' ? 'all' : 'today')}
+              xp={initialTotalXP}
+              sessionXP={sessionXP}
+              todayXP={initialTotalXP}
+              showFeedback={showFeedback}
+              hasRated={selectedOption !== null}
+              currentIndex={currentIndex}
+              timeLeftRef={timerRef}
+              sessionStudyTimeRef={sessionStudyTimeRef}
+              answeredCount={Object.keys(sessionAnswers).length}
+              correctCount={Object.values(sessionAnswers).filter((optIdx, i) => session.questions?.[i]?.options?.[optIdx]?.is_correct).length}
+              totalCards={session.questions?.length || 0}
+              cardsRemaining={Math.max(0, (session.questions?.length || 0) - Object.keys(sessionAnswers).length)}
+            />
+          </div>
+        </header>
+      ) : (
+        <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/90 backdrop-blur-2xl border-b border-slate-100/80 px-4 py-2.5 flex items-center justify-between shadow-[0_1px_20px_rgba(99,102,241,0.06)]">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/')} className="w-9 h-9 flex items-center justify-center bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600 shadow-sm hover:bg-indigo-100 active:scale-90 transition-all">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex flex-col">
+              <h1 className="text-[11px] font-black text-slate-700 truncate max-w-[200px] md:max-w-md leading-tight">{session.title}</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[11px] font-black text-indigo-600">{initialTotalXP} XP</span>
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[8px] font-black shadow-sm shadow-indigo-200">
+                   <span>+{sessionXP}</span>
                 </div>
-              )}
+                {streak >= 2 && (
+                  <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-[8px] font-black shadow-sm shadow-orange-200">
+                    <Flame className="w-3 h-3 fill-white" />
+                    <span>{streak}🔥</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
         <div className="flex items-center gap-2">
           <button 
              onClick={() => {
@@ -1928,6 +1967,7 @@ export default function QuizPlay() {
           </button>
         </div>
       </header>
+      )}
 
       <main className="flex-1 flex w-full max-w-none justify-center gap-4 lg:gap-8 px-2 lg:px-6 xl:px-10 md:py-6 py-2 overflow-hidden">
         <aside className="hidden xl:flex w-[340px] 2xl:w-[440px] flex-shrink-0 flex-col overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">

@@ -54,6 +54,12 @@ class AuthService:
         if not user_id:
             return None
         try:
+            if "." in str(user_id):
+                from app.modules.sso_module.cookie_signer import unsign_cookie
+                from app.core.config import settings
+                unsigned = unsign_cookie(str(user_id), settings.SECRET_KEY)
+                if unsigned:
+                    user_id = unsigned
             return await AuthService.get_user_by_id(db, int(user_id))
         except (ValueError, TypeError):
             return None

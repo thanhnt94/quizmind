@@ -445,8 +445,7 @@ export default function Dashboard() {
           <div className="lg:col-span-8 space-y-6">
 
             {/* MOBILE: ROADMAP TAB OR DESKTOP HERO */}
-            {(mobileTab === 'roadmap' || window.innerWidth >= 1024) && (
-              <div className="space-y-6">
+            <div className={cn("space-y-6", mobileTab !== 'roadmap' && "hidden lg:block")}>
                 
                 {/* 1. ROADMAP QUIZZES SECTION */}
                 <div className="space-y-4">
@@ -544,32 +543,28 @@ export default function Dashboard() {
                               </Link>
                             </div>
 
-                            {/* HERO MASCOT CARD (3 DISTINCT CLEAN ROWS) */}
+                            {/* HERO MASCOT CARD */}
                             <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-100/50 relative overflow-hidden flex flex-row items-center justify-between min-h-[160px]">
                               
-                              {/* Left Column */}
                               <div className="relative z-20 flex-1 max-w-[68%] sm:max-w-[72%] min-w-0 flex flex-col justify-center gap-2.5 py-1">
                                 
-                                {/* TOP BADGES: 3 DISTINCT CLEAN ROWS */}
+                                {/* TOP BADGES */}
                                 <div className="flex flex-col gap-2">
                                   {/* DÒNG 1: 🔥 Streak & ⏱️ Thời gian còn lại */}
                                   <div className="flex flex-wrap items-center gap-2">
-                                    {/* 🔥 STREAK BADGE */}
                                     <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white rounded-full text-xs font-black shadow-xs shrink-0">
-                                      <span className="text-xs">🔥</span>
+                                      <span>🔥</span>
                                       <span>{deckStreak} ngày streak</span>
                                     </div>
-
-                                    {/* ⏱️ COUNTDOWN BADGE */}
-                                    {!isDone ? (
+                                    {isDone ? (
+                                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
+                                        <span>✓</span>
+                                        <span>Đã xong hôm nay</span>
+                                      </div>
+                                    ) : (
                                       <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-900 border border-amber-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
                                         <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                                         <span>Còn {remainingTime}</span>
-                                      </div>
-                                    ) : (
-                                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
-                                        <span className="text-xs">✓</span>
-                                        <span>Đã xong hôm nay</span>
                                       </div>
                                     )}
                                   </div>
@@ -578,65 +573,72 @@ export default function Dashboard() {
                                   <div className="flex items-center max-w-full">
                                     <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900/95 text-white rounded-xl text-xs font-bold shadow-xs max-w-full">
                                       <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                      <span className="truncate max-w-[280px] sm:max-w-[400px] font-extrabold text-white">{item.title}</span>
+                                      <span className="truncate max-w-[280px] sm:max-w-[400px] font-extrabold text-white">
+                                        {item.title}
+                                      </span>
                                     </div>
                                   </div>
 
-                                  {/* DÒNG 3: 🎓 Đã học / Tổng số & 📅 Ngày dự kiến xong */}
+                                  {/* DÒNG 3: 🎓 Thẻ đã học & 📅 Ngày dự kiến xong */}
                                   <div className="flex flex-wrap items-center gap-2">
-                                    {/* 🎓 LEARNED BADGE */}
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0" title="Số câu đã thuộc / Tổng số câu">
-                                      <span className="text-xs">🎓</span>
-                                      <span>{st.learned_questions || st.learned_cards || 0}/{st.total_questions || st.total_cards || 0}</span>
+                                    <div 
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0"
+                                      title="Số câu hỏi đã hoàn thành / Tổng số câu"
+                                    >
+                                      <span>🎓</span>
+                                      <span>{st.learned_questions || 0}/{st.total_questions || 0} câu</span>
                                     </div>
-
-                                    {/* 📅 ESTIMATED COMPLETION DATE */}
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/15 text-indigo-950 border border-indigo-300/80 rounded-full text-xs font-black shadow-2xs shrink-0" title="Ngày dự kiến hoàn thành bộ đề">
+                                    <div 
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/15 text-indigo-950 border border-indigo-300/80 rounded-full text-xs font-black shadow-2xs shrink-0"
+                                      title="Ngày dự kiến hoàn thành lộ trình bộ đề"
+                                    >
                                       <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                                       <span>Dự kiến: {st.estimated_completion_date || '—'}</span>
                                     </div>
                                   </div>
                                 </div>
 
-                                {/* SLOGAN TEXT */}
-                                <div className="flex flex-col gap-1 mt-0.5">
-                                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+                                {/* Mascot Motivation Text */}
+                                <div className="flex flex-col gap-0.5 mt-1">
+                                  <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-snug">
                                     {mascotLine1}
-                                  </h2>
-                                  <p className="text-xs sm:text-base text-slate-500 font-medium leading-relaxed">
+                                  </h4>
+                                  <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
                                     {mascotLine2}
                                   </p>
                                 </div>
-
                               </div>
 
-                              {/* Right Mascot Image */}
-                              <div className="w-[45%] max-w-[260px] absolute right-2 sm:right-4 bottom-0 top-0 flex items-end justify-center pointer-events-none z-10">
-                                <motion.img 
+                              {/* Right Column: Mascot Character */}
+                              <div className="w-[38%] sm:w-[32%] max-w-[200px] absolute right-2 bottom-0 top-0 flex items-end justify-center pointer-events-none z-10">
+                                <motion.img
                                   key={mascotImg}
                                   initial={{ scale: 0.9, opacity: 0 }}
                                   animate={{ scale: 1, opacity: 1 }}
                                   transition={{ duration: 0.3 }}
-                                  src={mascotImg} 
-                                  alt="QuizMind Mascot" 
-                                  className="h-[105%] max-h-[280px] w-auto max-w-none object-contain object-bottom drop-shadow-2xl translate-y-1"
+                                  src={mascotImg}
+                                  alt="QuizMind Mascot"
+                                  className="h-[95%] max-h-[190px] w-auto max-w-none object-contain object-bottom drop-shadow-xl translate-y-1"
                                 />
                               </div>
-
                             </div>
 
-                            {/* Daily Pipeline Stepper Dots */}
-                            <div className="p-4 space-y-3 bg-white">
-                              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                                <span>Các bước luyện tập hôm nay</span>
-                                <span className="text-indigo-600">{isDone ? 'Hoàn thành' : `Bước ${currentStepIdx + 1}/${pipeline.length}`}</span>
+                            {/* PIPELINE STEPS LIST & CTA */}
+                            <div className="p-4 sm:p-5 bg-white border-t border-slate-100 flex flex-col gap-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                  <span>🗺️</span>
+                                  <span>Các bước hôm nay</span>
+                                </span>
+                                <span className="text-xs font-bold text-slate-400">
+                                  Bước {(st.current_step_index ?? 0) + 1}/{pipeline.length}
+                                </span>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                 {pipeline.map((step: any, sIdx: number) => {
                                   const isCurrent = sIdx === currentStepIdx && !isDone
                                   const stepDone = step.done
-
                                   return (
                                     <div
                                       key={step.id || sIdx}
@@ -698,77 +700,80 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {badgesData.slice(0, 4).map((badge: any) => (
-                        <div
-                          key={badge.id}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {badgesData.map(badge => (
+                        <div 
+                          key={badge.id} 
                           className={cn(
-                            "p-3.5 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all",
-                            badge.unlocked
-                              ? "bg-amber-50/50 border-amber-200 shadow-2xs"
-                              : "bg-slate-50 border-slate-200/60 opacity-60"
+                            "p-3.5 rounded-2xl border flex items-center gap-3 transition-all",
+                            badge.percentage >= 100 
+                              ? "bg-amber-50/50 border-amber-200 shadow-2xs" 
+                              : "bg-slate-50/50 border-slate-200/60 opacity-80"
                           )}
                         >
-                          <div className="text-3xl">{badge.icon || '🎖️'}</div>
-                          <div>
-                            <h4 className="text-xs font-black text-slate-800">{badge.name}</h4>
-                            <p className="text-[10px] text-slate-400 line-clamp-1">{badge.description}</p>
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0",
+                            badge.percentage >= 100 ? "bg-amber-500 text-white shadow-xs shadow-amber-200" : "bg-slate-200 text-slate-400"
+                          )}>
+                            {badge.percentage >= 100 ? '🏅' : '🔒'}
                           </div>
-                          {/* Progress bar */}
-                          <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
-                            <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"
-                              style={{ width: `${Math.min(100, badge.percentage || 0)}%` }}
-                            />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <h4 className="text-xs font-bold text-slate-900 truncate">{badge.name}</h4>
+                              <span className="text-[10px] font-black text-amber-600">{badge.percentage || 0}%</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-medium truncate">{badge.description}</p>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                              <div 
+                                className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"
+                                style={{ width: `${Math.min(100, badge.percentage || 0)}%` }}
+                              />
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
-              </div>
-            )}
+            </div>
 
             {/* MOBILE: BỘ ĐỀ TAB */}
-            {mobileTab === 'decks' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-black text-slate-900">Khám Phá Bộ Đề 📚</h2>
-                  <Link to="/library" className="text-xs font-bold text-indigo-600 hover:underline">Vào Thư Viện</Link>
-                </div>
-                <p className="text-xs text-slate-500">Tìm kiếm và luyện tập các bộ đề trắc nghiệm đa dạng chủ đề.</p>
-                <Link
-                  to="/library"
-                  className="block p-6 rounded-3xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md text-center space-y-2"
-                >
-                  <BookOpen className="w-8 h-8 mx-auto" />
-                  <h3 className="text-base font-black">Khám Phá Tất Cả Bộ Đề</h3>
-                  <p className="text-xs text-indigo-100">Chọn đề thi JLPT, IT, Tiếng Anh và bắt đầu học ngay!</p>
-                </Link>
+            <div className={cn("space-y-4 lg:hidden", mobileTab !== 'decks' && "hidden")}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-black text-slate-900">Khám Phá Bộ Đề 📚</h2>
+                <Link to="/library" className="text-xs font-bold text-indigo-600 hover:underline">Vào Thư Viện</Link>
               </div>
-            )}
+              <p className="text-xs text-slate-500">Tìm kiếm và luyện tập các bộ đề trắc nghiệm đa dạng chủ đề.</p>
+              <Link
+                to="/library"
+                className="block p-6 rounded-3xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md text-center space-y-2"
+              >
+                <BookOpen className="w-8 h-8 mx-auto" />
+                <h3 className="text-base font-black">Khám Phá Tất Cả Bộ Đề</h3>
+                <p className="text-xs text-indigo-100">Chọn đề thi JLPT, IT, Tiếng Anh và bắt đầu học ngay!</p>
+              </Link>
+            </div>
 
             {/* MOBILE: THỐNG KÊ TAB */}
-            {mobileTab === 'stats' && (
-              <div className="space-y-5">
-                <MiniHeatmap data={heatmapData} />
-                <DailyComparisonChart 
-                  data={dailyComparisonData?.days} 
-                  allTimeAvg={dailyComparisonData?.all_time_avg} 
-                  isLoading={isDailyCompLoading} 
-                />
-              </div>
-            )}
+            <div className={cn("space-y-5 lg:hidden", mobileTab !== 'stats' && "hidden")}>
+              <MiniHeatmap data={heatmapData} />
+              <DailyComparisonChart 
+                data={dailyComparisonData?.days} 
+                allTimeAvg={dailyComparisonData?.all_time_avg} 
+                isLoading={isDailyCompLoading} 
+              />
+            </div>
 
             {/* MOBILE: XẾP HẠNG TAB */}
-            {mobileTab === 'rank' && lbData && (
-              <LeaderboardWidget 
-                data={lbData} 
-                activeFilter={lbFilter} 
-                onFilterChange={setLbFilter} 
-              />
-            )}
+            <div className={cn("space-y-4 lg:hidden", (mobileTab !== 'rank' || !lbData) && "hidden")}>
+              {lbData && (
+                <LeaderboardWidget 
+                  data={lbData} 
+                  activeFilter={lbFilter} 
+                  onFilterChange={setLbFilter} 
+                />
+              )}
+            </div>
 
           </div>
 

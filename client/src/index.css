@@ -5,7 +5,7 @@
   --color-primary-dark: #4f46e5;
   --color-secondary: #a855f7;
   
-  --font-sans: "Outfit", system-ui, -apple-system, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", "Be Vietnam Pro", "Outfit", system-ui, -apple-system, sans-serif;
 }
 
 html, body, #root {

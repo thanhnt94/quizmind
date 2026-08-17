@@ -2186,6 +2186,27 @@ async def get_quiz_roadmap_status_helper(
     }
 
 
+async def get_request_user_id(request: Request, db: AsyncSession) -> int:
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if user:
+        return user.id
+    try:
+        raw_cookie = request.cookies.get("user_id")
+        if raw_cookie:
+            if "." in str(raw_cookie):
+                from app.modules.sso_module.cookie_signer import unsign_cookie
+                from app.core.config import settings
+                unsigned = unsign_cookie(str(raw_cookie), settings.SECRET_KEY)
+                if unsigned and unsigned.isdigit():
+                    return int(unsigned)
+            elif str(raw_cookie).isdigit():
+                return int(raw_cookie)
+    except Exception:
+        pass
+    return 1
+
+
 @router.get("/{quiz_id}/roadmap-status")
 async def get_quiz_roadmap_status(
     request: Request,
@@ -2212,7 +2233,7 @@ async def get_quiz_roadmap_status(
 @router.get("/roadmap/decks")
 @router.get("/roadmap/quizzes")
 async def get_roadmap_quizzes(request: Request, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import Quiz, UserQuizSettings
+    from app.modules.quiz.models import Quiz, UserQuizSettings, QuizAttempt
     user_id = await get_request_user_id(request, db)
 
     user_setts_res = await db.execute(
@@ -2220,18 +2241,43 @@ async def get_roadmap_quizzes(request: Request, db: AsyncSession = Depends(get_d
     )
 
     active_roadmaps = []
-    active_quiz_ids = []
+    active_quiz_ids = set()
     user_setts_map = {}
 
     for sett in user_setts_res.scalars().all():
         s = sett.settings or {}
         user_setts_map[sett.quiz_id] = s
         if s.get("roadmap_active") is True:
-            active_quiz_ids.append(sett.quiz_id)
+            active_quiz_ids.add(sett.quiz_id)
+
+    # Also check creator quizzes or quizzes with practice_settings.roadmap_active == True
+    all_quizzes_res = await db.execute(select(Quiz))
+    all_quizzes = all_quizzes_res.scalars().all()
+    for q in all_quizzes:
+        c_sett = q.practice_settings if isinstance(q.practice_settings, dict) else {}
+        u_sett = user_setts_map.get(q.id, {})
+        if c_sett.get("roadmap_active") is True and u_sett.get("roadmap_active") is not False:
+            active_quiz_ids.add(q.id)
+
+    # If still empty, include all quizzes created or attempted by the user
+    if not active_quiz_ids:
+        for q in all_quizzes:
+            if q.creator_id == user_id:
+                active_quiz_ids.add(q.id)
+        if not active_quiz_ids:
+            att_res = await db.execute(
+                select(QuizAttempt.quiz_id).where(QuizAttempt.user_id == user_id).distinct()
+            )
+            for r in att_res.all():
+                active_quiz_ids.add(r[0])
+        # If still empty, include all available quizzes (up to 5)
+        if not active_quiz_ids:
+            for q in all_quizzes[:5]:
+                active_quiz_ids.add(q.id)
 
     if active_quiz_ids:
         quizzes_res = await db.execute(
-            select(Quiz).where(Quiz.id.in_(active_quiz_ids))
+            select(Quiz).where(Quiz.id.in_(list(active_quiz_ids)))
         )
         quizzes = quizzes_res.scalars().all()
 
@@ -2250,6 +2296,7 @@ async def get_roadmap_quizzes(request: Request, db: AsyncSession = Depends(get_d
             })
 
     return {"decks": active_roadmaps, "quizzes": active_roadmaps}
+
 
 
 @router.get("/{quiz_id}/roadmap-calendar")
