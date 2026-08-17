@@ -38,15 +38,20 @@ interface LeaderboardEntry {
 }
 
 // ─── Mini Contribution Heatmap ────────────────────────────────────────────────
-function MiniHeatmap({ data }: { data: HeatmapDay[] }) {
+function MiniHeatmap({ data = [] }: { data?: HeatmapDay[] }) {
   const WEEKS = 15
   const today = new Date()
+  const safeData = Array.isArray(data) ? data : []
   
   const dayMap = useMemo(() => {
     const m: Record<string, number> = {}
-    data.forEach(d => { m[d.date] = d.count })
+    safeData.forEach(d => { 
+      if (d && d.date) {
+        m[d.date] = d.count || 0
+      }
+    })
     return m
-  }, [data])
+  }, [safeData])
 
   const cells: { date: string; count: number }[][] = useMemo(() => {
     const cols: { date: string; count: number }[][] = []
@@ -79,8 +84,8 @@ function MiniHeatmap({ data }: { data: HeatmapDay[] }) {
   const totalThisMonth = useMemo(() => {
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-    return data.filter(d => d.date >= monthStart).reduce((sum, d) => sum + d.count, 0)
-  }, [data])
+    return safeData.filter(d => d && d.date >= monthStart).reduce((sum, d) => sum + (d.count || 0), 0)
+  }, [safeData])
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-[2rem] p-5 shadow-sm flex flex-col gap-3 text-left flex-shrink-0">
@@ -119,9 +124,9 @@ function MiniHeatmap({ data }: { data: HeatmapDay[] }) {
 
 // ─── Leaderboard Widget ────────────────────────────────────────────────────────
 function LeaderboardWidget({ data, activeFilter, onFilterChange }: { 
-  data: { 
-    leaderboard: any[], 
-    current_user_rank: number | null,
+  data?: { 
+    leaderboard?: any[], 
+    current_user_rank?: number | null,
     time_leaderboard?: any[],
     current_user_time_rank?: number | null
   },
@@ -136,7 +141,8 @@ function LeaderboardWidget({ data, activeFilter, onFilterChange }: {
     3: 'from-amber-50/50 to-orange-50/30 border-amber-100/60',
   }
 
-  const currentList = activeTab === 'xp' ? data.leaderboard : (data.time_leaderboard || [])
+  const rawList = activeTab === 'xp' ? data?.leaderboard : data?.time_leaderboard
+  const currentList = Array.isArray(rawList) ? rawList : []
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-[2rem] p-5 shadow-sm flex flex-col gap-4 text-left flex-shrink-0">
@@ -292,7 +298,9 @@ export default function Dashboard() {
     return () => clearInterval(timer)
   }, [])
 
-  const roadmapQuizzes: any[] = roadmapData?.decks || roadmapData?.quizzes || []
+  const roadmapQuizzes: any[] = Array.isArray(roadmapData?.decks) 
+    ? roadmapData.decks 
+    : (Array.isArray(roadmapData?.quizzes) ? roadmapData.quizzes : [])
   const user = dashData?.user || authUser || { username: 'Học Viên', email: '', role: 'user' }
   const gamify = dashData?.gamify || { level: 1, xp: 0, streak: 0 }
 
@@ -673,7 +681,7 @@ export default function Dashboard() {
                 />
 
                 {/* 3. ACHIEVEMENTS & BADGES */}
-                {badgesData && badgesData.length > 0 && (
+                {Array.isArray(badgesData) && badgesData.length > 0 && (
                   <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
                       <div>

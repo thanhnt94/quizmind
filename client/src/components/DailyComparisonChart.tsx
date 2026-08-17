@@ -25,12 +25,12 @@ interface DailyComparisonChartProps {
 }
 
 export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: DailyComparisonChartProps) {
-  if (isLoading || !data) {
+  if (isLoading || !Array.isArray(data) || data.length === 0) {
     return (
-      <div className="bg-white border border-slate-200/60 rounded-[2.5rem] p-6 shadow-sm flex flex-col items-center justify-center text-center h-[400px]">
-        <TrendingUp className="w-8 h-8 text-slate-350 animate-pulse mb-3" />
+      <div className="bg-white border border-slate-200/60 rounded-[2.5rem] p-6 shadow-sm flex flex-col items-center justify-center text-center h-[280px]">
+        <TrendingUp className="w-8 h-8 text-slate-300 animate-pulse mb-3" />
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          Đang tải biểu đồ so sánh...
+          {isLoading ? 'Đang tải biểu đồ so sánh...' : 'Chưa có dữ liệu học tập tuần qua'}
         </span>
       </div>
     );
