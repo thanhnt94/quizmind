@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import DailyComparisonChart from '@/components/DailyComparisonChart'
+import { TelegramRoadmapReminderToggle } from '@/components/TelegramRoadmapReminderToggle'
 
 interface DashboardData {
   user: { id: number; username: string; email: string; role?: string }
@@ -419,6 +420,12 @@ export default function Dashboard() {
                 </div>
                 <span className="text-xl">🔥</span>
               </div>
+
+              {/* Telegram Reminder Quick Toggle */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Telegram Bot</span>
+                <TelegramRoadmapReminderToggle />
+              </div>
             </div>
 
             {/* Mini Contribution Heatmap */}
@@ -523,13 +530,14 @@ export default function Dashboard() {
                           >
                             {/* Subheader bar */}
                             <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-bold text-slate-700">Roadmap</span>
                                 <span className="text-slate-400">{idx + 1} / {roadmapQuizzes.length}</span>
+                                <TelegramRoadmapReminderToggle />
                               </div>
                               <Link
                                 to={`/quiz/${item.quiz_id || item.deck_id}/roadmap`}
-                                className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer"
+                                className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer shrink-0"
                               >
                                 <span>Chi tiết</span>
                                 <ChevronRight className="w-3.5 h-3.5" />

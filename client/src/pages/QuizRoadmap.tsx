@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
+import { TelegramRoadmapReminderToggle } from '@/components/TelegramRoadmapReminderToggle'
 
 export type StepType = 'new_cards' | 'mcq' | 'typing' | 'review' | 'study_time'
 
@@ -213,6 +214,11 @@ export default function QuizRoadmap() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Telegram Reminder Toggle */}
+            <div className="hidden sm:block">
+              <TelegramRoadmapReminderToggle />
+            </div>
+
             {/* Streak Badge */}
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black text-xs shadow-xs">
               <Flame className="w-4 h-4 fill-white" />
