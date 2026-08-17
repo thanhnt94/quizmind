@@ -227,6 +227,9 @@ export default function Dashboard() {
   const [mobileTab, setMobileTab] = useState<'roadmap' | 'decks' | 'stats' | 'rank'>('roadmap')
   const [lbFilter, setLbFilter] = useState('today')
   const [remainingTime, setRemainingTime] = useState('')
+  const [activeRoadmapIdx, setActiveRoadmapIdx] = useState(0)
+  const wheelCooldownRef = useRef(false)
+  const touchStartXRef = useRef<number | null>(null)
 
   // 1. Fetch Dashboard Stats & User Data
   const { data: dashData } = useQuery<DashboardData>({
@@ -494,61 +497,154 @@ export default function Dashboard() {
                         Vào Thư Viện Chọn Bộ Đề 📚
                       </Link>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {roadmapQuizzes.map((item, idx) => {
-                        const st = item.status || {}
-                        const isDone = Boolean(st.all_done)
-                        const pipeline = st.pipeline || []
-                        const deckStreak = st.streak || 0
-                        const currentStepIdx = st.current_step_index ?? 0
+                  ) : (() => {
+                    const safeIndex = Math.min(activeRoadmapIdx, Math.max(0, roadmapQuizzes.length - 1))
+                    const item = roadmapQuizzes[safeIndex]
+                    if (!item) return null
 
-                        // Mascot calculation
-                        let mascotImg = '/mascot/sleepy.png'
-                        let mascotLine1 = 'Hôm nay bạn chưa làm câu nào,'
-                        let mascotLine2 = 'bắt đầu thôi! 🚀'
+                    const st = item.status || {}
+                    const isDone = Boolean(st.all_done)
+                    const pipeline = st.pipeline || []
+                    const deckStreak = st.streak || 0
+                    const currentStepIdx = st.current_step_index ?? 0
 
-                        if (isDone) {
-                          mascotImg = '/mascot/celebrating.png'
-                          mascotLine1 = 'Xuất sắc!'
-                          mascotLine2 = 'Đã hoàn thành lộ trình hôm nay! 🎉'
-                        } else if (st.stage_1_done) {
-                          mascotImg = '/mascot/excited.png'
-                          mascotLine1 = 'Đang bùng cháy!'
-                          mascotLine2 = 'Tiếp tục giữ vững tiến độ nhé 🔥'
-                        } else if ((st.new_learned_today || 0) > 0 || (st.review_completed_today || 0) > 0) {
-                          mascotImg = '/mascot/excited.png'
-                          mascotLine1 = 'Khởi đầu tốt lắm!'
-                          mascotLine2 = 'Cố gắng hoàn thành các bước hôm nay 💪'
+                    // Mascot calculation with correct BASE_URL
+                    let mascotImg = `${import.meta.env.BASE_URL}mascot/sleepy.png`
+                    let mascotLine1 = 'Hôm nay bạn chưa làm câu nào,'
+                    let mascotLine2 = 'bắt đầu thôi! 🚀'
+
+                    if (isDone) {
+                      mascotImg = `${import.meta.env.BASE_URL}mascot/celebrating.png`
+                      mascotLine1 = 'Xuất sắc!'
+                      mascotLine2 = 'Đã hoàn thành lộ trình hôm nay! 🎉'
+                    } else if (st.stage_1_done) {
+                      mascotImg = `${import.meta.env.BASE_URL}mascot/excited.png`
+                      mascotLine1 = 'Đang bùng cháy!'
+                      mascotLine2 = 'Tiếp tục giữ vững tiến độ nhé 🔥'
+                    } else if ((st.new_learned_today || 0) > 0 || (st.review_completed_today || 0) > 0) {
+                      mascotImg = `${import.meta.env.BASE_URL}mascot/excited.png`
+                      mascotLine1 = 'Khởi đầu tốt lắm!'
+                      mascotLine2 = 'Cố gắng hoàn thành các bước hôm nay 💪'
+                    }
+
+                    const handleRoadmapWheel = (e: React.WheelEvent) => {
+                      if (roadmapQuizzes.length <= 1) return
+                      if (wheelCooldownRef.current) return
+                      if (Math.abs(e.deltaY) > 20 || Math.abs(e.deltaX) > 20) {
+                        wheelCooldownRef.current = true
+                        if (e.deltaY > 0 || e.deltaX > 0) {
+                          setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
+                        } else {
+                          setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
                         }
+                        setTimeout(() => {
+                          wheelCooldownRef.current = false
+                        }, 350)
+                      }
+                    }
 
-                        return (
-                          <div
-                            key={item.quiz_id || item.deck_id || idx}
-                            className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md"
-                          >
-                            {/* Subheader bar */}
-                            <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-slate-700">Roadmap</span>
-                                <span className="text-slate-400">{idx + 1} / {roadmapQuizzes.length}</span>
-                                <TelegramRoadmapReminderToggle />
+                    const handleTouchStart = (e: React.TouchEvent) => {
+                      touchStartXRef.current = e.touches[0].clientX
+                    }
+
+                    const handleTouchEnd = (e: React.TouchEvent) => {
+                      if (touchStartXRef.current === null || roadmapQuizzes.length <= 1) return
+                      const diff = touchStartXRef.current - e.changedTouches[0].clientX
+                      if (Math.abs(diff) > 40) {
+                        if (diff > 0) {
+                          setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
+                        } else {
+                          setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
+                        }
+                      }
+                      touchStartXRef.current = null
+                    }
+
+                    return (
+                      <div 
+                        onWheel={handleRoadmapWheel}
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
+                        className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md select-none"
+                      >
+                        {/* Subheader bar with Navigation & Telegram */}
+                        <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="font-extrabold text-slate-800">Roadmap</span>
+                            {roadmapQuizzes.length > 1 ? (
+                              <div className="flex items-center gap-1 bg-white border border-slate-200/80 px-2 py-0.5 rounded-full shadow-2xs">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
+                                  }}
+                                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 active:scale-90 font-black cursor-pointer"
+                                  title="Bộ đề trước"
+                                >
+                                  ‹
+                                </button>
+                                <span className="text-xs font-black text-indigo-600 px-1">
+                                  {safeIndex + 1} / {roadmapQuizzes.length}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
+                                  }}
+                                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 active:scale-90 font-black cursor-pointer"
+                                  title="Bộ đề tiếp theo"
+                                >
+                                  ›
+                                </button>
                               </div>
-                              <Link
-                                to={`/quiz/${item.quiz_id || item.deck_id}/roadmap`}
-                                className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer shrink-0"
-                              >
-                                <span>Chi tiết</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </Link>
-                            </div>
+                            ) : (
+                              <span className="text-slate-400">1 / 1</span>
+                            )}
+                            <TelegramRoadmapReminderToggle />
+                          </div>
 
-                            {/* HERO MASCOT CARD */}
-                            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-100/50 relative overflow-hidden flex flex-row items-center justify-between min-h-[160px]">
+                          <div className="flex items-center gap-2">
+                            {roadmapQuizzes.length > 1 && (
+                              <div className="hidden sm:flex items-center gap-1 mr-1">
+                                {roadmapQuizzes.map((_, dotIdx) => (
+                                  <button
+                                    key={dotIdx}
+                                    onClick={() => setActiveRoadmapIdx(dotIdx)}
+                                    className={cn(
+                                      "h-1.5 rounded-full transition-all cursor-pointer",
+                                      dotIdx === safeIndex ? "bg-indigo-600 w-4" : "bg-slate-300 hover:bg-slate-400 w-1.5"
+                                    )}
+                                    title={`Chuyển tới bộ đề ${dotIdx + 1}`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <Link
+                              to={`/quiz/${item.quiz_id || item.deck_id}/roadmap`}
+                              className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer shrink-0"
+                            >
+                              <span>Chi tiết</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
+                        </div>
+
+                        {/* HERO MASCOT CARD WITH ANIMATION */}
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={item.quiz_id || item.deck_id || safeIndex}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="flex flex-col"
+                          >
+                            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-100/50 relative overflow-hidden flex flex-row items-center justify-between min-h-[165px]">
                               
+                              {/* Left Column */}
                               <div className="relative z-20 flex-1 max-w-[68%] sm:max-w-[72%] min-w-0 flex flex-col justify-center gap-2.5 py-1">
                                 
-                                {/* TOP BADGES */}
+                                {/* TOP BADGES: 3 DISTINCT CLEAN ROWS */}
                                 <div className="flex flex-col gap-2">
                                   {/* DÒNG 1: 🔥 Streak & ⏱️ Thời gian còn lại */}
                                   <div className="flex flex-wrap items-center gap-2">
@@ -675,12 +771,12 @@ export default function Dashboard() {
                                 <span>{st.next_action_label || 'Tiếp Tục Lộ Trình 🚀'}</span>
                               </button>
                             </div>
+                          </motion.div>
+                        </AnimatePresence>
 
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* 2. DAILY COMPARISON CHART */}
