@@ -18,6 +18,7 @@ import EditQuiz from './pages/EditQuiz'
 import EditQuestions from './pages/EditQuestions'
 import QuizRoom from './pages/QuizRoom'
 import RoomJoin from './pages/RoomJoin'
+import QuizRoadmap from './pages/QuizRoadmap'
 import Layout from './components/Layout'
 
 const queryClient = new QueryClient({
@@ -77,6 +78,8 @@ function AppContent() {
 
         {/* Fullscreen Protected Views */}
         <Route path="/quiz/:id" element={isLoggedIn ? <QuizDetail /> : <Navigate to="/login" replace />} />
+        <Route path="/quiz/:id/roadmap" element={isLoggedIn ? <QuizRoadmap /> : <Navigate to="/login" replace />} />
+        <Route path="/flashcard/:id/roadmap" element={isLoggedIn ? <QuizRoadmap /> : <Navigate to="/login" replace />} />
         <Route path="/quiz/:id/play" element={isLoggedIn ? <QuizPlay /> : <Navigate to="/login" replace />} />
         <Route path="/room/:code" element={isLoggedIn ? <QuizRoom /> : <Navigate to="/login" replace />} />
 

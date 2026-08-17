@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Award, BookOpen, Search, StickyNote, BarChart2, Settings, Edit2, X, Save, Brain, HelpCircle, Plus } from 'lucide-react'
+import { ChevronLeft, Award, BookOpen, Search, StickyNote, BarChart2, Settings, Edit2, X, Save, Brain, HelpCircle, Plus, Compass } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
@@ -182,6 +182,30 @@ export default function QuizDetail() {
               </div>
               <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-3 tracking-tighter">{quiz?.title}</h1>
               <p className="text-slate-400 font-medium text-base leading-relaxed max-w-2xl">{quiz?.description || "Smart gamified quiz learning platform."}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Roadmap Engine Banner */}
+        <div className="px-6 max-w-5xl mx-auto mb-6">
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-black uppercase tracking-wider">
+                  Roadmap Pipeline 🗺️
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white">Lộ Trình Học Tập Hàng Ngày</h3>
+              <p className="text-xs text-slate-300 font-medium leading-relaxed">Tự động hóa pipeline học mới, bài kiểm tra đánh giá và ôn tập củng cố định kỳ.</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to={`/quiz/${id}/roadmap`}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <Compass className="w-4 h-4" />
+                <span>Vào Lộ Trình</span>
+              </Link>
             </div>
           </div>
         </div>

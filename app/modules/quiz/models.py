@@ -24,6 +24,7 @@ class Quiz(Base):
     cover_image = Column(String(512), nullable=True) # URL to the cover image
     time_limit = Column(Integer, default=0) # in minutes, 0 means no limit
     is_active = Column(Boolean, default=True)
+    practice_settings = Column(JSON, nullable=True) # Default creator configurations for practice modes & roadmap
     created_at = Column(DateTime, default=datetime.utcnow)
     
     category = relationship("Category", back_populates="quizzes")
@@ -171,6 +172,8 @@ class UserQuizGoal(Base):
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
     daily_target = Column(Integer, default=5)
+    daily_time_target = Column(Integer, default=10) # in minutes
+    daily_card_target = Column(Integer, default=20) # total questions
     streak_count = Column(Integer, default=0)
     last_completed_date = Column(String(50), nullable=True) # YYYY-MM-DD
     status = Column(String(50), default="active") # active, paused, completed
@@ -201,6 +204,15 @@ class UserQuestionMastery(Base):
     
     question = relationship("Question")
 
+class UserQuizSettings(Base):
+    __tablename__ = "user_quiz_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
+    settings = Column(JSON, nullable=True) # Custom mappings/configurations chosen by the learner
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    quiz = relationship("Quiz")
 
 class UserGlobalGoal(Base):
     __tablename__ = "user_global_goals"
@@ -209,4 +221,5 @@ class UserGlobalGoal(Base):
     daily_time_target = Column(Integer, default=20) # in minutes
     daily_card_target = Column(Integer, default=20) # number of cards
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 

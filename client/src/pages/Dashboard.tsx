@@ -1,35 +1,29 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trophy, ChevronRight, LayoutGrid, Users, Zap, Flame, BrainCircuit, X, Play, Crown, Medal, Swords, Settings, Info } from 'lucide-react'
+import { 
+  Trophy, ChevronRight, LayoutGrid, Users, Zap, Flame, BrainCircuit, X, Play, Crown, 
+  Medal, Star, CheckCircle2, Circle, Swords, Settings, Target, RefreshCw, User, 
+  BookOpen, Sparkles, TrendingUp, Clock, Layers, Compass, ArrowRight, FileText, 
+  RotateCcw, Search, Plus, Calendar 
+} from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
-
-interface ActiveGoal {
-  goal_id: number
-  quiz_id: number
-  quiz_title: string
-  cover_image: string | null
-  total_questions: number
-  total_learned: number
-  daily_target: number
-  done_today: number
-  is_target_met: boolean
-  streak_count: number
-  days_remaining_est: number
-}
+import DailyComparisonChart from '@/components/DailyComparisonChart'
 
 interface DashboardData {
-  user: { id: number, username: string, email: string }
-  gamify: { level: number, xp: number, streak: number }
-  stats_summary: { avg_accuracy: number, total_time_hours: number, total_questions: number }
+  user: { id: number; username: string; email: string; role?: string }
+  gamify: { level: number; xp: number; streak: number }
+  stats_summary: { avg_accuracy: number; total_time_hours: number; total_questions: number }
+  my_quizzes?: any[]
+  discover_quizzes?: any[]
 }
 
 interface HeatmapDay {
-  date: string;
-  count: number;
+  date: string
+  count: number
 }
 
 interface LeaderboardEntry {
@@ -43,20 +37,9 @@ interface LeaderboardEntry {
   out_of_top_10?: boolean
 }
 
-interface BadgeProgress {
-  id: string
-  name: string
-  description: string
-  icon: string
-  criteria_type: string
-  target_value: number
-  current_value: number
-  percentage: number
-}
-
 // ─── Mini Contribution Heatmap ────────────────────────────────────────────────
 function MiniHeatmap({ data }: { data: HeatmapDay[] }) {
-  const WEEKS = 15 // show 15 weeks = ~3.5 months
+  const WEEKS = 15
   const today = new Date()
   
   const dayMap = useMemo(() => {
@@ -147,29 +130,13 @@ function LeaderboardWidget({ data, activeFilter, onFilterChange }: {
 }) {
   const [activeTab, setActiveTab] = useState<'xp' | 'time'>('xp')
 
-  const rankIcons: Record<number, React.ReactNode> = {
-    1: <Crown className="w-4 h-4 text-amber-500" />,
-    2: <Medal className="w-4 h-4 text-slate-400" />,
-    3: <Medal className="w-4 h-4 text-amber-700" />,
-  }
   const rankColors: Record<number, string> = {
     1: 'from-amber-50 to-orange-50 border-amber-200/80',
     2: 'from-slate-50 to-slate-50/80 border-slate-200/60',
     3: 'from-amber-50/50 to-orange-50/30 border-amber-100/60',
   }
 
-  const formatTime = (seconds: number) => {
-    if (seconds < 60) return `${seconds}s`
-    const mins = Math.floor(seconds / 60)
-    const hours = Math.floor(mins / 60)
-    if (hours > 0) {
-      return `${hours}h ${mins % 60}m`
-    }
-    return `${mins}m`
-  }
-
   const currentList = activeTab === 'xp' ? data.leaderboard : (data.time_leaderboard || [])
-  const currentRank = activeTab === 'xp' ? data.current_user_rank : data.current_user_time_rank
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-[2rem] p-5 shadow-sm flex flex-col gap-4 text-left flex-shrink-0">
@@ -181,7 +148,7 @@ function LeaderboardWidget({ data, activeFilter, onFilterChange }: {
             <button
               onClick={() => setActiveTab('xp')}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all",
+                "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer",
                 activeTab === 'xp' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
               )}
             >
@@ -190,7 +157,7 @@ function LeaderboardWidget({ data, activeFilter, onFilterChange }: {
             <button
               onClick={() => setActiveTab('time')}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all",
+                "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer",
                 activeTab === 'time' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
               )}
             >
@@ -210,7 +177,7 @@ function LeaderboardWidget({ data, activeFilter, onFilterChange }: {
               key={filter.id}
               onClick={() => onFilterChange(filter.id)}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all",
+                "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer",
                 activeFilter === filter.id
                   ? "bg-indigo-600 text-white shadow-sm shadow-indigo-200"
                   : "bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
@@ -223,125 +190,23 @@ function LeaderboardWidget({ data, activeFilter, onFilterChange }: {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        {currentList.map((entry, index) => {
-          const isOutOfTop5 = (entry as any).out_of_top_5 || (entry as any).out_of_top_10
-          
-          return (
-            <React.Fragment key={entry.user_id}>
-              {isOutOfTop5 && index > 0 && (
-                <div className="flex justify-center py-1">
-                  <div className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
-                  </div>
-                </div>
-              )}
-              
-              <div
-                className={cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-gradient-to-r transition-all',
-                  entry.is_current_user
-                    ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-300/50'
-                    : rankColors[entry.rank as number] || 'border-slate-100 bg-slate-50/50',
-                  isOutOfTop5 && 'border-dashed'
-                )}
-              >
-                <div className="w-6 flex items-center justify-center flex-shrink-0">
-                  {rankIcons[entry.rank as number] || (
-                    <span className="text-[9px] font-black text-slate-400">#{entry.rank}</span>
-                  )}
-                </div>
-
-                <div className={cn(
-                  'w-7 h-7 rounded-xl flex items-center justify-center text-[10px] font-black flex-shrink-0',
-                  entry.is_current_user
-                    ? 'bg-indigo-600 text-white'
-                    : entry.rank === 1
-                      ? 'bg-amber-500 text-white'
-                      : 'bg-slate-200 text-slate-600'
-                )}>
-                  {entry.username.slice(0, 2).toUpperCase()}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <span className={cn(
-                    'text-[10px] font-black truncate block',
-                    entry.is_current_user ? 'text-indigo-700' : 'text-slate-700'
-                  )}>
-                    {entry.username} {entry.is_current_user && '(Bạn)'}
-                  </span>
-                  {activeTab === 'xp' ? (
-                    <span className="text-[8px] font-bold text-slate-400 flex items-center gap-1">
-                      Lvl {entry.level} · 🔥 {entry.streak}d
-                    </span>
-                  ) : (
-                    <span className="text-[8px] font-bold text-slate-400 flex items-center gap-1">
-                      Tổng thời gian học
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex-shrink-0 text-right">
-                  <span className={cn(
-                    'text-[10px] font-black',
-                    entry.rank === 1 ? 'text-amber-600' : entry.is_current_user ? 'text-indigo-600' : 'text-slate-600'
-                  )}>
-                    {activeTab === 'xp' ? entry.xp.toLocaleString() : formatTime(entry.total_time || 0)}
-                  </span>
-                  <span className="text-[7px] font-black text-slate-400 block">
-                    {activeTab === 'xp' ? 'XP' : 'Đã học'}
-                  </span>
-                </div>
-              </div>
-            </React.Fragment>
-          )
-        })}
-      </div>
-
-      {currentRank && (
-        <div className="pt-1 border-t border-slate-100 text-center">
-          <span className="text-[9px] font-black text-slate-400">
-            Hạng của bạn: <span className="text-indigo-600 font-extrabold">#{currentRank}</span> toàn hệ thống
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Badge Progress Widget ─────────────────────────────────────────────────────
-function BadgeProgressWidget({ data }: { data: BadgeProgress[] }) {
-  return (
-    <div className="bg-white border border-slate-200/60 rounded-[2rem] p-5 shadow-sm flex flex-col gap-3.5 text-left flex-shrink-0">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-        <div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Hành trình danh hiệu</span>
-          <span className="text-[8px] font-black text-indigo-600 uppercase tracking-wider block mt-0.5">
-            🏆 Sắp đạt được
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {data.map(badge => (
-          <div key={badge.id} className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/30">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100/50 flex items-center justify-center text-indigo-600 flex-shrink-0 text-lg">
-              {badge.icon === 'Zap' ? '⚡' : badge.icon === 'Flame' ? '🔥' : '🏆'}
+        {currentList.slice(0, 5).map((entry) => (
+          <div
+            key={entry.user_id}
+            className={cn(
+              'flex items-center gap-2.5 px-3 py-2 rounded-xl border bg-gradient-to-r transition-all',
+              entry.is_current_user
+                ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-300/50'
+                : rankColors[entry.rank as number] || 'border-slate-100 bg-slate-50/50'
+            )}
+          >
+            <div className="w-6 flex items-center justify-center flex-shrink-0">
+              {entry.rank === 1 ? <Crown className="w-4 h-4 text-amber-500" /> : <span className="text-xs font-black text-slate-400">#{entry.rank}</span>}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-black text-slate-800 truncate">{badge.name}</span>
-                <span className="text-[9px] font-black text-indigo-600">{badge.percentage}%</span>
-              </div>
-              <p className="text-[8px] font-medium text-slate-400 truncate mt-0.5">{badge.description}</p>
-              <div className="h-1 bg-slate-100 rounded-full mt-2 overflow-hidden w-full relative">
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
-                  style={{ width: `${badge.percentage}%` }}
-                />
-              </div>
+              <span className="text-xs font-black text-slate-800 truncate block">{entry.username}</span>
             </div>
+            <span className="text-xs font-black text-indigo-600">{entry.xp || entry.study_seconds || 0}</span>
           </div>
         ))}
       </div>
@@ -349,831 +214,551 @@ function BadgeProgressWidget({ data }: { data: BadgeProgress[] }) {
   )
 }
 
-interface GlobalGoals {
-  daily_time_target: number
-  daily_card_target: number
-  daily_new_card_target: number
-  actual_time_minutes: number
-  actual_cards_completed: number
-  actual_new_cards_completed?: number
-}
-
-// ─── Today Focus Widget ────────────────────────────────────────────────────────
-function TodayFocusWidget({
-  data,
-  activeGoals,
-  todayReview,
-  onOpenSettings,
-  onStartPractice,
-  navigate
-}: {
-  data: GlobalGoals;
-  activeGoals: ActiveGoal[] | undefined;
-  todayReview: any | undefined;
-  onOpenSettings: () => void;
-  onStartPractice: (quiz: any) => void;
-  navigate: any;
-}) {
-  const timePercentage = Math.min(100, Math.round((data.actual_time_minutes / (data.daily_time_target || 1)) * 100))
-  const cardPercentage = Math.min(100, Math.round((data.actual_cards_completed / (data.daily_card_target || 1)) * 100))
-  const newCardPercentage = Math.min(100, Math.round(((data.actual_new_cards_completed || 0) / (data.daily_new_card_target || 1)) * 100))
-
-  return (
-    <div className="bg-white border border-slate-200/60 rounded-[2.5rem] p-6 shadow-sm relative overflow-hidden text-left mb-5 flex-shrink-0">
-      <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-indigo-50/30 blur-md pointer-events-none" />
-      
-      <div className="flex items-center justify-between mb-5 relative z-10">
-        <div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">🎯 TODAY'S FOCUS</span>
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight mt-1">Mục tiêu ngày của bạn</h3>
-        </div>
-        <button
-          onClick={onOpenSettings}
-          className="w-8.5 h-8.5 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-600 shadow-sm active:scale-90 hover:bg-slate-100 transition-all"
-          title="Cài đặt mục tiêu"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 relative z-10 mb-6">
-        <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1 sm:gap-3 bg-slate-50/60 p-2 sm:p-3.5 rounded-2xl sm:rounded-[1.5rem] border border-slate-100">
-          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 flex items-center justify-center rounded-full bg-white shadow-sm">
-            <svg className="w-10 h-10 sm:w-14 sm:h-14 transform -rotate-90">
-              <circle cx="50%" cy="50%" r="40%" className="stroke-slate-100 fill-none" strokeWidth="3" />
-              <circle
-                cx="50%" cy="50%" r="40%"
-                className="stroke-indigo-600 fill-none transition-all duration-500 ease-out"
-                strokeWidth="3"
-                strokeDasharray="250%"
-                strokeDashoffset={`${250 - (timePercentage / 100) * 250}%`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="absolute text-[8px] sm:text-[10px] font-black text-indigo-600">
-              {timePercentage}%
-            </span>
-          </div>
-          <div className="text-center sm:text-left mt-1 sm:mt-0">
-            <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider block leading-none sm:leading-normal">Thời gian học</span>
-            <span className="text-[9px] sm:text-xs font-black text-slate-850 block mt-0.5 whitespace-nowrap">
-              {data.actual_time_minutes} / {data.daily_time_target}m
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1 sm:gap-3 bg-slate-50/60 p-2 sm:p-3.5 rounded-2xl sm:rounded-[1.5rem] border border-slate-100">
-          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 flex items-center justify-center rounded-full bg-white shadow-sm">
-            <svg className="w-10 h-10 sm:w-14 sm:h-14 transform -rotate-90">
-              <circle cx="50%" cy="50%" r="40%" className="stroke-slate-100 fill-none" strokeWidth="3" />
-              <circle
-                cx="50%" cy="50%" r="40%"
-                className="stroke-emerald-500 fill-none transition-all duration-500 ease-out"
-                strokeWidth="3"
-                strokeDasharray="250%"
-                strokeDashoffset={`${250 - (cardPercentage / 100) * 250}%`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="absolute text-[8px] sm:text-[10px] font-black text-emerald-600">
-              {cardPercentage}%
-            </span>
-          </div>
-          <div className="text-center sm:text-left mt-1 sm:mt-0">
-            <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider block leading-none sm:leading-normal">Câu đã trả lời</span>
-            <span className="text-[9px] sm:text-xs font-black text-slate-850 block mt-0.5 whitespace-nowrap">
-              {data.actual_cards_completed} / {data.daily_card_target}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1 sm:gap-3 bg-slate-50/60 p-2 sm:p-3.5 rounded-2xl sm:rounded-[1.5rem] border border-slate-100">
-          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 flex items-center justify-center rounded-full bg-white shadow-sm">
-            <svg className="w-10 h-10 sm:w-14 sm:h-14 transform -rotate-90">
-              <circle cx="50%" cy="50%" r="40%" className="stroke-slate-100 fill-none" strokeWidth="3" />
-              <circle
-                cx="50%" cy="50%" r="40%"
-                className="stroke-rose-500 fill-none transition-all duration-500 ease-out"
-                strokeWidth="3"
-                strokeDasharray="250%"
-                strokeDashoffset={`${250 - (newCardPercentage / 100) * 250}%`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="absolute text-[8px] sm:text-[10px] font-black text-rose-600">
-              {newCardPercentage}%
-            </span>
-          </div>
-          <div className="text-center sm:text-left mt-1 sm:mt-0">
-            <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider block leading-none sm:leading-normal">Câu hỏi mới</span>
-            <span className="text-[9px] sm:text-xs font-black text-slate-850 block mt-0.5 whitespace-nowrap">
-              {data.actual_new_cards_completed || 0} / {data.daily_new_card_target || 0}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-slate-100 pt-5 relative z-10">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3.5">Mục tiêu theo từng bộ đề:</span>
-        
-        {!activeGoals || activeGoals.length === 0 ? (
-          <div className="text-center py-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200/80">
-            <span className="text-[10px] font-bold text-slate-400">Chưa thiết lập mục tiêu cho bộ đề nào.</span>
-            <Link to="/library" className="text-[10px] font-black text-indigo-600 uppercase tracking-wider block mt-1 hover:underline">📚 Đi đến thư viện</Link>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {activeGoals.map(goal => {
-              const deckReview = todayReview?.decks_summary?.find((d: any) => d.quiz_id === goal.quiz_id)
-              const dueReviews = deckReview ? deckReview.due_count : 0
-              const isGoalMet = goal.done_today >= goal.daily_target
-              const goalPercentage = goal.daily_target > 0 ? Math.min(100, Math.round((goal.done_today / goal.daily_target) * 100)) : 0
-
-              return (
-                <div key={goal.goal_id} className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/30 hover:bg-slate-50/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full bg-white shadow-sm border border-slate-100">
-                      <svg className="w-11 h-11 transform -rotate-90">
-                        <circle cx="22" cy="22" r="17" className="stroke-slate-50 fill-none" strokeWidth="2.5" />
-                        <circle
-                          cx="22" cy="22" r="17"
-                          className={cn("fill-none transition-all duration-500 ease-out", isGoalMet ? "stroke-amber-400" : "stroke-indigo-600")}
-                          strokeWidth="2.5"
-                          strokeDasharray={2 * Math.PI * 17}
-                          strokeDashoffset={2 * Math.PI * 17 - (goalPercentage / 100) * 2 * Math.PI * 17}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className={cn("absolute text-[8px] font-black", isGoalMet ? "text-amber-500" : "text-indigo-600")}>
-                        {goal.done_today}/{goal.daily_target}
-                      </span>
-                    </div>
-
-                    <div className="min-w-0 text-left">
-                      <h4 className="text-xs font-black text-slate-800 truncate leading-snug">{goal.quiz_title}</h4>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100/60">
-                          🔥 {goal.streak_count}D
-                        </span>
-                        {dueReviews > 0 ? (
-                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-100/60 animate-pulse">
-                            ⚠️ {dueReviews} câu cần học lại
-                          </span>
-                        ) : (
-                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100/60">
-                            ✅ Đã thuộc hết
-                          </span>
-                        )}
-                        <span className="text-[8px] font-bold text-slate-400">
-                          {isGoalMet ? "Đạt mục tiêu học mới ⚡" : `Còn lại ${goal.daily_target - goal.done_today} câu mới`}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-center">
-                    <button
-                      onClick={() => navigate(`/quiz/${goal.quiz_id}/play`)}
-                      className={cn(
-                        "h-8.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm active:scale-95 transition-all",
-                        dueReviews > 0 || !isGoalMet
-                          ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100"
-                          : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-                      )}
-                      title="Spaced Repetition"
-                    >
-                      <BrainCircuit className="w-3.5 h-3.5" />
-                      Học lại {dueReviews > 0 && `(${dueReviews})`}
-                    </button>
-                    <button
-                      onClick={() => onStartPractice({ id: goal.quiz_id, title: goal.quiz_title, questions_count: goal.total_questions })}
-                      className="h-8.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm shadow-emerald-100 active:scale-95 transition-all"
-                      title="Luyện tập tự do"
-                    >
-                      <Trophy className="w-3.5 h-3.5" />
-                      Luyện tập
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Goal Settings Modal ───────────────────────────────────────────────────────
-function GoalSettingsModal({
-  isOpen,
-  onClose,
-  initialTime,
-  initialCard,
-  initialNewCard,
-  onSave
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  initialTime: number;
-  initialCard: number;
-  initialNewCard: number;
-  onSave: (time: number, card: number, newCard: number) => Promise<void>;
-}) {
-  const [timeTarget, setTimeTarget] = useState(initialTime)
-  const [cardTarget, setCardTarget] = useState(initialCard)
-  const [newCardTarget, setNewCardTarget] = useState(initialNewCard)
-  const [isSaving, setIsSaving] = useState(false)
-
-  const timePresets = [10, 20, 30, 60]
-  const cardPresets = [10, 20, 30, 50]
-  const newCardPresets = [5, 10, 20, 30]
-
-  useEffect(() => {
-    if (isOpen) {
-      setTimeTarget(initialTime)
-      setCardTarget(initialCard)
-      setNewCardTarget(initialNewCard)
-    }
-  }, [isOpen, initialTime, initialCard, initialNewCard])
-
-  const handleSave = async () => {
-    setIsSaving(true)
-    try {
-      await onSave(timeTarget, cardTarget, newCardTarget)
-      onClose()
-    } catch (e) {
-      alert("Lỗi khi lưu mục tiêu")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl relative z-10 p-8 border border-slate-100 text-left"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Cài đặt mục tiêu học</h3>
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Mục tiêu thời gian học (phút/ngày)</label>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {timePresets.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setTimeTarget(preset)}
-                      className={cn(
-                        "py-2.5 rounded-xl text-[10px] font-black tracking-wider transition-all border",
-                        timeTarget === preset
-                          ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100"
-                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                      )}
-                    >
-                      {preset}m
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="number"
-                  min="1"
-                  max="480"
-                  value={timeTarget}
-                  onChange={(e) => setTimeTarget(Math.max(1, parseInt(e.target.value) || 0))}
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-750 focus:border-indigo-500 focus:bg-white outline-none transition-all"
-                  placeholder="Nhập số phút tùy chọn..."
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Mục tiêu số câu học (câu/ngày)</label>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {cardPresets.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setCardTarget(preset)}
-                      className={cn(
-                        "py-2.5 rounded-xl text-[10px] font-black tracking-wider transition-all border",
-                        cardTarget === preset
-                          ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-100"
-                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                      )}
-                    >
-                      {preset} Câu
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="number"
-                  min="1"
-                  max="1000"
-                  value={cardTarget}
-                  onChange={(e) => setCardTarget(Math.max(1, parseInt(e.target.value) || 0))}
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-750 focus:border-indigo-500 focus:bg-white outline-none transition-all"
-                  placeholder="Nhập số câu tùy chọn..."
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Mục tiêu câu hỏi mới (câu/ngày)</label>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {newCardPresets.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setNewCardTarget(preset)}
-                      className={cn(
-                        "py-2.5 rounded-xl text-[10px] font-black tracking-wider transition-all border",
-                        newCardTarget === preset
-                          ? "bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-100"
-                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                      )}
-                    >
-                      {preset} Câu
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={newCardTarget}
-                  onChange={(e) => setNewCardTarget(Math.max(1, parseInt(e.target.value) || 0))}
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-750 focus:border-indigo-500 focus:bg-white outline-none transition-all"
-                  placeholder="Nhập số câu mới tùy chọn..."
-                />
-              </div>
-
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-150 transition-all flex items-center justify-center"
-              >
-                {isSaving ? "ĐANG LƯU..." : "LƯU MỤC TIÊU"}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-// ─── Main Dashboard Component ─────────────────────────────────────────────────
 export default function Dashboard() {
-  const { setUser, setGamify } = useAppStore()
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { user: authUser } = useAppStore()
+  const [mobileTab, setMobileTab] = useState<'roadmap' | 'decks' | 'stats' | 'rank'>('roadmap')
+  const [lbFilter, setLbFilter] = useState('today')
+  const [remainingTime, setRemainingTime] = useState('')
 
-  const [selectedPracticeQuiz, setSelectedPracticeQuiz] = useState<any | null>(null)
-  const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false)
-  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
-  const [roomCode, setRoomCode] = useState('')
-  const [isJoining, setIsJoining] = useState(false)
-  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false)
-  const [timeFilter, setTimeFilter] = useState('all_time')
-
-  const { data: globalGoals, refetch: refetchGlobalGoals } = useQuery<GlobalGoals>({
-    queryKey: ['globalGoals'],
-    queryFn: async () => {
-      const res = await axios.get('/api/v1/quiz/goals/global')
-      return res.data
-    }
-  })
-
-  const handleSaveGlobalGoals = async (timeTarget: number, cardTarget: number, newCardTarget: number) => {
-    await axios.post('/api/v1/quiz/goals/global', {
-      daily_time_target: timeTarget,
-      daily_card_target: cardTarget,
-      daily_new_card_target: newCardTarget
-    })
-    refetchGlobalGoals()
-  }
-
-  const { data: activeGoals } = useQuery<ActiveGoal[]>({
-    queryKey: ['activeGoals'],
-    queryFn: async () => {
-      const res = await axios.get('/api/v1/quiz/goals/active')
-      return res.data
-    }
-  })
-
-  const { data: todayReview } = useQuery({
-    queryKey: ['todayReview'],
-    queryFn: async () => {
-      const res = await axios.get('/api/v1/quiz/today-review')
-      return res.data
-    }
-  })
-
-  const { data: heatmapData } = useQuery<HeatmapDay[]>({
-    queryKey: ['stats-heatmap'],
-    queryFn: async () => {
-      const res = await axios.get('/api/v1/quiz/stats/heatmap')
-      return res.data
-    }
-  })
-
-  const { data: leaderboardData } = useQuery({
-    queryKey: ['leaderboard', timeFilter],
-    queryFn: async () => {
-      const res = await axios.get(`/api/v1/gamification/leaderboard?time_filter=${timeFilter}`)
-      return res.data
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const { data: badgesProgress } = useQuery<BadgeProgress[]>({
-    queryKey: ['badgesProgress'],
-    queryFn: async () => {
-      const res = await axios.get('/api/v1/gamification/badges/progress')
-      return res.data
-    }
-  })
-
-  const { data, isLoading } = useQuery<DashboardData>({
-    queryKey: ['dashboard'],
+  // 1. Fetch Dashboard Stats & User Data
+  const { data: dashData } = useQuery<DashboardData>({
+    queryKey: ['dashboard-data'],
     queryFn: async () => {
       const res = await axios.get('/api/v1/dashboard/data')
-      setUser(res.data.user)
-      setGamify(res.data.gamify)
       return res.data
-    },
-    retry: false
+    }
   })
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        document.body.style.overflow = 'hidden'
-        document.body.style.height = '100vh'
-        document.documentElement.style.overflow = 'hidden'
-        document.documentElement.style.height = '100vh'
-      } else {
-        document.body.style.overflow = ''
-        document.body.style.height = ''
-        document.documentElement.style.overflow = ''
-        document.documentElement.style.height = ''
-      }
+  // 2. Fetch Active Roadmap Quizzes (Decks)
+  const { data: roadmapData, isLoading: isRoadmapLoading } = useQuery({
+    queryKey: ['roadmap-global-decks'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/quiz/roadmap/decks')
+      return res.data
     }
+  })
 
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      document.body.style.overflow = ''
-      document.body.style.height = ''
-      document.documentElement.style.overflow = ''
-      document.documentElement.style.height = ''
+  // 3. Fetch Leaderboard
+  const { data: lbData } = useQuery({
+    queryKey: ['leaderboard', lbFilter],
+    queryFn: async () => {
+      const res = await axios.get(`/api/v1/stats/leaderboard?time_filter=${lbFilter}`)
+      return res.data
     }
+  })
+
+  // 4. Fetch Heatmap
+  const { data: heatmapData } = useQuery({
+    queryKey: ['stats-heatmap'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/stats/heatmap')
+      return res.data?.heatmap || []
+    }
+  })
+
+  // 5. Fetch Daily Comparison
+  const { data: dailyComparisonData, isLoading: isDailyCompLoading } = useQuery({
+    queryKey: ['stats-daily-comparison'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/stats/daily-comparison')
+      return res.data
+    }
+  })
+
+  // 6. Fetch Badges
+  const { data: badgesData } = useQuery({
+    queryKey: ['badges-progress'],
+    queryFn: async () => {
+      const res = await axios.get('/api/v1/gamification/badges/progress')
+      return res.data?.badges || []
+    }
+  })
+
+  // Countdown timer to midnight (UTC+7)
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const midnight = new Date(now)
+      midnight.setHours(24, 0, 0, 0)
+      const diff = Math.max(0, midnight.getTime() - now.getTime())
+      const h = Math.floor(diff / (1000 * 60 * 60))
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const s = Math.floor((diff % (1000 * 60)) / 1000)
+      setRemainingTime(`${h}h ${m < 10 ? '0' : ''}${m}m ${s < 10 ? '0' : ''}${s}s`)
+    }
+    updateCountdown()
+    const timer = setInterval(updateCountdown, 1000)
+    return () => clearInterval(timer)
   }, [])
 
-  const handleJoinRoom = async () => {
-    if (!roomCode) return
-    setIsJoining(true)
-    try {
-      await axios.post('/api/v1/quiz/room/join', { room_code: roomCode })
-      navigate(`/room/${roomCode.toUpperCase()}`)
-    } catch (e) {
-      alert("Room not found or expired")
-    } finally {
-      setIsJoining(false)
-    }
-  }
-
-  if (isLoading || !data) return (
-    <div className="h-screen flex items-center justify-center font-black animate-pulse text-indigo-600 tracking-widest uppercase italic bg-[#fafbfd]">
-      🚀 NEURAL SYNCING...
-    </div>
-  )
+  const roadmapQuizzes: any[] = roadmapData?.decks || roadmapData?.quizzes || []
+  const user = dashData?.user || authUser || { username: 'Học Viên', email: '', role: 'user' }
+  const gamify = dashData?.gamify || { level: 1, xp: 0, streak: 0 }
 
   return (
-    <div className="flex flex-col bg-gradient-to-br from-[#f8fafc] via-[#f1f6fa] to-[#f8fafc] min-h-[calc(100vh-6rem)] relative overflow-x-hidden md:overflow-hidden md:min-h-0 md:h-full">
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 text-slate-800 selection:bg-indigo-100">
       
-      {/* Soft blobs */}
-      <div className="absolute top-[20%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-indigo-200/10 blur-[130px] pointer-events-none" />
-      <div className="absolute bottom-[20%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-pink-200/10 blur-[130px] pointer-events-none" />
-
-      {/* MOBILE HEADER */}
-      <div className="sticky top-0 z-[150] bg-white/80 backdrop-blur-xl border-b border-slate-100 md:hidden flex-shrink-0">
-         <div className="px-4 py-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-               <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-indigo-100 flex-shrink-0">
-                  <BrainCircuit className="w-6 h-6 animate-pulse" />
-               </div>
-               <div>
-                  <h1 className="text-[13px] font-black text-slate-800 leading-none mb-1">Hello {data.user?.username}! 👋</h1>
-                  <div className="flex items-center gap-1.5">
-                     <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-lg border border-indigo-100/50">LVL {data.gamify?.level}</span>
-                     <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-lg border border-orange-100/50 flex items-center gap-0.5">
-                       🔥 {data.gamify?.streak}D
-                     </span>
-                  </div>
-               </div>
+      {/* ========================================================================= */}
+      {/* MOBILE TOP HEADER & 4-TAB NAVIGATION                                      */}
+      {/* ========================================================================= */}
+      <div className="md:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+        <div className="px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-orange-500 flex items-center justify-center text-white font-black text-sm shadow-xs">
+              ⚡
             </div>
-            <div className="flex items-center gap-2">
-               <button 
-                  onClick={() => setIsJoinModalOpen(true)}
-                  className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-600 shadow-sm active:scale-90 transition-all"
-               >
-                  <Users className="w-5 h-5" />
-               </button>
-            </div>
-         </div>
-      </div>
-
-      {/* DESKTOP LAYOUT */}
-      <div className="hidden md:flex w-full h-full overflow-hidden px-8 py-6 gap-8">
-        
-        {/* LEFT COLUMN: Sidebar (Contribution History, Profile stats, Arena shortcut) */}
-        <aside className="w-80 flex-shrink-0 flex flex-col gap-5 h-full overflow-y-auto pr-2 pb-6 scrollbar-thin">
-          
-          <div className="bg-white border border-slate-200/60 rounded-[2rem] p-6 shadow-sm flex flex-col gap-4 text-left relative overflow-hidden flex-shrink-0">
-            <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full bg-indigo-50/40 blur-md pointer-events-none" />
-            
-            <div className="flex items-center gap-3.5 z-10">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-md text-2xl shadow-indigo-100">
-                👋
-              </div>
-              <div>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Welcome back</span>
-                <h2 className="text-base font-black text-slate-800 leading-tight mt-0.5 truncate max-w-[170px]">
-                  {data.user?.username}
-                </h2>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 mt-1">
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-50 to-amber-50/50 border border-orange-100 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Streak</span>
-                </div>
-                <span className="text-xs font-black text-orange-600 bg-white px-2.5 py-1 rounded-xl border border-orange-200">{data.gamify?.streak} ngày 🔥</span>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50/50 border border-indigo-100 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-indigo-500" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Level</span>
-                </div>
-                <span className="text-xs font-black text-indigo-600 bg-white px-2.5 py-1 rounded-xl border border-indigo-200">Lvl {data.gamify?.level} ⭐</span>
-              </div>
-            </div>
-          </div>
-
-          {heatmapData && heatmapData.length > 0 && <MiniHeatmap data={heatmapData} />}
-
-          <div className="bg-white border border-slate-200/60 rounded-[2rem] p-5 shadow-sm flex flex-col gap-3 text-left flex-shrink-0">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Đấu trường trí tuệ</span>
-            <button 
-              onClick={() => setIsJoinModalOpen(true)}
-              className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 active:scale-95"
-            >
-              <Users className="w-4 h-4" />
-              Vào phòng Arena
-            </button>
-          </div>
-          
-        </aside>
-
-        {/* RIGHT COLUMN: Study target widgets & Leaderboard & Badges */}
-        <section className="flex-1 h-full flex flex-col gap-5 overflow-y-auto pr-2 scrollbar-thin text-left pb-8">
-          <div className="flex items-center justify-between mb-1">
             <div>
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight italic">Mục tiêu hôm nay</h2>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mt-0.5">Today's Study Targets & Goals</p>
+              <h1 className="text-sm font-black text-slate-900 leading-none">QuizMind</h1>
+              <span className="text-[9px] font-bold text-slate-400">Gamified Learning Hub</span>
             </div>
-            <Link 
-              to="/library"
-              className="h-10 px-5 bg-white border border-slate-200/80 rounded-xl text-[10px] font-black text-indigo-600 uppercase tracking-wider hover:bg-slate-50 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-sm"
-            >
-              Thư Viện 📚
-            </Link>
           </div>
 
-          {globalGoals && (
-            <TodayFocusWidget
-              data={globalGoals}
-              activeGoals={activeGoals}
-              todayReview={todayReview}
-              onOpenSettings={() => setIsGoalModalOpen(true)}
-              onStartPractice={(quiz) => {
-                setSelectedPracticeQuiz(quiz)
-                setIsPracticeModalOpen(true)
-              }}
-              navigate={navigate}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {/* Streak Pill */}
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white text-xs font-black shadow-xs">
+              <span>🔥</span>
+              <span>{gamify.streak || 0}d</span>
+            </div>
 
-          {badgesProgress && <BadgeProgressWidget data={badgesProgress} />}
+            {/* User Level */}
+            <div className="w-7 h-7 rounded-xl bg-slate-900 text-amber-400 font-black text-xs flex items-center justify-center shadow-xs">
+              {gamify.level || 1}
+            </div>
+          </div>
+        </div>
 
-          {leaderboardData && leaderboardData.leaderboard?.length > 0 && (
-            <LeaderboardWidget data={leaderboardData} activeFilter={timeFilter} onFilterChange={setTimeFilter} />
-          )}
-        </section>
-
+        {/* 4 Tabs */}
+        <div className="grid grid-cols-4 border-t border-slate-100 text-center">
+          {[
+            { id: 'roadmap', label: 'Lộ Trình', icon: Compass },
+            { id: 'decks', label: 'Bộ Đề', icon: BookOpen },
+            { id: 'stats', label: 'Thống Kê', icon: TrendingUp },
+            { id: 'rank', label: 'Xếp Hạng', icon: Trophy }
+          ].map(tab => {
+            const Icon = tab.icon
+            const isActive = mobileTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setMobileTab(tab.id as any)}
+                className={cn(
+                  "py-2.5 flex flex-col items-center justify-center gap-0.5 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer",
+                  isActive
+                    ? "border-indigo-600 text-indigo-600 bg-indigo-50/50"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* MOBILE FEED */}
-      <div className="md:hidden px-4 w-full mt-4 flex-grow space-y-4 overflow-y-auto pb-24">
-        {globalGoals && (
-          <TodayFocusWidget
-            data={globalGoals}
-            activeGoals={activeGoals}
-            todayReview={todayReview}
-            onOpenSettings={() => setIsGoalModalOpen(true)}
-            onStartPractice={(quiz) => {
-              setSelectedPracticeQuiz(quiz)
-              setIsPracticeModalOpen(true)
-            }}
-            navigate={navigate}
-          />
-        )}
-
-        {badgesProgress && <BadgeProgressWidget data={badgesProgress} />}
-
-        {leaderboardData && leaderboardData.leaderboard?.length > 0 && (
-          <LeaderboardWidget data={leaderboardData} activeFilter={timeFilter} onFilterChange={setTimeFilter} />
-        )}
-
-        {heatmapData && heatmapData.length > 0 && <MiniHeatmap data={heatmapData} />}
-      </div>
-
-      {/* MODALS */}
-      <AnimatePresence>
-        {isJoinModalOpen && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => setIsJoinModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl relative z-10 p-8 border border-slate-100"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-base font-black text-slate-800 uppercase tracking-widest">Enter Arena Room</h3>
-                <button onClick={() => setIsJoinModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">
-                   <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* ========================================================================= */}
+      {/* DESKTOP SPLIT VIEW & MOBILE TAB CONTENT                                    */}
+      {/* ========================================================================= */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* ─── LEFT SIDEBAR (DESKTOP) ────────────────────────────────────────── */}
+          <div className="hidden lg:flex lg:col-span-4 flex-col gap-5 sticky top-6">
+            {/* User Profile Card */}
+            <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm flex flex-col gap-4 relative overflow-hidden">
+              <div className="h-1 absolute top-0 inset-x-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500" />
               
-              <div className="space-y-6">
-                <div>
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Enter Arena Room Code</label>
-                   <input 
-                     type="text" 
-                     placeholder="e.g. AZ78K"
-                     value={roomCode}
-                     onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                     className="w-full h-16 bg-slate-50 border-2 border-slate-200 rounded-2xl px-6 text-2xl font-black tracking-[0.3em] text-center text-indigo-600 focus:border-indigo-500 focus:bg-white outline-none transition-all placeholder:text-slate-300 placeholder:tracking-normal placeholder:text-sm"
-                   />
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white text-2xl font-black shadow-md shadow-indigo-100">
+                  {user.username.charAt(0).toUpperCase()}
                 </div>
-                
-                <button 
-                  onClick={handleJoinRoom}
-                  disabled={!roomCode || isJoining}
-                  className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-200 disabled:shadow-none"
-                >
-                  {isJoining ? 'CONNECTING...' : 'ENTER ROOM NOW'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {isPracticeModalOpen && selectedPracticeQuiz && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => setIsPracticeModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl relative z-10 p-8 border border-slate-100 text-left"
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                    <Trophy className="w-5 h-5" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 truncate">{user.username}</h3>
+                    {user.role === 'admin' && (
+                      <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">
+                        Admin
+                      </span>
+                    )}
                   </div>
+                  <p className="text-xs text-slate-400 font-medium truncate">{user.email || 'Học viên QuizMind'}</p>
+                </div>
+              </div>
+
+              {/* Level & XP Progress Bar */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between text-xs font-black">
+                  <span className="text-slate-700">Level {gamify.level || 1}</span>
+                  <span className="text-indigo-600">{gamify.xp || 0} XP</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, ((gamify.xp || 0) % 100))}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Streak Counter */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-between shadow-sm shadow-orange-200">
+                <div className="flex items-center gap-2.5">
+                  <Flame className="w-6 h-6 fill-white" />
                   <div>
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest leading-none mb-1">Practice Mode</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Chọn chế độ luyện tập</p>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-100 block leading-none">Chuỗi Học</span>
+                    <span className="text-lg font-black leading-tight">{gamify.streak || 0} Ngày Liên Tục</span>
                   </div>
                 </div>
-                <button onClick={() => setIsPracticeModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200/50 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">
-                  <X className="w-4 h-4" />
-                </button>
+                <span className="text-xl">🔥</span>
               </div>
+            </div>
 
-              <div className="space-y-4">
-                <div className="bg-slate-50/60 rounded-2xl p-4 border border-slate-100 mb-2">
-                  <h4 className="text-xs font-black text-indigo-600 leading-snug line-clamp-1">{selectedPracticeQuiz.title}</h4>
-                  <p className="text-[9px] text-slate-400 uppercase tracking-wider font-black mt-0.5">
-                    {selectedPracticeQuiz.questions_count} câu hỏi
-                  </p>
-                </div>
+            {/* Mini Contribution Heatmap */}
+            <MiniHeatmap data={heatmapData} />
 
-                <div className="grid grid-cols-1 gap-3">
-                  <button 
-                    onClick={() => {
-                      setIsPracticeModalOpen(false)
-                      navigate(`/practice/${selectedPracticeQuiz.id}/mcq`)
-                    }}
-                    className="group w-full flex items-center gap-4 p-4 rounded-[1.75rem] border border-slate-200/60 bg-white hover:border-emerald-500 hover:bg-emerald-50/10 active:scale-[0.98] transition-all text-left shadow-sm"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100/50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all flex-shrink-0">
-                      <LayoutGrid className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider block mb-0.5 group-hover:text-indigo-600 transition-colors">Trắc nghiệm (MCQ)</span>
-                      <span className="text-[9px] font-medium text-slate-400 block line-clamp-1">Luyện phản xạ nhanh với 4 lựa chọn</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-all" />
-                  </button>
-
-                  <button 
-                    onClick={() => {
-                      setIsPracticeModalOpen(false)
-                      navigate(`/practice/${selectedPracticeQuiz.id}/typing`)
-                    }}
-                    className="group w-full flex items-center gap-4 p-4 rounded-[1.75rem] border border-slate-200/60 bg-white hover:border-emerald-500 hover:bg-emerald-50/10 active:scale-[0.98] transition-all text-left shadow-sm"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100/50 flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-all flex-shrink-0">
-                      <Zap className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider block mb-0.5 group-hover:text-rose-600 transition-colors">Tự luận (Typing)</span>
-                      <span className="text-[9px] font-medium text-slate-400 block line-clamp-1">Gõ trực tiếp câu trả lời để ghi nhớ sâu sắc</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-all" />
-                  </button>
-
-                  <button 
-                    onClick={() => {
-                      setIsPracticeModalOpen(false)
-                      navigate(`/practice/${selectedPracticeQuiz.id}/listening`)
-                    }}
-                    className="group w-full flex items-center gap-4 p-4 rounded-[1.75rem] border border-slate-200/60 bg-white hover:border-emerald-500 hover:bg-emerald-50/10 active:scale-[0.98] transition-all text-left shadow-sm"
-                  >
-                    <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100/50 flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all flex-shrink-0">
-                      <Play className="w-5 h-5 fill-amber-600 group-hover:fill-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider block mb-0.5 group-hover:text-amber-600 transition-colors">Luyện nghe (Listening)</span>
-                      <span className="text-[9px] font-medium text-slate-400 block line-clamp-1">Lắng nghe phát âm và chọn đáp án chính xác</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-all" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+            {/* Leaderboard Widget */}
+            {lbData && (
+              <LeaderboardWidget 
+                data={lbData} 
+                activeFilter={lbFilter} 
+                onFilterChange={setLbFilter} 
+              />
+            )}
           </div>
-        )}
 
-        {globalGoals && (
-          <GoalSettingsModal
-            isOpen={isGoalModalOpen}
-            onClose={() => setIsGoalModalOpen(false)}
-            initialTime={globalGoals.daily_time_target}
-            initialCard={globalGoals.daily_card_target}
-            initialNewCard={globalGoals.daily_new_card_target}
-            onSave={handleSaveGlobalGoals}
-          />
-        )}
-      </AnimatePresence>
+          {/* ─── MAIN CONTENT AREA (DESKTOP & MOBILE) ─────────────────────────── */}
+          <div className="lg:col-span-8 space-y-6">
+
+            {/* MOBILE: ROADMAP TAB OR DESKTOP HERO */}
+            {(mobileTab === 'roadmap' || window.innerWidth >= 1024) && (
+              <div className="space-y-6">
+                
+                {/* 1. ROADMAP QUIZZES SECTION */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <Compass className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                          Lộ Trình Học Tập ({roadmapQuizzes.length})
+                        </h2>
+                        <p className="text-xs text-slate-400 font-medium">Pipeline luyện tập câu hỏi hàng ngày</p>
+                      </div>
+                    </div>
+                    
+                    <Link
+                      to="/library"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-black text-xs flex items-center gap-1 active:scale-95 transition-all shadow-2xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Thêm bộ đề</span>
+                    </Link>
+                  </div>
+
+                  {isRoadmapLoading ? (
+                    <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/90 shadow-sm space-y-3">
+                      <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                      <p className="text-xs font-bold text-slate-400">Đang tải Lộ Trình của bạn...</p>
+                    </div>
+                  ) : roadmapQuizzes.length === 0 ? (
+                    <div className="bg-white rounded-3xl p-8 sm:p-12 text-center border border-slate-200/90 shadow-sm space-y-4">
+                      <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+                        🗺️
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-base font-black text-slate-900">Chưa Kích Hoạt Lộ Trình Nào</h3>
+                        <p className="text-xs text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
+                          Chọn bộ đề bạn muốn ôn luyện để thiết lập mục tiêu hàng ngày, làm bài kiểm tra và duy trì chuỗi Streak ngọn lửa!
+                        </p>
+                      </div>
+                      <Link
+                        to="/library"
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-indigo-200 transition-all inline-block active:scale-95"
+                      >
+                        Vào Thư Viện Chọn Bộ Đề 📚
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {roadmapQuizzes.map((item, idx) => {
+                        const st = item.status || {}
+                        const isDone = Boolean(st.all_done)
+                        const pipeline = st.pipeline || []
+                        const deckStreak = st.streak || 0
+                        const currentStepIdx = st.current_step_index ?? 0
+
+                        // Mascot calculation
+                        let mascotImg = '/mascot/sleepy.png'
+                        let mascotLine1 = 'Hôm nay bạn chưa làm câu nào,'
+                        let mascotLine2 = 'bắt đầu thôi! 🚀'
+
+                        if (isDone) {
+                          mascotImg = '/mascot/celebrating.png'
+                          mascotLine1 = 'Xuất sắc!'
+                          mascotLine2 = 'Đã hoàn thành lộ trình hôm nay! 🎉'
+                        } else if (st.stage_1_done) {
+                          mascotImg = '/mascot/excited.png'
+                          mascotLine1 = 'Đang bùng cháy!'
+                          mascotLine2 = 'Tiếp tục giữ vững tiến độ nhé 🔥'
+                        } else if ((st.new_learned_today || 0) > 0 || (st.review_completed_today || 0) > 0) {
+                          mascotImg = '/mascot/excited.png'
+                          mascotLine1 = 'Khởi đầu tốt lắm!'
+                          mascotLine2 = 'Cố gắng hoàn thành các bước hôm nay 💪'
+                        }
+
+                        return (
+                          <div
+                            key={item.quiz_id || item.deck_id || idx}
+                            className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md"
+                          >
+                            {/* Subheader bar */}
+                            <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-700">Roadmap</span>
+                                <span className="text-slate-400">{idx + 1} / {roadmapQuizzes.length}</span>
+                              </div>
+                              <Link
+                                to={`/quiz/${item.quiz_id || item.deck_id}/roadmap`}
+                                className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <span>Chi tiết</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+
+                            {/* HERO MASCOT CARD (3 DISTINCT CLEAN ROWS) */}
+                            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-100/50 relative overflow-hidden flex flex-row items-center justify-between min-h-[160px]">
+                              
+                              {/* Left Column */}
+                              <div className="relative z-20 flex-1 max-w-[68%] sm:max-w-[72%] min-w-0 flex flex-col justify-center gap-2.5 py-1">
+                                
+                                {/* TOP BADGES: 3 DISTINCT CLEAN ROWS */}
+                                <div className="flex flex-col gap-2">
+                                  {/* DÒNG 1: 🔥 Streak & ⏱️ Thời gian còn lại */}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {/* 🔥 STREAK BADGE */}
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white rounded-full text-xs font-black shadow-xs shrink-0">
+                                      <span className="text-xs">🔥</span>
+                                      <span>{deckStreak} ngày streak</span>
+                                    </div>
+
+                                    {/* ⏱️ COUNTDOWN BADGE */}
+                                    {!isDone ? (
+                                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-900 border border-amber-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
+                                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                        <span>Còn {remainingTime}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
+                                        <span className="text-xs">✓</span>
+                                        <span>Đã xong hôm nay</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* DÒNG 2: 📖 Tên bộ đề */}
+                                  <div className="flex items-center max-w-full">
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900/95 text-white rounded-xl text-xs font-bold shadow-xs max-w-full">
+                                      <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <span className="truncate max-w-[280px] sm:max-w-[400px] font-extrabold text-white">{item.title}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* DÒNG 3: 🎓 Đã học / Tổng số & 📅 Ngày dự kiến xong */}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {/* 🎓 LEARNED BADGE */}
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0" title="Số câu đã thuộc / Tổng số câu">
+                                      <span className="text-xs">🎓</span>
+                                      <span>{st.learned_questions || st.learned_cards || 0}/{st.total_questions || st.total_cards || 0}</span>
+                                    </div>
+
+                                    {/* 📅 ESTIMATED COMPLETION DATE */}
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/15 text-indigo-950 border border-indigo-300/80 rounded-full text-xs font-black shadow-2xs shrink-0" title="Ngày dự kiến hoàn thành bộ đề">
+                                      <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                      <span>Dự kiến: {st.estimated_completion_date || '—'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* SLOGAN TEXT */}
+                                <div className="flex flex-col gap-1 mt-0.5">
+                                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+                                    {mascotLine1}
+                                  </h2>
+                                  <p className="text-xs sm:text-base text-slate-500 font-medium leading-relaxed">
+                                    {mascotLine2}
+                                  </p>
+                                </div>
+
+                              </div>
+
+                              {/* Right Mascot Image */}
+                              <div className="w-[45%] max-w-[260px] absolute right-2 sm:right-4 bottom-0 top-0 flex items-end justify-center pointer-events-none z-10">
+                                <motion.img 
+                                  key={mascotImg}
+                                  initial={{ scale: 0.9, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  transition={{ duration: 0.3 }}
+                                  src={mascotImg} 
+                                  alt="QuizMind Mascot" 
+                                  className="h-[105%] max-h-[280px] w-auto max-w-none object-contain object-bottom drop-shadow-2xl translate-y-1"
+                                />
+                              </div>
+
+                            </div>
+
+                            {/* Daily Pipeline Stepper Dots */}
+                            <div className="p-4 space-y-3 bg-white">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                                <span>Các bước luyện tập hôm nay</span>
+                                <span className="text-indigo-600">{isDone ? 'Hoàn thành' : `Bước ${currentStepIdx + 1}/${pipeline.length}`}</span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {pipeline.map((step: any, sIdx: number) => {
+                                  const isCurrent = sIdx === currentStepIdx && !isDone
+                                  const stepDone = step.done
+
+                                  return (
+                                    <div
+                                      key={step.id || sIdx}
+                                      className={cn(
+                                        "p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-between gap-2 transition-all",
+                                        stepDone
+                                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                          : isCurrent
+                                            ? "bg-indigo-50 text-indigo-800 border-indigo-300 ring-2 ring-indigo-500/20 animate-pulse"
+                                            : "bg-slate-50 text-slate-400 border-slate-200"
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <span>{stepDone ? '✓' : `${sIdx + 1}.`}</span>
+                                        <span className="truncate">{step.label}</span>
+                                      </div>
+                                      {stepDone && <span className="text-[10px] font-black text-emerald-600 shrink-0">Xong</span>}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+
+                              {/* Big Continue CTA Button */}
+                              <button
+                                onClick={() => navigate(st.next_action_url || `/quiz/${item.quiz_id || item.deck_id}/play?mode=roadmap`)}
+                                className={cn(
+                                  "w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98",
+                                  isDone
+                                    ? "bg-slate-900 hover:bg-slate-800 text-white"
+                                    : "bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500 hover:from-indigo-700 hover:to-rose-600 text-white shadow-indigo-200"
+                                )}
+                              >
+                                <Play className="w-4 h-4 fill-white" />
+                                <span>{st.next_action_label || 'Tiếp Tục Lộ Trình 🚀'}</span>
+                              </button>
+                            </div>
+
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. DAILY COMPARISON CHART */}
+                <DailyComparisonChart 
+                  data={dailyComparisonData?.days} 
+                  allTimeAvg={dailyComparisonData?.all_time_avg} 
+                  isLoading={isDailyCompLoading} 
+                />
+
+                {/* 3. ACHIEVEMENTS & BADGES */}
+                {badgesData && badgesData.length > 0 && (
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-black text-slate-900">Huy Hiệu Thành Tích 🏆</h3>
+                        <p className="text-xs text-slate-400 font-medium">Hoàn thành thử thách để mở khóa huy hiệu</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {badgesData.slice(0, 4).map((badge: any) => (
+                        <div
+                          key={badge.id}
+                          className={cn(
+                            "p-3.5 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all",
+                            badge.unlocked
+                              ? "bg-amber-50/50 border-amber-200 shadow-2xs"
+                              : "bg-slate-50 border-slate-200/60 opacity-60"
+                          )}
+                        >
+                          <div className="text-3xl">{badge.icon || '🎖️'}</div>
+                          <div>
+                            <h4 className="text-xs font-black text-slate-800">{badge.name}</h4>
+                            <p className="text-[10px] text-slate-400 line-clamp-1">{badge.description}</p>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"
+                              style={{ width: `${Math.min(100, badge.percentage || 0)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+
+            {/* MOBILE: BỘ ĐỀ TAB */}
+            {mobileTab === 'decks' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-black text-slate-900">Khám Phá Bộ Đề 📚</h2>
+                  <Link to="/library" className="text-xs font-bold text-indigo-600 hover:underline">Vào Thư Viện</Link>
+                </div>
+                <p className="text-xs text-slate-500">Tìm kiếm và luyện tập các bộ đề trắc nghiệm đa dạng chủ đề.</p>
+                <Link
+                  to="/library"
+                  className="block p-6 rounded-3xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md text-center space-y-2"
+                >
+                  <BookOpen className="w-8 h-8 mx-auto" />
+                  <h3 className="text-base font-black">Khám Phá Tất Cả Bộ Đề</h3>
+                  <p className="text-xs text-indigo-100">Chọn đề thi JLPT, IT, Tiếng Anh và bắt đầu học ngay!</p>
+                </Link>
+              </div>
+            )}
+
+            {/* MOBILE: THỐNG KÊ TAB */}
+            {mobileTab === 'stats' && (
+              <div className="space-y-5">
+                <MiniHeatmap data={heatmapData} />
+                <DailyComparisonChart 
+                  data={dailyComparisonData?.days} 
+                  allTimeAvg={dailyComparisonData?.all_time_avg} 
+                  isLoading={isDailyCompLoading} 
+                />
+              </div>
+            )}
+
+            {/* MOBILE: XẾP HẠNG TAB */}
+            {mobileTab === 'rank' && lbData && (
+              <LeaderboardWidget 
+                data={lbData} 
+                activeFilter={lbFilter} 
+                onFilterChange={setLbFilter} 
+              />
+            )}
+
+          </div>
+
+        </div>
+      </div>
+
     </div>
   )
 }

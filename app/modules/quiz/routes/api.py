@@ -1873,3 +1873,697 @@ async def get_speed_accuracy_stats(request: Request, db: AsyncSession = Depends(
         "total_answers_analyzed": total_answers_analyzed
     }
 
+
+# =========================================================================
+# ROADMAP SYSTEM & PIPELINE ENGINE FOR QUIZMIND
+# =========================================================================
+
+from datetime import date, datetime, timedelta
+import math
+
+async def get_request_user_id(request: Request, db: AsyncSession) -> int:
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if user:
+        return user.id
+    raw_uid = request.cookies.get("user_id")
+    if raw_uid:
+        try:
+            from app.modules.sso_module.cookie_signer import unsign_cookie
+            from app.core.config import settings
+            unsigned = unsign_cookie(raw_uid, settings.SECRET_KEY)
+            if unsigned:
+                return int(unsigned)
+            return int(raw_uid)
+        except Exception:
+            pass
+    return 1
+
+
+async def get_quiz_roadmap_status_helper(
+    db: AsyncSession,
+    user_id: int,
+    quiz_id: int,
+    settings: dict,
+    target_date_str: Optional[str] = None
+) -> dict:
+    from app.modules.quiz.models import (
+        Quiz, Question, QuizAttempt, UserAnswer,
+        UserQuizGoal, UserDailyProgress, UserQuestionMastery
+    )
+
+    today_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
+    today_str = today_date.isoformat()
+    today_start = datetime(today_date.year, today_date.month, today_date.day, 0, 0, 0)
+    today_end = datetime(today_date.year, today_date.month, today_date.day, 23, 59, 59)
+
+    # 1. Fetch Quiz & Questions
+    quiz_res = await db.execute(
+        select(Quiz).options(selectinload(Quiz.questions).selectinload(Question.options)).where(Quiz.id == quiz_id)
+    )
+    quiz_obj = quiz_res.scalar_one_or_none()
+    questions = quiz_obj.questions if quiz_obj else []
+    total_questions = len(questions)
+    question_ids = [q.id for q in questions]
+
+    # 2. Fetch or Create UserQuizGoal
+    goal_res = await db.execute(
+        select(UserQuizGoal).where(UserQuizGoal.user_id == user_id, UserQuizGoal.quiz_id == quiz_id)
+    )
+    goal = goal_res.scalar_one_or_none()
+    if not goal:
+        goal = UserQuizGoal(
+            user_id=user_id,
+            quiz_id=quiz_id,
+            daily_target=settings.get("roadmap_daily_new", 10),
+            daily_time_target=10,
+            daily_card_target=settings.get("roadmap_daily_new", 10),
+            streak_count=0
+        )
+        db.add(goal)
+        await db.flush()
+
+    # 3. Settings & Pipeline
+    roadmap_active = settings.get("roadmap_active", False)
+    roadmap_type = settings.get("roadmap_type", "daily")
+    roadmap_daily_new = settings.get("roadmap_daily_new", 10)
+    roadmap_daily_review_max = settings.get("roadmap_daily_review_max", 30)
+    roadmap_pass_threshold = settings.get("roadmap_pass_threshold", 80)
+
+    pipeline = settings.get("pipeline")
+    if not pipeline or not isinstance(pipeline, list):
+        pipeline = [
+            {"id": "step_new", "type": "new_cards", "label": "Học câu mới", "daily_count": roadmap_daily_new},
+            {"id": "step_mcq", "type": "mcq", "label": "Bài kiểm tra MCQ", "question_count": roadmap_daily_new, "pass_threshold": roadmap_pass_threshold},
+            {"id": "step_review", "type": "review", "label": "Ôn tập củng cố", "max_count": roadmap_daily_review_max}
+        ]
+
+    # 4. Learned questions count (box_level >= 2)
+    mastery_map = {}
+    if question_ids:
+        mastery_res = await db.execute(
+            select(UserQuestionMastery.question_id, UserQuestionMastery.box_level)
+            .where(
+                UserQuestionMastery.user_id == user_id,
+                UserQuestionMastery.question_id.in_(question_ids)
+            )
+        )
+        mastery_map = {r[0]: r[1] for r in mastery_res.all()}
+    learned_questions = sum(1 for qid in question_ids if mastery_map.get(qid, 1) >= 2)
+    unlearned_questions = max(0, total_questions - learned_questions)
+
+    # 5. Activity today
+    ans_today_res = await db.execute(
+        select(UserAnswer.question_id, UserAnswer.is_correct, UserAnswer.active_time)
+        .join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)
+        .where(
+            QuizAttempt.user_id == user_id,
+            QuizAttempt.quiz_id == quiz_id,
+            UserAnswer.created_at >= today_start,
+            UserAnswer.created_at <= today_end
+        )
+    )
+    answers_today = ans_today_res.all()
+    answered_qids_today = set(r[0] for r in answers_today)
+    new_learned_today = sum(1 for qid in answered_qids_today if mastery_map.get(qid, 1) >= 2)
+    if new_learned_today == 0 and len(answered_qids_today) > 0:
+        new_learned_today = min(len(answered_qids_today), roadmap_daily_new)
+
+    # Review questions due today (box_level between 1 and 4)
+    review_due_today = sum(1 for qid in question_ids if 1 <= mastery_map.get(qid, 0) < 5)
+    review_completed_today = sum(1 for r in answers_today if r[1] is True)
+
+    # MCQ Test results today
+    mcq_attempts_res = await db.execute(
+        select(QuizAttempt)
+        .where(
+            QuizAttempt.user_id == user_id,
+            QuizAttempt.quiz_id == quiz_id,
+            QuizAttempt.mode.in_(["roadmap_test", "roadmap_mcq", "mcq", "exam"]),
+            QuizAttempt.started_at >= today_start,
+            QuizAttempt.started_at <= today_end
+        )
+        .order_by(QuizAttempt.score.desc())
+    )
+    best_mcq_attempt = mcq_attempts_res.scalars().first()
+    best_score_today = best_mcq_attempt.score if best_mcq_attempt else 0
+    mcq_passed_today = best_score_today >= roadmap_pass_threshold
+
+    # 6. Process each pipeline step
+    pipeline_processed = []
+    first_incomplete_idx = None
+
+    for idx, step in enumerate(pipeline):
+        st_type = step.get("type")
+        is_done = False
+        progress_info = {}
+
+        if st_type == "new_cards":
+            target = step.get("daily_count", roadmap_daily_new)
+            is_done = new_learned_today >= target or unlearned_questions == 0
+            progress_info = {"done": new_learned_today, "target": target}
+            url = f"/quiz/{quiz_id}/play?mode=roadmap_new"
+            label = step.get("label", "Học câu mới")
+        elif st_type in ("mcq", "typing"):
+            target = step.get("question_count", roadmap_daily_new)
+            threshold = step.get("pass_threshold", roadmap_pass_threshold)
+            is_done = mcq_passed_today
+            progress_info = {"best_score": best_score_today, "threshold": threshold, "target": target}
+            url = f"/quiz/{quiz_id}/play?mode=roadmap_test"
+            label = step.get("label", "Bài test MCQ")
+        elif st_type == "review":
+            target = min(review_due_today, step.get("max_count", roadmap_daily_review_max))
+            is_done = review_completed_today >= target or review_due_today == 0
+            progress_info = {"done": review_completed_today, "due": review_due_today, "target": target}
+            url = f"/quiz/{quiz_id}/play?mode=roadmap_review"
+            label = step.get("label", "Ôn tập củng cố")
+        else:
+            is_done = True
+            url = f"/quiz/{quiz_id}/play?mode=roadmap"
+            label = step.get("label", "Luyện tập")
+
+        if not is_done and first_incomplete_idx is None:
+            first_incomplete_idx = idx
+
+        pipeline_processed.append({
+            **step,
+            "done": is_done,
+            "url": url,
+            "label": label,
+            "progress": progress_info
+        })
+
+    all_done = all(st["done"] for st in pipeline_processed) if pipeline_processed else False
+
+    # 7. Update UserDailyProgress & Consecutive Streak
+    if not target_date_str:
+        prog_res = await db.execute(
+            select(UserDailyProgress).where(
+                UserDailyProgress.goal_id == goal.id,
+                UserDailyProgress.date == today_str
+            )
+        )
+        prog = prog_res.scalar_one_or_none()
+        if not prog:
+            prog = UserDailyProgress(
+                goal_id=goal.id,
+                date=today_str,
+                count_done=new_learned_today + review_completed_today,
+                is_target_met=all_done
+            )
+            db.add(prog)
+        else:
+            prog.count_done = new_learned_today + review_completed_today
+            prog.is_target_met = all_done
+
+        if all_done:
+            goal.last_completed_date = today_str
+
+        all_progs_res = await db.execute(
+            select(UserDailyProgress.date)
+            .where(UserDailyProgress.goal_id == goal.id, UserDailyProgress.is_target_met == True)
+            .order_by(UserDailyProgress.date.desc())
+        )
+        met_date_strings = all_progs_res.scalars().all()
+        met_dates = []
+        for d_str in met_date_strings:
+            try:
+                d_obj = date.fromisoformat(d_str)
+                if d_obj == today_date and not all_done:
+                    continue
+                met_dates.append(d_obj)
+            except Exception:
+                pass
+
+        if not met_dates:
+            streak = 0
+        else:
+            most_recent = met_dates[0]
+            if most_recent != today_date and most_recent != (today_date - timedelta(days=1)):
+                streak = 0
+            else:
+                streak = 1
+                curr = most_recent
+                for d in met_dates[1:]:
+                    diff = (curr - d).days
+                    if diff == 1:
+                        streak += 1
+                        curr = d
+                    elif diff == 0:
+                        continue
+                    else:
+                        break
+
+        goal.streak_count = streak
+        await db.commit()
+    else:
+        streak = goal.streak_count or 0
+
+    # 8. Estimated Completion Date
+    if roadmap_type == "accumulation":
+        estimated_completion_date = "Tích lũy vô tận"
+        days_left = 999
+    elif unlearned_questions == 0:
+        estimated_completion_date = "Đã hoàn thành"
+        days_left = 0
+    else:
+        daily_target = roadmap_daily_new if roadmap_daily_new > 0 else 10
+        days_left = math.ceil(unlearned_questions / daily_target)
+        target_finish_date = today_date + timedelta(days=days_left)
+        estimated_completion_date = target_finish_date.strftime("%d/%m/%Y")
+
+    if len(pipeline_processed) > 0 and first_incomplete_idx is None:
+        current_step_index = len(pipeline_processed)
+        next_action_url = f"/quiz/{quiz_id}/roadmap"
+        next_action_label = "Đã xong lộ trình hôm nay"
+    elif len(pipeline_processed) > 0:
+        current_step_index = first_incomplete_idx
+        next_action_url = pipeline_processed[first_incomplete_idx]["url"]
+        next_action_label = pipeline_processed[first_incomplete_idx]["label"]
+    else:
+        current_step_index = 0
+        next_action_url = f"/quiz/{quiz_id}/roadmap"
+        next_action_label = "Chưa thiết lập lộ trình"
+
+    new_cards_step = next((st for st in pipeline_processed if st.get("type") == "new_cards"), None)
+    stage_1_done = new_cards_step["done"] if new_cards_step else True
+
+    test_step = next((st for st in pipeline_processed if st.get("type") in ("mcq", "typing")), None)
+    stage_2_done = test_step["done"] if test_step else False
+
+    retention_rate = round((learned_questions / total_questions * 100)) if total_questions > 0 else 0
+
+    return {
+        "quiz_id": quiz_id,
+        "deck_id": quiz_id,
+        "quiz_title": quiz_obj.title if quiz_obj else None,
+        "deck_title": quiz_obj.title if quiz_obj else None,
+        "cover_image": quiz_obj.cover_image if quiz_obj else None,
+        "roadmap_active": roadmap_active,
+        "pipeline": pipeline_processed,
+        "current_step_index": current_step_index,
+        "all_done": all_done,
+        "next_action_url": next_action_url,
+        "next_action_label": next_action_label,
+        "stage_1_done": stage_1_done,
+        "stage_2_done": stage_2_done,
+        "new_learned_today": new_learned_today,
+        "new_target_today": roadmap_daily_new,
+        "review_completed_today": review_completed_today,
+        "review_due_today": review_due_today,
+        "roadmap_daily_new": roadmap_daily_new,
+        "roadmap_pass_threshold": roadmap_pass_threshold,
+        "total_cards": total_questions,
+        "total_questions": total_questions,
+        "learned_cards": learned_questions,
+        "learned_questions": learned_questions,
+        "unlearned_cards": unlearned_questions,
+        "unlearned_questions": unlearned_questions,
+        "days_left": days_left,
+        "estimated_completion_date": estimated_completion_date,
+        "retention_rate": retention_rate,
+        "streak": streak
+    }
+
+
+@router.get("/{quiz_id}/roadmap-status")
+async def get_quiz_roadmap_status(
+    request: Request,
+    quiz_id: int,
+    target_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.modules.quiz.models import UserQuizSettings
+    user_id = await get_request_user_id(request, db)
+
+    user_sett_res = await db.execute(
+        select(UserQuizSettings).where(
+            UserQuizSettings.user_id == user_id,
+            UserQuizSettings.quiz_id == quiz_id
+        )
+    )
+    user_sett = user_sett_res.scalar_one_or_none()
+    settings = user_sett.settings if (user_sett and user_sett.settings) else {}
+
+    status = await get_quiz_roadmap_status_helper(db, user_id, quiz_id, settings, target_date_str=target_date)
+    return status
+
+
+@router.get("/roadmap/decks")
+@router.get("/roadmap/quizzes")
+async def get_roadmap_quizzes(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz, UserQuizSettings
+    user_id = await get_request_user_id(request, db)
+
+    user_setts_res = await db.execute(
+        select(UserQuizSettings).where(UserQuizSettings.user_id == user_id)
+    )
+
+    active_roadmaps = []
+    active_quiz_ids = []
+    user_setts_map = {}
+
+    for sett in user_setts_res.scalars().all():
+        s = sett.settings or {}
+        user_setts_map[sett.quiz_id] = s
+        if s.get("roadmap_active") is True:
+            active_quiz_ids.append(sett.quiz_id)
+
+    if active_quiz_ids:
+        quizzes_res = await db.execute(
+            select(Quiz).where(Quiz.id.in_(active_quiz_ids))
+        )
+        quizzes = quizzes_res.scalars().all()
+
+        for quiz in quizzes:
+            u_sett = user_setts_map.get(quiz.id, {})
+            creator_sett = quiz.practice_settings if isinstance(quiz.practice_settings, dict) else {}
+            merged_settings = {**creator_sett, **u_sett, "roadmap_active": True}
+            status = await get_quiz_roadmap_status_helper(db, user_id, quiz.id, merged_settings)
+            active_roadmaps.append({
+                "quiz_id": quiz.id,
+                "deck_id": quiz.id,
+                "title": quiz.title,
+                "description": quiz.description,
+                "cover_image": quiz.cover_image,
+                "status": status
+            })
+
+    return {"decks": active_roadmaps, "quizzes": active_roadmaps}
+
+
+@router.get("/{quiz_id}/roadmap-calendar")
+async def get_quiz_roadmap_calendar(
+    request: Request,
+    quiz_id: int,
+    month: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get calendar heatmap data for a month (YYYY-MM)."""
+    user_id = await get_request_user_id(request, db)
+    from app.modules.quiz.models import Question, QuizAttempt, UserAnswer, UserQuizGoal, UserDailyProgress, UserQuizSettings
+    import calendar as cal_mod
+
+    try:
+        year, month_num = int(month.split("-")[0]), int(month.split("-")[1])
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid month format. Use YYYY-MM."})
+
+    _, days_in_month = cal_mod.monthrange(year, month_num)
+
+    goal_res = await db.execute(
+        select(UserQuizGoal).where(UserQuizGoal.user_id == user_id, UserQuizGoal.quiz_id == quiz_id)
+    )
+    quiz_goal = goal_res.scalar_one_or_none()
+    daily_card_target = quiz_goal.daily_card_target if (quiz_goal and quiz_goal.daily_card_target) else 20
+
+    user_sett_res = await db.execute(
+        select(UserQuizSettings).where(UserQuizSettings.user_id == user_id, UserQuizSettings.quiz_id == quiz_id)
+    )
+    user_sett = user_sett_res.scalar_one_or_none()
+    settings = user_sett.settings if (user_sett and user_sett.settings) else {}
+
+    month_start = datetime(year, month_num, 1)
+    month_end = datetime(year, month_num, days_in_month, 23, 59, 59)
+    month_start_str = month_start.strftime("%Y-%m-%d")
+    month_end_str = month_end.strftime("%Y-%m-%d")
+
+    progress_records_map = {}
+    if quiz_goal:
+        progress_res = await db.execute(
+            select(UserDailyProgress)
+            .where(
+                UserDailyProgress.goal_id == quiz_goal.id,
+                UserDailyProgress.date >= month_start_str,
+                UserDailyProgress.date <= month_end_str
+            )
+        )
+        progress_records_map = {p.date: p for p in progress_res.scalars().all()}
+
+    daily_study_res = await db.execute(
+        select(
+            func.date(UserAnswer.created_at).label("day"),
+            func.sum(UserAnswer.active_time).label("total_time"),
+            func.count(UserAnswer.id).label("answer_count")
+        )
+        .join(Question, UserAnswer.question_id == Question.id)
+        .join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)
+        .where(
+            Question.quiz_id == quiz_id,
+            QuizAttempt.user_id == user_id,
+            UserAnswer.created_at >= month_start,
+            UserAnswer.created_at <= month_end
+        )
+        .group_by(func.date(UserAnswer.created_at))
+    )
+    daily_data = {}
+    for row in daily_study_res.all():
+        day_val = row[0]
+        day_key = str(day_val)
+        daily_data[day_key] = {
+            "study_seconds": float(row[1] or 0),
+            "answer_count": int(row[2] or 0)
+        }
+
+    days = []
+    for d in range(1, days_in_month + 1):
+        day_date = date(year, month_num, d)
+        day_str = day_date.isoformat()
+        info = daily_data.get(day_str, {"study_seconds": 0, "answer_count": 0})
+        is_active = info["answer_count"] > 0
+        study_minutes = round(info["study_seconds"] / 60.0, 1)
+
+        p_record = progress_records_map.get(day_str)
+        is_target_met = getattr(p_record, "is_target_met", False) if p_record else False
+
+        completion_percent = 0
+        if is_target_met:
+            completion_percent = 100
+        elif is_active:
+            if settings.get("roadmap_active"):
+                st = await get_quiz_roadmap_status_helper(db, user_id, quiz_id, settings, target_date_str=day_str)
+                completion_percent = 100 if st.get("all_done") else 50
+            else:
+                completion_percent = 100 if info["answer_count"] >= daily_card_target else 50
+
+        days.append({
+            "date": day_str,
+            "day_of_week": day_date.weekday(),
+            "active": is_active or is_target_met,
+            "is_target_met": is_target_met,
+            "completion_percent": completion_percent,
+            "study_minutes": study_minutes,
+            "answer_count": info["answer_count"]
+        })
+
+    return {"month": month, "days": days}
+
+
+@router.get("/{quiz_id}/practice-settings")
+async def get_quiz_practice_settings(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz, UserQuizSettings
+    user_id = await get_request_user_id(request, db)
+
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+
+    user_sett_res = await db.execute(
+        select(UserQuizSettings).where(
+            UserQuizSettings.user_id == user_id,
+            UserQuizSettings.quiz_id == quiz_id
+        )
+    )
+    user_sett = user_sett_res.scalar_one_or_none()
+
+    return {
+        "creator_settings": quiz.practice_settings or {},
+        "user_settings": user_sett.settings if (user_sett and user_sett.settings) else {},
+        "available_columns": ["content", "explanation", "options"]
+    }
+
+
+@router.post("/{quiz_id}/practice-settings")
+async def save_quiz_practice_settings(
+    request: Request,
+    quiz_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.modules.quiz.models import Quiz, UserQuizSettings
+    user_id = await get_request_user_id(request, db)
+
+    settings_data = payload.get("settings", {})
+    is_creator = payload.get("is_creator", False)
+
+    if is_creator:
+        quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+        if quiz and (quiz.creator_id == user_id or user_id == 1):
+            quiz.practice_settings = settings_data
+            await db.commit()
+
+    user_sett_res = await db.execute(
+        select(UserQuizSettings).where(
+            UserQuizSettings.user_id == user_id,
+            UserQuizSettings.quiz_id == quiz_id
+        )
+    )
+    user_sett = user_sett_res.scalar_one_or_none()
+
+    if not user_sett:
+        user_sett = UserQuizSettings(
+            user_id=user_id,
+            quiz_id=quiz_id,
+            settings=settings_data
+        )
+        db.add(user_sett)
+    else:
+        user_sett.settings = settings_data
+
+    await db.commit()
+    return {"status": "success", "settings": settings_data}
+
+
+@router.get("/{quiz_id}/roadmap-test-questions")
+async def get_quiz_roadmap_test_questions(
+    request: Request,
+    quiz_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = await get_request_user_id(request, db)
+    from app.modules.quiz.models import Quiz, Question, Option, UserQuestionMastery
+    import random
+
+    quiz_res = await db.execute(
+        select(Quiz).options(selectinload(Quiz.questions).selectinload(Question.options)).where(Quiz.id == quiz_id)
+    )
+    quiz = quiz_res.scalar_one_or_none()
+    if not quiz or not quiz.questions:
+        return {"questions": []}
+
+    all_questions = list(quiz.questions)
+    random.shuffle(all_questions)
+    test_questions = all_questions[:min(20, len(all_questions))]
+
+    return {
+        "quiz_id": quiz.id,
+        "title": quiz.title,
+        "questions": [
+            {
+                "id": q.id,
+                "content": q.content,
+                "explanation": q.explanation,
+                "options": [
+                    {"id": o.id, "content": o.content, "is_correct": o.is_correct}
+                    for o in q.options
+                ]
+            }
+            for q in test_questions
+        ]
+    }
+
+
+@router.post("/{quiz_id}/roadmap-test-submit")
+async def submit_quiz_roadmap_test(
+    request: Request,
+    quiz_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = await get_request_user_id(request, db)
+    from app.modules.quiz.models import QuizAttempt, UserAnswer, UserQuizGoal, UserDailyProgress, UserQuizSettings
+    from app.modules.gamification.interface import GamificationInterface
+
+    answers = payload.get("answers", [])
+    time_spent = payload.get("time_spent_seconds", 0)
+
+    total_q = len(answers)
+    correct_count = sum(1 for a in answers if a.get("is_correct") is True)
+    score_pct = round((correct_count / total_q * 100)) if total_q > 0 else 0
+
+    user_sett_res = await db.execute(
+        select(UserQuizSettings).where(UserQuizSettings.user_id == user_id, UserQuizSettings.quiz_id == quiz_id)
+    )
+    user_sett = user_sett_res.scalar_one_or_none()
+    settings = user_sett.settings if (user_sett and user_sett.settings) else {}
+    pass_threshold = settings.get("roadmap_pass_threshold", 80)
+    passed = score_pct >= pass_threshold
+
+    attempt = QuizAttempt(
+        user_id=user_id,
+        quiz_id=quiz_id,
+        mode="roadmap_test",
+        score=score_pct,
+        total_questions=total_q,
+        completed_at=datetime.utcnow()
+    )
+    db.add(attempt)
+    await db.flush()
+
+    for a in answers:
+        ua = UserAnswer(
+            attempt_id=attempt.id,
+            question_id=a.get("card_id") or a.get("question_id"),
+            selected_option_id=a.get("selected_option_id"),
+            is_correct=a.get("is_correct", False),
+            active_time=float(a.get("active_time", 2))
+        )
+        db.add(ua)
+
+    xp_gained = 30 if passed else 10
+    await GamificationInterface.award_xp(db, user_id, xp_gained)
+
+    await db.commit()
+
+    return {
+        "status": "success",
+        "passed": passed,
+        "score": score_pct,
+        "correct_count": correct_count,
+        "total_questions": total_q,
+        "pass_threshold": pass_threshold,
+        "xp_gained": xp_gained
+    }
+
+
+@router.post("/{quiz_id}/roadmap-test-reset")
+async def reset_quiz_roadmap_test(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+    return {"status": "success"}
+
+
+@router.post("/{quiz_id}/roadmap-test-save-progress")
+async def save_quiz_roadmap_test_progress(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
+    return {"status": "success"}
+
+
+@router.get("/today-review")
+async def get_today_review_quizzes(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz, UserQuestionMastery, Question
+    user_id = await get_request_user_id(request, db)
+
+    due_res = await db.execute(
+        select(Question.quiz_id, func.count(Question.id))
+        .join(UserQuestionMastery, Question.id == UserQuestionMastery.question_id)
+        .where(
+            UserQuestionMastery.user_id == user_id,
+            UserQuestionMastery.box_level < 5
+        )
+        .group_by(Question.quiz_id)
+    )
+    due_map = {row[0]: row[1] for row in due_res.all()}
+
+    quizzes = []
+    if due_map:
+        q_res = await db.execute(select(Quiz).where(Quiz.id.in_(list(due_map.keys()))))
+        for q in q_res.scalars().all():
+            quizzes.append({
+                "quiz_id": q.id,
+                "deck_id": q.id,
+                "title": q.title,
+                "cover_image": q.cover_image,
+                "due_count": due_map.get(q.id, 0)
+            })
+
+    return {"quizzes": quizzes, "decks": quizzes}
+
+

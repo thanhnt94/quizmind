@@ -452,7 +452,8 @@ async def login_api(
     from app.modules.sso_module.cookie_signer import sign_cookie
     from app.core.config import settings
     signed_id = sign_cookie(str(user.id), settings.SECRET_KEY)
-    response.set_cookie(key="user_id", value=signed_id, httponly=True, path="/", samesite="lax", max_age=1800)
+    # 30-day session login (2,592,000 seconds)
+    response.set_cookie(key="user_id", value=signed_id, httponly=True, path="/", samesite="lax", max_age=2592000)
     return {
         "status": "success",
         "user": {

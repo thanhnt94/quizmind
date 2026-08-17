@@ -127,7 +127,8 @@ async def sso_callback(request: Request, code: Optional[str] = None, db: AsyncSe
     from app.modules.sso_module.cookie_signer import sign_cookie
     from app.core.config import settings
     signed_id = sign_cookie(str(user.id), settings.SECRET_KEY)
-    res.set_cookie(key="user_id", value=signed_id, httponly=True, path="/", samesite="lax", max_age=1800)
+    # 30-day session login (2,592,000 seconds)
+    res.set_cookie(key="user_id", value=signed_id, httponly=True, path="/", samesite="lax", max_age=2592000)
     return res
 
 from pydantic import BaseModel
