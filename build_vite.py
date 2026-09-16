@@ -28,10 +28,13 @@ def fix_lookbehinds(project_dir):
     if not found:
         print("  [+] No lookbehinds found in assets.")
 
+import shutil
+
 def build_frontend():
     """Builds the Vite frontend and outputs it to app/static/dist."""
     project_dir = os.path.dirname(os.path.abspath(__file__))
     frontend_dir = os.path.join(project_dir, "client")
+    dist_assets_dir = os.path.join(project_dir, "app", "static", "dist", "assets")
     
     if not os.path.exists(frontend_dir):
         print(" [!] Client directory not found.")
@@ -39,14 +42,29 @@ def build_frontend():
         
     print(f" [VITE] Building QuizMind Frontend at {frontend_dir}...")
     
+    if os.path.exists(dist_assets_dir):
+        print(" [VITE] Cleaning up stale dist assets...")
+        shutil.rmtree(dist_assets_dir, ignore_errors=True)
+        
+    npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+    
     try:
-        # Install dependencies if node_modules doesn't exist
-        if not os.path.exists(os.path.join(frontend_dir, "node_modules")):
+        # Install dependencies if node_modules or .bin doesn't exist
+        bin_check = os.path.join(frontend_dir, "node_modules", ".bin")
+        if not os.path.exists(bin_check) or not os.listdir(bin_check):
             print(" [VITE] Installing dependencies...")
-            subprocess.run(["npm", "install"], cwd=frontend_dir, shell=True, check=True)
+            subprocess.run([npm_cmd, "install"], cwd=frontend_dir, shell=(os.name == "nt"), check=True)
+            
+        # Run TypeScript verification
+        tsc_cmd = os.path.join(bin_check, "tsc.cmd" if os.name == "nt" else "tsc")
+        print(" [VITE] Running TypeScript type check...")
+        if os.path.exists(tsc_cmd):
+            subprocess.run([tsc_cmd, "-p", "tsconfig.app.json", "--noEmit"], cwd=frontend_dir, shell=(os.name == "nt"), check=True)
+        else:
+            subprocess.run(["node", "./node_modules/typescript/bin/tsc", "-p", "tsconfig.app.json", "--noEmit"], cwd=frontend_dir, shell=(os.name == "nt"), check=True)
             
         # Run build
-        subprocess.run(["npm", "run", "build"], cwd=frontend_dir, shell=True, check=True)
+        subprocess.run([npm_cmd, "run", "build"], cwd=frontend_dir, shell=(os.name == "nt"), check=True)
         
         # Run lookbehind fix directly
         fix_lookbehinds(project_dir)

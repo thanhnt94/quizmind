@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.db import Base
 
@@ -15,3 +16,33 @@ class User(Base):
     
     # SSO related
     sso_id = Column(String(255), unique=True, index=True, nullable=True)
+
+
+class UserGlobalSettings(Base):
+    __tablename__ = "user_global_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    
+    # UI Theme & System Preferences
+    theme = Column(String(20), default="light") # 'light' | 'dark'
+    focus_timer_active = Column(Boolean, default=True)
+    sfx_enabled = Column(Boolean, default=True)
+    haptic_enabled = Column(Boolean, default=True)
+    autoplay_audio = Column(String(20), default="never") # 'never' | 'always' | 'question'
+    
+    # Session & Quiz Modes
+    quiz_learning_mode = Column(String(50), default="mcq") # 'mcq' | 'missed' | 'new' | 'typing' | 'listening' | 'exam'
+    practice_range = Column(String(20), default="all") # 'all' | 'missed' | 'new'
+    score_mode = Column(String(20), default="all") # 'today' | 'all'
+    time_mode = Column(String(20), default="question") # 'question' | 'today' | 'all'
+    last_quiz_id = Column(Integer, nullable=True)
+    
+    # Home & Dashboard Display Preferences
+    home_active_tab = Column(String(20), default="roadmap") # 'roadmap' | 'quizzes'
+    roadmap_quiz_order = Column(JSON, nullable=True, default=list)
+    quizzes_quiz_order = Column(JSON, nullable=True, default=list)
+    
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User")
+

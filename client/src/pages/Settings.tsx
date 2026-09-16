@@ -17,32 +17,25 @@ import {
   Moon,
   Send
 } from 'lucide-react'
+import { useAppStore } from '@/store/useAppStore'
 
 const Settings = () => {
   const [telegramConfig, setTelegramConfig] = useState<any>(null)
-  
   const [pushActive, setPushActive] = useState(false)
   const [checkingPush, setCheckingPush] = useState(true)
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
-  const [focusTimer, setFocusTimer] = useState(() => localStorage.getItem('focus_timer_active') !== 'false')
+
+  const { userSettings, updateUserSettings } = useAppStore()
+  const darkMode = userSettings.theme === 'dark'
+  const focusTimer = userSettings.focus_timer_active
 
   const toggleDarkMode = () => {
-    const nextMode = !darkMode
-    setDarkMode(nextMode)
-    if (nextMode) {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
+    updateUserSettings({ theme: darkMode ? 'light' : 'dark' })
   }
 
   const toggleFocusTimer = () => {
-    const nextVal = !focusTimer
-    setFocusTimer(nextVal)
-    localStorage.setItem('focus_timer_active', String(nextVal))
+    updateUserSettings({ focus_timer_active: !focusTimer })
   }
+
 
   
   const fetchTelegramConfig = async () => {

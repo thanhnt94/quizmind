@@ -330,7 +330,7 @@ class AnalyticsService:
                 "total_time": user_time,
                 "is_current_user": True,
                 "out_of_top_5": True,
-            })
+                })
 
         return {
             "leaderboard": leaderboard,
@@ -338,3 +338,215 @@ class AnalyticsService:
             "time_leaderboard": time_leaderboard,
             "current_user_time_rank": current_user_time_rank,
         }
+
+    @staticmethod
+    async def get_daily_summary(db: AsyncSession, user_id: int, tz_offset: int = -420):
+        from sqlalchemy.orm import joinedload
+        from app.modules.quiz.models import UserQuizGoal, UserDailyProgress
+
+        now_utc = datetime.utcnow()
+        now_local = now_utc - timedelta(minutes=tz_offset)
+        today_local_date = now_local.date()
+        today_start_utc = datetime.combine(today_local_date, datetime.min.time()) + timedelta(minutes=tz_offset)
+        today_end_utc = today_start_utc + timedelta(days=1)
+
+        # 1. Fetch all user answers today with attempt info
+        answers_stmt = (
+            select(
+                UserAnswer.id,
+                UserAnswer.question_id,
+                UserAnswer.is_correct,
+                UserAnswer.active_time,
+                UserAnswer.created_at,
+                QuizAttempt.quiz_id,
+                QuizAttempt.mode,
+                QuizAttempt.id.label("attempt_id")
+            )
+            .join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)
+            .where(
+                QuizAttempt.user_id == user_id,
+                UserAnswer.created_at >= today_start_utc,
+                UserAnswer.created_at < today_end_utc
+            )
+            .order_by(UserAnswer.created_at.asc())
+        )
+        answers_res = await db.execute(answers_stmt)
+        today_answers = answers_res.all()
+
+        total_questions_studied = len(today_answers)
+        correct_count = sum(1 for a in today_answers if a.is_correct)
+        wrong_count = total_questions_studied - correct_count
+        accuracy = round((correct_count / total_questions_studied) * 100, 1) if total_questions_studied > 0 else 0
+        active_time_seconds = sum((a.active_time or 0.0) for a in today_answers)
+        study_minutes = round(active_time_seconds / 60.0, 1)
+
+        # 2. Distinct new questions answered today (first time ever by this user)
+        first_answers_sub = (
+            select(
+                UserAnswer.question_id,
+                func.min(UserAnswer.created_at).label("first_answered_at")
+            )
+            .join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)
+            .where(QuizAttempt.user_id == user_id)
+            .group_by(UserAnswer.question_id)
+            .having(func.min(UserAnswer.created_at) >= today_start_utc)
+        ).subquery()
+
+        first_answers_res = await db.execute(select(func.count(first_answers_sub.c.question_id)))
+        new_questions_learned = first_answers_res.scalar() or 0
+        questions_reviewed = max(0, total_questions_studied - new_questions_learned)
+
+        # 3. Hourly Activity Distribution (0 to 23 hours local time)
+        hourly_counts = [0] * 24
+        for a in today_answers:
+            if a.created_at:
+                local_dt = a.created_at - timedelta(minutes=tz_offset)
+                hour = local_dt.hour
+                if 0 <= hour < 24:
+                    hourly_counts[hour] += 1
+
+        # 4. Fetch Attempts/Sessions today
+        attempts_stmt = (
+            select(QuizAttempt)
+            .options(joinedload(QuizAttempt.answers))
+            .where(
+                QuizAttempt.user_id == user_id,
+                QuizAttempt.started_at >= today_start_utc,
+                QuizAttempt.started_at < today_end_utc
+            )
+            .order_by(QuizAttempt.started_at.desc())
+        )
+        attempts_res = await db.execute(attempts_stmt)
+        today_attempts = attempts_res.unique().scalars().all()
+
+        quiz_ids = list(set(att.quiz_id for att in today_attempts if att.quiz_id).union(
+            set(a.quiz_id for a in today_answers if a.quiz_id)
+        ))
+        quiz_map = {}
+        if quiz_ids:
+            quizzes_res = await db.execute(select(Quiz).where(Quiz.id.in_(quiz_ids)))
+            for q in quizzes_res.scalars().all():
+                quiz_map[q.id] = q
+
+        sessions_data = []
+        for att in today_attempts:
+            q = quiz_map.get(att.quiz_id)
+            att_answers = att.answers or []
+            att_correct = sum(1 for ans in att_answers if ans.is_correct)
+            att_total = len(att_answers)
+            att_acc = round((att_correct / att_total) * 100, 1) if att_total > 0 else 0
+            att_time = sum((ans.active_time or 0.0) for ans in att_answers)
+
+            started_local = att.started_at - timedelta(minutes=tz_offset) if att.started_at else None
+            time_str = started_local.strftime("%H:%M") if started_local else ""
+
+            sessions_data.append({
+                "attempt_id": att.id,
+                "quiz_id": att.quiz_id,
+                "quiz_title": q.title if q else f"Quiz #{att.quiz_id}",
+                "quiz_cover": q.cover_image if q else None,
+                "mode": att.mode or "mcq",
+                "total_questions": att_total or att.total_questions or 0,
+                "correct_count": att_correct,
+                "accuracy": att_acc,
+                "score": att.score or 0,
+                "time_spent": round(att_time),
+                "started_at": att.started_at.isoformat() if att.started_at else None,
+                "time_str": time_str
+            })
+
+        # 5. Breakdown by Quizzes Studied
+        quiz_counter = {}
+        for a in today_answers:
+            qid = a.quiz_id
+            if qid:
+                quiz_counter[qid] = quiz_counter.get(qid, 0) + 1
+
+        quizzes_studied = []
+        for qid, count in sorted(quiz_counter.items(), key=lambda x: x[1], reverse=True):
+            q = quiz_map.get(qid)
+            quizzes_studied.append({
+                "quiz_id": qid,
+                "title": q.title if q else f"Quiz #{qid}",
+                "cover_image": q.cover_image if q else None,
+                "questions_count": count
+            })
+
+        # 6. Fetch Gamification & Streak
+        gam_res = await db.execute(select(UserGamification).where(UserGamification.user_id == user_id))
+        gam = gam_res.scalar_one_or_none()
+        streak_count = gam.streak_count if gam else 0
+        current_xp = gam.xp if gam else 0
+
+        # Calculate XP earned today from answers (+10 for correct, +2 for wrong)
+        xp_earned_today = (correct_count * 10) + (wrong_count * 2)
+
+        first_session_time = None
+        last_session_time = None
+        if today_answers:
+            first_time_local = today_answers[0].created_at - timedelta(minutes=tz_offset)
+            last_time_local = today_answers[-1].created_at - timedelta(minutes=tz_offset)
+            first_session_time = first_time_local.strftime("%H:%M")
+            last_session_time = last_time_local.strftime("%H:%M")
+
+        # Check roadmap goals completed today
+        goals_stmt = (
+            select(UserQuizGoal, UserDailyProgress)
+            .outerjoin(
+                UserDailyProgress,
+                and_(
+                    UserDailyProgress.goal_id == UserQuizGoal.id,
+                    UserDailyProgress.date == today_local_date.strftime("%Y-%m-%d")
+                )
+            )
+            .where(UserQuizGoal.user_id == user_id, UserQuizGoal.status == "active")
+        )
+        goals_res = await db.execute(goals_stmt)
+        roadmap_goals = []
+        for goal, progress in goals_res.all():
+            q = quiz_map.get(goal.quiz_id)
+            if not q and goal.quiz_id:
+                q_res = await db.execute(select(Quiz).where(Quiz.id == goal.quiz_id))
+                q = q_res.scalar_one_or_none()
+            count_done = progress.count_done if progress else 0
+            target = goal.daily_target or 5
+            roadmap_goals.append({
+                "goal_id": goal.id,
+                "quiz_id": goal.quiz_id,
+                "quiz_title": q.title if q else f"Quiz #{goal.quiz_id}",
+                "daily_target": target,
+                "count_done": count_done,
+                "is_completed": count_done >= target
+            })
+
+        # Format human-readable date string
+        date_str = today_local_date.strftime("%A, %b %d, %Y")
+
+        return {
+            "date_str": date_str,
+            "summary": {
+                "total_questions": total_questions_studied,
+                "total_cards": total_questions_studied,  # compatibility
+                "new_questions": new_questions_learned,
+                "new_cards": new_questions_learned,      # compatibility
+                "reviewed_questions": questions_reviewed,
+                "reviewed_cards": questions_reviewed,    # compatibility
+                "correct_count": correct_count,
+                "wrong_count": wrong_count,
+                "accuracy": accuracy,
+                "total_time_seconds": round(active_time_seconds),
+                "total_time_minutes": study_minutes,
+                "total_sessions": len(today_attempts),
+                "first_session_time": first_session_time,
+                "last_session_time": last_session_time,
+                "xp_earned": xp_earned_today,
+                "streak_count": streak_count,
+                "streak_completed_today": bool(total_questions_studied > 0)
+            },
+            "hourly_activity": hourly_counts,
+            "sessions": sessions_data,
+            "quizzes_studied": quizzes_studied,
+            "decks_studied": quizzes_studied,  # compatibility
+            "roadmap_goals": roadmap_goals
+        }
+

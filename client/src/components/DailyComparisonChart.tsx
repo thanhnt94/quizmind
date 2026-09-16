@@ -30,7 +30,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
       <div className="bg-white border border-slate-200/60 rounded-[2.5rem] p-6 shadow-sm flex flex-col items-center justify-center text-center h-[280px]">
         <TrendingUp className="w-8 h-8 text-slate-300 animate-pulse mb-3" />
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          {isLoading ? 'Đang tải biểu đồ so sánh...' : 'Chưa có dữ liệu học tập tuần qua'}
+          {isLoading ? 'Loading comparison chart...' : 'No study data available for the past 7 days'}
         </span>
       </div>
     );
@@ -51,8 +51,8 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
     yesterday.setDate(now.getDate() - 1);
     const yesterdayUTC = yesterday.toISOString().split('T')[0];
 
-    if (dateStr === todayUTC) return "Hôm nay";
-    if (dateStr === yesterdayUTC) return "Hôm qua";
+    if (dateStr === todayUTC) return "Today";
+    if (dateStr === yesterdayUTC) return "Yesterday";
 
     return `${parts[2]}/${parts[1]}`;
   };
@@ -91,11 +91,11 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100/80">
-              Phân tích học tập
+              Learning Analytics
             </span>
           </div>
           <h3 className="text-base font-black text-slate-900 tracking-tight mt-1">
-            So sánh hiệu suất 7 ngày qua
+            7-Day Performance Comparison
           </h3>
         </div>
       </div>
@@ -106,7 +106,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
         <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-              Câu Mới Hôm Nay
+              New Today
             </span>
             <div className="w-6 h-6 rounded-lg bg-orange-100/50 flex items-center justify-center text-orange-600">
               <Zap className="w-3.5 h-3.5" />
@@ -124,7 +124,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
         <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-              Tổng Câu Đã Làm
+              Total Answered
             </span>
             <div className="w-6 h-6 rounded-lg bg-indigo-100/50 flex items-center justify-center text-indigo-600">
               <Layers className="w-3.5 h-3.5" />
@@ -142,7 +142,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
         <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-              Lượt Ôn Tập
+              Reviews Count
             </span>
             <div className="w-6 h-6 rounded-lg bg-emerald-100/50 flex items-center justify-center text-emerald-600">
               <BookOpen className="w-3.5 h-3.5" />
@@ -160,7 +160,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
         <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-              Thời Gian Học
+              Study Time
             </span>
             <div className="w-6 h-6 rounded-lg bg-purple-100/50 flex items-center justify-center text-purple-600">
               <Clock className="w-3.5 h-3.5" />
@@ -200,17 +200,17 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
                   return (
                     <div className="bg-slate-900 text-white rounded-2xl p-3 shadow-xl border border-slate-800 text-xs font-medium space-y-1">
                       <p className="font-bold text-amber-300">{formatLabel(day.date)} ({day.date})</p>
-                      <p className="flex justify-between gap-4"><span>Học mới:</span> <span className="font-bold text-orange-400">{day.new_cards} câu</span></p>
-                      <p className="flex justify-between gap-4"><span>Tổng câu:</span> <span className="font-bold text-indigo-400">{day.unique_cards} câu</span></p>
-                      <p className="flex justify-between gap-4"><span>Thời gian:</span> <span className="font-bold text-emerald-400">{day.study_minutes} phút</span></p>
+                      <p className="flex justify-between gap-4"><span>New:</span> <span className="font-bold text-orange-400">{day.new_cards} questions</span></p>
+                      <p className="flex justify-between gap-4"><span>Total:</span> <span className="font-bold text-indigo-400">{day.unique_cards} questions</span></p>
+                      <p className="flex justify-between gap-4"><span>Time:</span> <span className="font-bold text-emerald-400">{day.study_minutes} mins</span></p>
                     </div>
                   );
                 }
                 return null;
               }}
             />
-            <Bar dataKey="new_cards" fill="#F97316" radius={[4, 4, 0, 0]} name="Câu mới" />
-            <Bar dataKey="unique_cards" fill="#6366F1" radius={[4, 4, 0, 0]} name="Tổng câu" />
+            <Bar dataKey="new_cards" fill="#F97316" radius={[4, 4, 0, 0]} name="New questions" />
+            <Bar dataKey="unique_cards" fill="#6366F1" radius={[4, 4, 0, 0]} name="Total questions" />
           </BarChart>
         </ResponsiveContainer>
       </div>

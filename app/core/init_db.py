@@ -31,7 +31,7 @@ async def init_db():
             admin = User(
                 username="admin",
                 email="admin@mindstack.click",
-                full_name="QuizMind Admin",
+                full_name="admin",
                 hashed_password=AuthService.get_password_hash("admin"),
                 role="admin"
             )

@@ -26,7 +26,7 @@ async def reset_quizmind_admin():
             admin = User(
                 username="admin",
                 email="admin@quizmind.com",
-                full_name="QuizMind Admin",
+                full_name="admin",
                 hashed_password=AuthService.get_password_hash("admin"),
                 role="admin"
             )

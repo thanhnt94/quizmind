@@ -50,42 +50,42 @@ export interface RoadmapHeaderTrackerProps {
 
 const STEP_META: Record<string, { emoji: string; label: string; short: string; style: string }> = {
   new_cards: { 
-    emoji: '📝', 
-    label: 'Học Câu Mới', 
-    short: 'NW',
+    emoji: '✨', 
+    label: 'New Questions', 
+    short: 'NEW',
     style: 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300'
   },
   review: { 
     emoji: '🔄', 
-    label: 'Ôn Tập Củng Cố', 
+    label: 'Spaced Review', 
     short: 'REV',
     style: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
   },
   mcq: { 
     emoji: '🎯', 
-    label: 'Trắc Nghiệm MCQ', 
+    label: '4-Choice MCQ', 
     short: 'MCQ',
     style: 'bg-rose-500/15 border-rose-500/30 text-rose-300'
   },
   typing: { 
     emoji: '⌨️', 
-    label: 'Gõ Đáp Án', 
+    label: 'Typing Recall', 
     short: 'TYP',
     style: 'bg-purple-500/15 border-purple-500/30 text-purple-300'
   },
   study_time: { 
     emoji: '⏱️', 
-    label: 'Thời Gian Học', 
+    label: 'Study Time', 
     short: 'TIME',
     style: 'bg-amber-500/15 border-amber-500/30 text-amber-300'
   }
 }
 
 const OVERACHIEVE_PRAISES = [
-  "⚡ NỖ LỰC PHI THƯỜNG!",
-  "🚀 VƯỢT CHỈ TIÊU BỨT PHÁ!",
-  "👑 BỨT PHÁ GIỚI HẠN BẢN THÂN!",
-  "🔥 CHĂM CHỈ XUẤT SẮC!"
+  "⚡ EXTRAORDINARY EFFORT!",
+  "🚀 GOAL EXCEEDED SURGE!",
+  "👑 BREAKING ALL LIMITS!",
+  "🔥 OUTSTANDING MOMENTUM!"
 ]
 
 export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
@@ -195,7 +195,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
 
   const currentStep = pipeline[currentStepIndex] || null
   const meta = currentStep ? (STEP_META[currentStep.type] || STEP_META.new_cards) : STEP_META.new_cards
-  const effectiveTitle = quizTitle || deckTitle || 'Phiên Học Lộ Trình'
+  const effectiveTitle = quizTitle || deckTitle || 'Roadmap Session'
 
   const hasSubProg = typeof subProgressCurr === 'number' && typeof subProgressTotal === 'number' && subProgressTotal > 0
   const subPercent = hasSubProg ? Math.min(100, Math.round((subProgressCurr / subProgressTotal) * 100)) : 0
@@ -205,7 +205,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
 
   const praiseMsg = isOverachieved 
     ? OVERACHIEVE_PRAISES[(extraCount - 1) % OVERACHIEVE_PRAISES.length] 
-    : (isGoalReached ? 'ĐÃ ĐẠT GOAL HÔM NAY!' : 'TIẾN BỘ TỐT LẮM!')
+    : (isGoalReached ? "TODAY'S GOAL ACHIEVED!" : "GREAT PROGRESS!")
 
   useEffect(() => {
     if (
@@ -310,7 +310,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
           <button
             onClick={onExit}
             className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-slate-700 flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-sm"
-            title="Thoát phiên học"
+            title="Exit Session"
           >
             <X className="w-4 h-4" />
           </button>
@@ -321,13 +321,13 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
       <div 
         onClick={toggleViewMode}
         className="flex-1 flex items-center min-w-0 h-full cursor-pointer z-[140]"
-        title="Bấm vào thanh để chuyển đổi giữa (Tên bộ đề & Chế độ) ⇄ (Toàn bộ Thông số chi tiết)"
+        title="Tap to toggle between (Quiz & Mode) ⇄ (Live HUD Stats)"
       >
         <div className="w-full h-full flex items-center rounded-full bg-slate-900/80 hover:bg-slate-900/95 border border-slate-800 hover:border-slate-700/80 px-2.5 sm:px-3.5 backdrop-blur-md shadow-sm transition-all overflow-hidden relative">
           <AnimatePresence mode="wait" initial={false}>
             {viewMode === 0 ? (
               /* ========================================================================= */
-              /* MẶT 1: TÊN BỘ ĐỀ & CHẾ ĐỘ HỌC                                            */
+              /* FACE 1: QUIZ TITLE & PRACTICE MODE                                        */
               /* ========================================================================= */
               <motion.div
                 key="face-deck-title"
@@ -348,7 +348,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 {/* Right side of Face 1: Mode + Step Dots + Progress + Flip Hint */}
                 <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
                   {/* Step Stepper Dots */}
-                  <div className="flex items-center gap-1 shrink-0" title={`Bước ${currentStepIndex + 1}/${pipeline.length}`}>
+                  <div className="flex items-center gap-1 shrink-0" title={`Step ${currentStepIndex + 1}/${pipeline.length}`}>
                     {pipeline.map((_, idx) => (
                       <div
                         key={idx}
@@ -364,7 +364,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                     ))}
                   </div>
 
-                  {/* Mode Badge (Ultra-clean acronym: NW, REV, MCQ, TYP, TIME) */}
+                  {/* Mode Badge */}
                   <div 
                     className={cn(
                       "flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-xs font-black shrink-0 tracking-wide shadow-sm",
@@ -396,13 +396,13 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                   {/* Flip Action Indicator Pill */}
                   <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] font-bold text-slate-400 hover:text-slate-200 shrink-0">
                     <ArrowRightLeft className="w-2.5 h-2.5" />
-                    <span>Thông số</span>
+                    <span>HUD</span>
                   </div>
                 </div>
               </motion.div>
             ) : (
               /* ========================================================================= */
-              /* MẶT 2: TOÀN BỘ CÁC THÔNG SỐ CHI TIẾT (Full Live HUD Dashboard)             */
+              /* FACE 2: LIVE HUD PERFORMANCE STATS                                         */
               /* ========================================================================= */
               <motion.div
                 key="face-stats-hud"
@@ -412,32 +412,32 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 transition={{ duration: 0.18, ease: "easeInOut" }}
                 className="w-full flex items-center justify-between gap-1.5 sm:gap-3 text-xs min-w-0 font-mono"
               >
-                {/* 1. Timer: Câu này & Tổng hôm nay */}
-                <div className="flex items-center gap-1 shrink-0" title="Thời gian câu hỏi hiện tại & Tổng thời gian học">
+                {/* 1. Timer: Question & Today */}
+                <div className="flex items-center gap-1 shrink-0" title="Current Question Timer & Today's Study Time">
                   <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-pulse" />
                   <span className="text-emerald-300 font-black text-[11px]">{displayCardTime}</span>
                   <span className="text-slate-600 hidden sm:inline">•</span>
-                  <span className="text-slate-400 text-[10px] hidden sm:inline" title="Thời gian học hôm nay">{displayTodayTime}</span>
+                  <span className="text-slate-400 text-[10px] hidden sm:inline" title="Today's Study Time">{displayTodayTime}</span>
                 </div>
 
                 <div className="w-[1px] h-3 bg-slate-800 shrink-0" />
 
-                {/* 2. Tiến độ & Còn lại */}
-                <div className="flex items-center gap-1 shrink-0" title="Tiến độ câu hỏi hiện tại">
+                {/* 2. Progress & Remaining */}
+                <div className="flex items-center gap-1 shrink-0" title="Question Progress">
                   <Target className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                   <span className="text-slate-200 font-black text-[11px]">
                     {hasSubProg ? `${subProgressCurr}/${subProgressTotal}` : `${currentIndex + 1}/${totalCards || '--'}`}
                   </span>
                   {cardsRemaining > 0 && (
-                    <span className="text-slate-500 text-[10px] hidden md:inline">({cardsRemaining} còn)</span>
+                    <span className="text-slate-500 text-[10px] hidden md:inline">({cardsRemaining} left)</span>
                   )}
                 </div>
 
-                {/* 3. Độ chính xác (Accuracy %) */}
+                {/* 3. Accuracy Rate % */}
                 {accuracyPercent !== null && (
                   <>
                     <div className="w-[1px] h-3 bg-slate-800 shrink-0 hidden sm:block" />
-                    <div className="hidden sm:flex items-center gap-1 shrink-0" title={`Độ chính xác: ${correctCount}/${answeredCount} câu đúng`}>
+                    <div className="hidden sm:flex items-center gap-1 shrink-0" title={`Accuracy: ${correctCount}/${answeredCount} correct`}>
                       <Gauge className="w-3.5 h-3.5 text-teal-400 shrink-0" />
                       <span className={cn(
                         "font-black text-[11px]",
@@ -449,13 +449,13 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                   </>
                 )}
 
-                {/* 4. Tốc độ trung bình (Avg Speed) */}
+                {/* 4. Average Speed */}
                 {avgSpeed && (
                   <>
                     <div className="w-[1px] h-3 bg-slate-800 shrink-0 hidden lg:block" />
-                    <div className="hidden lg:flex items-center gap-1 shrink-0 text-slate-400 text-[10px]" title="Tốc độ trả lời trung bình mỗi câu">
+                    <div className="hidden lg:flex items-center gap-1 shrink-0 text-slate-400 text-[10px]" title="Average speed per question">
                       <Zap className="w-3 h-3 text-cyan-400 shrink-0" />
-                      <span>{avgSpeed}/câu</span>
+                      <span>{avgSpeed}/q</span>
                     </div>
                   </>
                 )}
@@ -463,7 +463,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 <div className="w-[1px] h-3 bg-slate-800 shrink-0" />
 
                 {/* 5. XP Score */}
-                <div className="flex items-center gap-1 shrink-0 text-amber-300" title={`Điểm phiên: +${sessionXP} XP | Tổng: ${xp.toLocaleString()} XP`}>
+                <div className="flex items-center gap-1 shrink-0 text-amber-300" title={`Session XP: +${sessionXP} | Total: ${xp.toLocaleString()} XP`}>
                   <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <span className="font-black text-[11px]">
                     {sessionXP > 0 ? `+${sessionXP}` : displayTotalXP}
@@ -475,7 +475,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 {streakCount > 0 && (
                   <>
                     <div className="w-[1px] h-3 bg-slate-800 shrink-0" />
-                    <div className="flex items-center gap-1 shrink-0 text-orange-400" title={`Chuỗi học ${streakCount} ngày liên tục`}>
+                    <div className="flex items-center gap-1 shrink-0 text-orange-400" title={`Active streak: ${streakCount} days`}>
                       <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500 shrink-0 animate-pulse" />
                       <span className="font-black text-[11px]">{streakCount}d</span>
                     </div>
@@ -485,7 +485,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 {/* Flip Back Hint */}
                 <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] font-bold text-slate-400 hover:text-slate-200 shrink-0 ml-auto">
                   <ArrowRightLeft className="w-2.5 h-2.5" />
-                  <span>Tên đề</span>
+                  <span>Quiz Info</span>
                 </div>
               </motion.div>
             )}

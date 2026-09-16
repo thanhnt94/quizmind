@@ -132,19 +132,13 @@ const MarkdownComponents = {
 export default function QuizPlay() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, setUser, setGamify } = useAppStore()
+  const { user, setUser, setGamify, userSettings, updateUserSettings } = useAppStore()
   const [session, setSession] = useState<any>(null)
   const { status: roadmapStatus } = useRoadmapStatus(id)
   const [timeMode, setTimeMode] = useState<'card' | 'today' | 'all'>('card')
   const [scoreMode, setScoreMode] = useState<'all' | 'today'>('today')
   const sessionStudyTimeRef = useRef<number>(0)
-  const [sfxEnabled, setSfxEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('quizmind_sfx_enabled');
-      return saved === null ? true : saved === 'true';
-    }
-    return true;
-  });
+  const [sfxEnabled, setSfxEnabled] = useState<boolean>(userSettings?.sfx_enabled ?? true);
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -201,7 +195,7 @@ export default function QuizPlay() {
   const [activeGoal, setActiveGoal] = useState<any>(null)
   const [showGoalCelebration, setShowGoalCelebration] = useState(false)
   const [isLimitlessStrike, setIsLimitlessStrike] = useState(false)
-  const [activeMode, setActiveMode] = useState<string>(() => localStorage.getItem('quiz_learning_mode') || 'sequential')
+  const [activeMode, setActiveMode] = useState<string>(userSettings?.quiz_learning_mode || 'sequential')
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
   const [learningModeAlert, setLearningModeAlert] = useState<{
     visible: boolean;
@@ -374,7 +368,25 @@ export default function QuizPlay() {
   const fetchSession = async () => {
     try {
       const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
-      const questions = quizRes.data.questions || []
+      let questions = quizRes.data.questions || []
+
+      const searchParams = new URLSearchParams(window.location.search)
+      const urlMode = searchParams.get('mode')
+
+      if (urlMode === 'missed' || urlMode === 'review') {
+        const missedList = questions.filter((q: any) => ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && !q.is_ignored)
+        if (missedList.length > 0) {
+          questions = missedList
+        }
+      } else if (urlMode === 'new' || urlMode === 'unseen') {
+        const newList = questions.filter((q: any) => (q.stats?.total || 0) === 0 && !q.is_ignored)
+        if (newList.length > 0) {
+          questions = newList
+        }
+      } else if (urlMode === 'random') {
+        questions = [...questions].sort(() => Math.random() - 0.5)
+      }
+
       setSession({ ...quizRes.data, questions })
       setPromptInput(quizRes.data.ai_prompt || '')
       setInitialTotalXP(quizRes.data.user_total_xp || 0)
@@ -392,75 +404,15 @@ export default function QuizPlay() {
         console.error("Failed to load active goals", e)
       }
       
-      try {
-        const sessionRes = await axios.get(`/api/v1/quiz/${id}/session`)
-        if (sessionRes.data) {
-          const restoredAnswers = sessionRes.data.state?.sessionAnswers || {}
-          setSessionAnswers(restoredAnswers)
-          
-          let curIdx = sessionRes.data.current_index || 0
-          
-          // Adjust initial index based on smart learning mode if we are starting a fresh/unanswered question
-          if (restoredAnswers[curIdx] === undefined) {
-            const savedMode = localStorage.getItem('quiz_learning_mode') || 'sequential'
-            if (savedMode !== 'sequential') {
-              let modeIdx = -1
-              if (savedMode === 'unseen') {
-                modeIdx = questions.findIndex((q: any, i: number) => (q.stats?.total || 0) === 0 && restoredAnswers[i] === undefined && !q.is_ignored)
-              } else if (savedMode === 'review') {
-                modeIdx = questions.findIndex((q: any, i: number) => ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && restoredAnswers[i] === undefined && !q.is_ignored)
-              } else if (savedMode === 'hardest') {
-                let minRatio = Infinity
-                let maxWrongs = -1
-                for (let i = 0; i < questions.length; i++) {
-                  if (restoredAnswers[i] !== undefined) continue
-                  const q = questions[i]
-                  if (q.is_ignored) continue
-                  const t = q.stats?.total || 0
-                  const c = q.stats?.correct || 0
-                  const wrongs = t - c
-                  if (t > 0) {
-                    const ratio = c / t
-                    if (ratio < minRatio) {
-                      minRatio = ratio
-                      maxWrongs = wrongs
-                      modeIdx = i
-                    } else if (ratio === minRatio && wrongs > maxWrongs) {
-                      maxWrongs = wrongs
-                      modeIdx = i
-                    }
-                  }
-                }
-              } else if (savedMode === 'random') {
-                const pool = questions.map((_: any, i: number) => i).filter((i: number) => restoredAnswers[i] === undefined && !questions[i].is_ignored)
-                if (pool.length > 0) {
-                  modeIdx = pool[Math.floor(Math.random() * pool.length)]
-                }
-              }
-
-              if (modeIdx !== -1) {
-                curIdx = modeIdx
-              }
-            }
-          }
-          
-          setCurrentIndex(curIdx)
-          
-          // Update local state to reflect which questions are answered in this session
-          // but DO NOT manually increment stats, as the backend quiz play-data already includes them.
-          if (typeof restoredAnswers[curIdx] === 'number') {
-            setSelectedOption(restoredAnswers[curIdx])
-            setShowFeedback(true)
-          }
-
-          if (sessionRes.data.state?.sessionXP) {
-            setSessionXP(sessionRes.data.state.sessionXP)
-          }
-          if (sessionRes.data.state?.streak) {
-            setStreak(sessionRes.data.state.streak)
-          }
-        }
-      } catch (e) {}
+      // Dynamic Realtime Queue Initialization
+      let curIdx = 0
+      if (urlMode === 'roadmap') {
+        const unseenIdx = questions.findIndex((q: any) => (q.stats?.total || 0) === 0 && !q.is_ignored)
+        if (unseenIdx !== -1) curIdx = unseenIdx
+      }
+      setCurrentIndex(curIdx)
+      setSelectedOption(null)
+      setShowFeedback(false)
     } catch (e) {
       navigate('/')
     }
@@ -922,7 +874,7 @@ export default function QuizPlay() {
 
   const applyLearningMode = (mode: string) => {
     setActiveMode(mode)
-    localStorage.setItem('quiz_learning_mode', mode)
+    updateUserSettings({ quiz_learning_mode: mode })
     setIsModeMenuOpen(false)
 
     if (!session || !session.questions) return
@@ -1905,7 +1857,7 @@ export default function QuizPlay() {
              onClick={() => {
                 const nextSfx = !sfxEnabled;
                 setSfxEnabled(nextSfx);
-                localStorage.setItem('quizmind_sfx_enabled', nextSfx ? 'true' : 'false');
+                updateUserSettings({ sfx_enabled: nextSfx });
              }}
              className={cn(
                 "w-9 h-9 flex items-center justify-center rounded-xl border transition-all active:scale-90 shadow-sm",

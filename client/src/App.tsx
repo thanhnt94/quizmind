@@ -20,6 +20,7 @@ import QuizRoom from './pages/QuizRoom'
 import RoomJoin from './pages/RoomJoin'
 import QuizRoadmap from './pages/QuizRoadmap'
 import Layout from './components/Layout'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,41 +52,43 @@ function AppContent() {
 
   return (
     <Router>
-      <Routes>
-        {/* Public Auth Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/auth/callback" element={<Login />} />
+      <ErrorBoundary>
+        <Routes>
+          {/* Public Auth Routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/auth/callback" element={<Login />} />
 
-        {/* Client Layout Routes (Protected / Guest Landing) */}
-        <Route element={<Layout />}>
-          <Route path="/" element={isLoggedIn ? <Dashboard /> : <Landing />} />
-          <Route path="/dashboard" element={<Navigate to="/" replace />} />
-          
-          {/* Protected Routes (Authenticated only) */}
-          <Route path="/profile" element={isLoggedIn ? <Profile /> : <Navigate to="/login" replace />} />
-          <Route path="/stats" element={isLoggedIn ? <Stats /> : <Navigate to="/login" replace />} />
-          <Route path="/settings" element={isLoggedIn ? <Settings /> : <Navigate to="/login" replace />} />
-          <Route path="/library" element={isLoggedIn ? <Library /> : <Navigate to="/login" replace />} />
-          <Route path="/manage" element={isLoggedIn ? <ManageQuizzes /> : <Navigate to="/login" replace />} />
-          <Route path="/manage/import" element={isLoggedIn ? <ImportQuiz /> : <Navigate to="/login" replace />} />
-          <Route path="/manage/edit/:id" element={isLoggedIn ? <EditQuiz /> : <Navigate to="/login" replace />} />
-          <Route path="/manage/edit/:id/questions" element={isLoggedIn ? <EditQuestions /> : <Navigate to="/login" replace />} />
-          <Route path="/room/join" element={isLoggedIn ? <RoomJoin /> : <Navigate to="/login" replace />} />
-          
-          {/* Admin Control Panel */}
-          <Route path="/admin" element={isLoggedIn && user?.role === 'admin' ? <Admin /> : <Navigate to="/" replace />} />
-        </Route>
+          {/* Client Layout Routes (Protected / Guest Landing) */}
+          <Route element={<Layout />}>
+            <Route path="/" element={isLoggedIn ? <Dashboard /> : <Landing />} />
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
+            
+            {/* Protected Routes (Authenticated only) */}
+            <Route path="/profile" element={isLoggedIn ? <Profile /> : <Navigate to="/login" replace />} />
+            <Route path="/stats" element={isLoggedIn ? <Stats /> : <Navigate to="/login" replace />} />
+            <Route path="/settings" element={isLoggedIn ? <Settings /> : <Navigate to="/login" replace />} />
+            <Route path="/library" element={isLoggedIn ? <Library /> : <Navigate to="/login" replace />} />
+            <Route path="/manage" element={isLoggedIn ? <ManageQuizzes /> : <Navigate to="/login" replace />} />
+            <Route path="/manage/import" element={isLoggedIn ? <ImportQuiz /> : <Navigate to="/login" replace />} />
+            <Route path="/manage/edit/:id" element={isLoggedIn ? <EditQuiz /> : <Navigate to="/login" replace />} />
+            <Route path="/manage/edit/:id/questions" element={isLoggedIn ? <EditQuestions /> : <Navigate to="/login" replace />} />
+            <Route path="/room/join" element={isLoggedIn ? <RoomJoin /> : <Navigate to="/login" replace />} />
+            
+            {/* Admin Control Panel */}
+            <Route path="/admin" element={isLoggedIn && user?.role === 'admin' ? <Admin /> : <Navigate to="/" replace />} />
+          </Route>
 
-        {/* Fullscreen Protected Views */}
-        <Route path="/quiz/:id" element={isLoggedIn ? <QuizDetail /> : <Navigate to="/login" replace />} />
-        <Route path="/quiz/:id/roadmap" element={isLoggedIn ? <QuizRoadmap /> : <Navigate to="/login" replace />} />
-        <Route path="/flashcard/:id/roadmap" element={isLoggedIn ? <QuizRoadmap /> : <Navigate to="/login" replace />} />
-        <Route path="/quiz/:id/play" element={isLoggedIn ? <QuizPlay /> : <Navigate to="/login" replace />} />
-        <Route path="/room/:code" element={isLoggedIn ? <QuizRoom /> : <Navigate to="/login" replace />} />
+          {/* Fullscreen Protected Views */}
+          <Route path="/quiz/:id" element={isLoggedIn ? <QuizDetail /> : <Navigate to="/login" replace />} />
+          <Route path="/quiz/:id/roadmap" element={isLoggedIn ? <QuizRoadmap /> : <Navigate to="/login" replace />} />
+          <Route path="/flashcard/:id/roadmap" element={isLoggedIn ? <QuizRoadmap /> : <Navigate to="/login" replace />} />
+          <Route path="/quiz/:id/play" element={isLoggedIn ? <QuizPlay /> : <Navigate to="/login" replace />} />
+          <Route path="/room/:code" element={isLoggedIn ? <QuizRoom /> : <Navigate to="/login" replace />} />
 
-        {/* Catch-all Redirect */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Catch-all Redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ErrorBoundary>
     </Router>
   )
 }

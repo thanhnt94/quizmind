@@ -26,7 +26,7 @@ export function TelegramRoadmapReminderToggle({ className, size = 'sm' }: Telegr
     return (
       <div className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/40 text-slate-400 text-[11px] font-medium border border-slate-700/50 animate-pulse", className)}>
         <Send className="w-3 h-3 text-slate-500" />
-        <span>Đang kiểm tra Telegram...</span>
+        <span>Checking Telegram...</span>
       </div>
     )
   }
@@ -65,7 +65,7 @@ export function TelegramRoadmapReminderToggle({ className, size = 'sm' }: Telegr
       <button
         onClick={handleToggle}
         disabled={isSaving}
-        title={isActive ? `Bật nhắc nhở lúc ${reminderTime} hằng ngày qua Telegram` : 'Bấm để bật nhắc nhở lộ trình qua Telegram'}
+        title={isActive ? `Daily reminder active at ${reminderTime} via Telegram` : 'Click to enable Telegram roadmap reminders'}
         className={cn(
           "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer active:scale-95 shadow-xs",
           isActive 
@@ -76,7 +76,7 @@ export function TelegramRoadmapReminderToggle({ className, size = 'sm' }: Telegr
         )}
       >
         <Send className={cn("w-3 h-3 transition-transform", isActive ? "text-sky-400 fill-sky-400/30" : "text-slate-500")} />
-        <span>{isActive ? `Nhắc Telegram (${reminderTime})` : 'Bật Nhắc Telegram'}</span>
+        <span>{isActive ? `Telegram (${reminderTime})` : 'Enable Telegram'}</span>
         {isActive && <Check className="w-3 h-3 text-sky-400 ml-0.5" />}
       </button>
     )
@@ -86,15 +86,15 @@ export function TelegramRoadmapReminderToggle({ className, size = 'sm' }: Telegr
   return (
     <button
       onClick={handleToggle}
-      title="Tài khoản chưa kết nối Telegram Bot. Bấm để kết nối nhận nhắc nhở Lộ trình!"
+      title="Telegram bot not connected. Click to link and receive roadmap reminders!"
       className={cn(
         "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-slate-800/60 text-slate-400 border border-slate-700/80 hover:border-sky-500/50 hover:text-sky-300 transition-all cursor-pointer active:scale-95 group opacity-85",
         className
       )}
     >
       <Lock className="w-3 h-3 text-slate-500 group-hover:text-sky-400 transition-colors" />
-      <span>Chưa nối Telegram</span>
-      <span className="text-[9px] bg-slate-700 group-hover:bg-sky-500/30 text-slate-300 group-hover:text-sky-200 px-1.5 py-0.2 rounded-full font-bold transition-colors">Nối ngay</span>
+      <span>Telegram Unlinked</span>
+      <span className="text-[9px] bg-slate-700 group-hover:bg-sky-500/30 text-slate-300 group-hover:text-sky-200 px-1.5 py-0.2 rounded-full font-bold transition-colors">Link Now</span>
     </button>
   )
 }

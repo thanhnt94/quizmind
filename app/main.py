@@ -182,18 +182,52 @@ async def ecosystem_sync(
     await db.commit()
     return {"status": "success", "message": f"Synced {synced_count} users successfully."}
 
+from app.modules.auth.services.user_settings_service import UserSettingsService
+
 @app.get("/api/v1/auth/me")
 async def get_me(request: Request, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
     if not user: return {"user": None}
+    
+    settings_obj = await UserSettingsService.get_or_create_settings(db, user.id)
     return {
         "user": {
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "settings": UserSettingsService.to_dict(settings_obj)
         }
     }
+
+@app.get("/api/v1/user/settings")
+async def get_user_settings(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    settings_obj = await UserSettingsService.get_or_create_settings(db, user.id)
+    return {"status": "success", "settings": UserSettingsService.to_dict(settings_obj)}
+
+@app.patch("/api/v1/user/settings")
+async def update_user_settings(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    updated_obj = await UserSettingsService.update_settings(db, user.id, data)
+    return {"status": "success", "settings": UserSettingsService.to_dict(updated_obj)}
+
+@app.get("/api/v1/stats/daily-summary")
+async def get_daily_summary(request: Request, tz_offset: int = -420, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return await AnalyticsService.get_daily_summary(db, user.id, tz_offset=tz_offset)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/")
 @app.get("/login")

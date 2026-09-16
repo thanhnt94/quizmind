@@ -601,40 +601,51 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
 
 @router.get("/{quiz_id}/session")
 async def get_quiz_session(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import QuizSession
-    user_id = int(request.cookies.get("user_id", 1))
-    result = await db.execute(select(QuizSession).filter(QuizSession.quiz_id == quiz_id, QuizSession.user_id == user_id))
-    session = result.scalar_one_or_none()
-    if not session: return None
     return {
-        "mode": session.mode,
-        "current_index": session.current_index,
-        "state": json.loads(session.state_json) if session.state_json else {}
+        "mode": "sequential",
+        "current_index": 0,
+        "state": {}
     }
 
 @router.post("/{quiz_id}/session")
 async def save_quiz_session(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import QuizSession
-    user_id = int(request.cookies.get("user_id", 1))
-    result = await db.execute(select(QuizSession).filter(QuizSession.quiz_id == quiz_id, QuizSession.user_id == user_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        session = QuizSession(quiz_id=quiz_id, user_id=user_id)
-        db.add(session)
-    
-    session.mode = data.get("mode")
-    session.current_index = data.get("current_index", 0)
-    session.state_json = json.dumps(data.get("state", {}))
-    await db.commit()
     return {"status": "ok"}
 
 @router.delete("/{quiz_id}/session")
 async def reset_quiz_session(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import QuizSession
-    user_id = int(request.cookies.get("user_id", 1))
-    await db.execute(delete(QuizSession).where(QuizSession.quiz_id == quiz_id, QuizSession.user_id == user_id))
-    await db.commit()
     return {"status": "ok"}
+
+@router.get("/{quiz_id}/history")
+async def get_quiz_history(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+    user_id = await get_request_user_id(request, db)
+    from app.modules.quiz.models import QuizAttempt
+    from sqlalchemy.orm import selectinload
+    
+    stmt = (
+        select(QuizAttempt)
+        .options(selectinload(QuizAttempt.answers))
+        .where(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == user_id)
+        .order_by(QuizAttempt.id.desc())
+        .limit(10)
+    )
+    res = await db.execute(stmt)
+    attempts = res.scalars().all()
+    
+    history = []
+    for att in attempts:
+        total_answers = len(att.answers) if att.answers else (att.total_questions or 0)
+        correct_count = sum(1 for a in att.answers if a.is_correct) if att.answers else (att.score or 0)
+        acc = round((correct_count / total_answers * 100)) if total_answers > 0 else 0
+        history.append({
+            "id": att.id,
+            "mode": att.mode or "standard",
+            "score": att.score or correct_count,
+            "total_questions": total_answers,
+            "accuracy": acc,
+            "started_at": att.started_at.isoformat() if att.started_at else None,
+            "completed_at": att.completed_at.isoformat() if att.completed_at else None,
+        })
+    return {"history": history}
 
 async def _generate_ai_task(quiz_id: int, question_id: int, prompt_template: Optional[str] = None):
     from app.core.db import AsyncSession, engine
@@ -762,12 +773,6 @@ async def ask_ai(quiz_id: int, payload: dict, background_tasks: BackgroundTasks,
     
     return {"status": "processing", "message": "AI analysis started in background."}
 
-@router.delete("/{quiz_id}/session")
-async def delete_quiz_session(quiz_id: int, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import QuizSession
-    await db.execute(delete(QuizSession).where(QuizSession.quiz_id == quiz_id))
-    await db.commit()
-    return {"status": "ok"}
 
 @router.get("/question/{question_id}/note")
 async def get_question_note(request: Request, question_id: int, db: AsyncSession = Depends(get_db)):
@@ -1958,7 +1963,7 @@ async def get_quiz_roadmap_status_helper(
             {"id": "step_review", "type": "review", "label": "Ôn tập củng cố", "max_count": roadmap_daily_review_max}
         ]
 
-    # 4. Learned questions count (box_level >= 2)
+    # 4. Learned questions count
     mastery_map = {}
     if question_ids:
         mastery_res = await db.execute(
@@ -1969,7 +1974,7 @@ async def get_quiz_roadmap_status_helper(
             )
         )
         mastery_map = {r[0]: r[1] for r in mastery_res.all()}
-    learned_questions = sum(1 for qid in question_ids if mastery_map.get(qid, 1) >= 2)
+    learned_questions = sum(1 for qid in question_ids if qid in mastery_map)
     unlearned_questions = max(0, total_questions - learned_questions)
 
     # 5. Activity today
@@ -1985,9 +1990,7 @@ async def get_quiz_roadmap_status_helper(
     )
     answers_today = ans_today_res.all()
     answered_qids_today = set(r[0] for r in answers_today)
-    new_learned_today = sum(1 for qid in answered_qids_today if mastery_map.get(qid, 1) >= 2)
-    if new_learned_today == 0 and len(answered_qids_today) > 0:
-        new_learned_today = min(len(answered_qids_today), roadmap_daily_new)
+    new_learned_today = len(answered_qids_today)
 
     # Review questions due today (box_level between 1 and 4)
     review_due_today = sum(1 for qid in question_ids if 1 <= mastery_map.get(qid, 0) < 5)
