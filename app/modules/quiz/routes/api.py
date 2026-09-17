@@ -1013,14 +1013,14 @@ async def export_quiz(quiz_id: int, request: Request, db: AsyncSession = Depends
         
         from fastapi.responses import Response
         import urllib.parse
-        clean_title = "".join(c for c in (quiz.title or "Quiz") if c.isalnum() or c in (" ", "_", "-")).strip() or "Quiz"
-        encoded_filename = urllib.parse.quote(f"{clean_title}.xlsx")
+        ascii_filename = f"quiz_{quiz.id}.xlsx"
+        encoded_filename = urllib.parse.quote(f"{quiz.title or 'Quiz'}.xlsx")
         
         return Response(
             content=excel_bytes,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f'attachment; filename="{clean_title}.xlsx"; filename*=UTF-8\'\'{encoded_filename}'
+                "Content-Disposition": f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
             }
         )
     except Exception as e:
