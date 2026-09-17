@@ -550,3 +550,165 @@ class AnalyticsService:
             "roadmap_goals": roadmap_goals
         }
 
+    @staticmethod
+    async def get_heatmap(db: AsyncSession, user_id: int):
+        today = datetime.utcnow().date()
+        start_date = today - timedelta(days=365)
+        
+        heatmap_stmt = select(
+            UserDailyStats.date,
+            UserDailyStats.questions_attempted
+        ).where(
+            UserDailyStats.user_id == user_id,
+            UserDailyStats.date >= start_date
+        ).order_by(UserDailyStats.date)
+        
+        results = await db.execute(heatmap_stmt)
+        data = []
+        for row in results.all():
+            day_val = row[0]
+            if isinstance(day_val, str):
+                date_str = day_val[:10]
+            elif day_val:
+                date_str = day_val.strftime("%Y-%m-%d")
+            else:
+                date_str = ""
+            data.append({
+                "date": date_str,
+                "count": row[1] or 0
+            })
+        return data
+
+    @staticmethod
+    async def get_daily_comparison_stats(db: AsyncSession, user_id: int):
+        today = datetime.utcnow().date()
+        start_date = datetime.combine(today - timedelta(days=13), datetime.min.time())
+
+        # 1. Total and unique questions per day (last 14 days)
+        reviews_stmt = select(
+            func.date(UserAnswer.created_at).label("date_str"),
+            func.count(UserAnswer.id).label("total_reviews"),
+            func.count(func.distinct(UserAnswer.question_id)).label("unique_cards"),
+            func.sum(UserAnswer.active_time).label("total_active_time")
+        ).join(
+            QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id
+        ).where(
+            QuizAttempt.user_id == user_id,
+            UserAnswer.created_at >= start_date
+        ).group_by(
+            func.date(UserAnswer.created_at)
+        )
+
+        # 2. Subquery for first ever answers of each question by user
+        first_answers = select(
+            UserAnswer.question_id,
+            func.min(UserAnswer.created_at).label("first_answered_at")
+        ).join(
+            QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id
+        ).where(
+            QuizAttempt.user_id == user_id
+        ).group_by(
+            UserAnswer.question_id
+        ).subquery()
+
+        # Questions first answered per day (last 14 days)
+        new_cards_stmt = select(
+            func.date(first_answers.c.first_answered_at).label("date_str"),
+            func.count(first_answers.c.question_id).label("new_cards")
+        ).where(
+            first_answers.c.first_answered_at >= start_date
+        ).group_by(
+            func.date(first_answers.c.first_answered_at)
+        )
+
+        # 3. All-time daily stats for computing historical averages
+        all_time_reviews_stmt = select(
+            func.date(UserAnswer.created_at).label("date_str"),
+            func.count(UserAnswer.id).label("total_reviews"),
+            func.count(func.distinct(UserAnswer.question_id)).label("unique_cards"),
+            func.sum(UserAnswer.active_time).label("total_active_time")
+        ).join(
+            QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id
+        ).where(
+            QuizAttempt.user_id == user_id
+        ).group_by(
+            func.date(UserAnswer.created_at)
+        )
+
+        all_time_new_cards_stmt = select(
+            func.date(first_answers.c.first_answered_at).label("date_str"),
+            func.count(first_answers.c.question_id).label("new_cards")
+        ).group_by(
+            func.date(first_answers.c.first_answered_at)
+        )
+
+        reviews_res = await db.execute(reviews_stmt)
+        new_cards_res = await db.execute(new_cards_stmt)
+        all_reviews_res = await db.execute(all_time_reviews_stmt)
+        all_new_res = await db.execute(all_time_new_cards_stmt)
+
+        daily_map = {}
+        for i in range(14):
+            d = today - timedelta(days=i)
+            d_str = d.strftime("%Y-%m-%d")
+            daily_map[d_str] = {
+                "date": d_str,
+                "new_cards": 0,
+                "unique_cards": 0,
+                "total_reviews": 0,
+                "study_minutes": 0.0
+            }
+
+        def parse_db_date(val) -> str:
+            if not val:
+                return ""
+            if isinstance(val, str):
+                return val[:10]
+            return val.strftime("%Y-%m-%d")
+
+        for row in reviews_res.all():
+            d_str = parse_db_date(row.date_str)
+            if d_str in daily_map:
+                daily_map[d_str]["total_reviews"] = row.total_reviews or 0
+                daily_map[d_str]["unique_cards"] = row.unique_cards or 0
+                daily_map[d_str]["study_minutes"] = round((row.total_active_time or 0.0) / 60.0, 1)
+
+        for row in new_cards_res.all():
+            d_str = parse_db_date(row.date_str)
+            if d_str in daily_map:
+                daily_map[d_str]["new_cards"] = row.new_cards or 0
+
+        # Compute all-time averages across active days only
+        all_time_by_day: dict = {}
+        for row in all_reviews_res.all():
+            d_str = parse_db_date(row.date_str)
+            if d_str:
+                all_time_by_day.setdefault(d_str, {"new_cards": 0, "unique_cards": 0, "total_reviews": 0, "study_minutes": 0.0})
+                all_time_by_day[d_str]["total_reviews"] = row.total_reviews or 0
+                all_time_by_day[d_str]["unique_cards"] = row.unique_cards or 0
+                all_time_by_day[d_str]["study_minutes"] = round((row.total_active_time or 0.0) / 60.0, 1)
+        for row in all_new_res.all():
+            d_str = parse_db_date(row.date_str)
+            if d_str:
+                all_time_by_day.setdefault(d_str, {"new_cards": 0, "unique_cards": 0, "total_reviews": 0, "study_minutes": 0.0})
+                all_time_by_day[d_str]["new_cards"] = row.new_cards or 0
+
+        active_days = len(all_time_by_day)
+        if active_days > 0:
+            avg_new = round(sum(v["new_cards"] for v in all_time_by_day.values()) / active_days, 1)
+            avg_unique = round(sum(v["unique_cards"] for v in all_time_by_day.values()) / active_days, 1)
+            avg_reviews = round(sum(v["total_reviews"] for v in all_time_by_day.values()) / active_days, 1)
+            avg_minutes = round(sum(v["study_minutes"] for v in all_time_by_day.values()) / active_days, 1)
+        else:
+            avg_new = avg_unique = avg_reviews = avg_minutes = 0.0
+
+        return {
+            "days": [daily_map[k] for k in sorted(daily_map.keys())],
+            "all_time_avg": {
+                "new_cards": avg_new,
+                "unique_cards": avg_unique,
+                "total_reviews": avg_reviews,
+                "study_minutes": avg_minutes,
+            }
+        }
+

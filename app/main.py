@@ -108,10 +108,12 @@ from app.modules.quiz.routes.api import router as quiz_api_router
 from app.modules.quiz.routes.room import router as room_router
 from app.modules.sso_module.routes import router as sso_api_router
 from app.modules.notification.routes.api import router as notification_router
+from app.modules.stats.routes.api import router as stats_router
 
 app.include_router(quiz_api_router, prefix=settings.API_V1_STR)
 app.include_router(room_router, prefix=settings.API_V1_STR)
 app.include_router(notification_router, prefix=settings.API_V1_STR)
+app.include_router(stats_router, prefix=settings.API_V1_STR)
 app.include_router(sso_api_router)
 
 # --- Health Checks for Ecosystem ---
