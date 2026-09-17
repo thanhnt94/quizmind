@@ -1,8 +1,10 @@
+from typing import Optional, List, Dict, Any
 from sqlalchemy import func, Integer, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.modules.quiz.models import Quiz, Question, Option, Category
 from app.modules.quiz.schemas import QuizSchema, QuestionSchema, CategorySchema
+
 
 class QuizService:
     @staticmethod
