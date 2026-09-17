@@ -55,3 +55,23 @@ async def get_daily_summary(request: Request, tz_offset: int = -420, db: AsyncSe
         return await AnalyticsService.get_daily_summary(db, user.id, tz_offset=tz_offset)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/stats/weekly-report")
+async def get_weekly_report(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return await AnalyticsService.get_weekly_report(db, user.id)
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/stats/speed-accuracy")
+async def get_speed_accuracy(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return await AnalyticsService.get_speed_accuracy_stats(db, user.id)
+    except Exception as e:
+        return {"error": str(e)}

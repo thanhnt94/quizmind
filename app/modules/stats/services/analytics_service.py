@@ -199,144 +199,443 @@ class AnalyticsService:
             start_date = today
         elif time_filter == "week":
             start_date = today - timedelta(days=today.weekday())
+        elif time_filter == "month":
+            start_date = today.replace(day=1)
 
-        # 1. Fetch XP Leaderboard
+        # 1. Fetch current user baseline
+        cur_user_res = await db.execute(select(User).where(User.id == current_user_id))
+        cur_user = cur_user_res.scalar_one_or_none()
+        cur_gam_res = await db.execute(select(UserGamification).where(UserGamification.user_id == current_user_id))
+        cur_gam = cur_gam_res.scalar_one_or_none()
+        
+        cur_streak = cur_gam.streak_count if cur_gam else 0
+        cur_level = cur_gam.level if cur_gam else 1
+        
+        # Current user's XP
+        if time_filter == "all_time":
+            cur_xp = cur_gam.xp if cur_gam else 0
+        else:
+            cur_xp_res = await db.execute(
+                select(func.sum(XPTransaction.amount)).where(
+                    XPTransaction.user_id == current_user_id,
+                    XPTransaction.created_at >= start_date
+                )
+            )
+            cur_xp = cur_xp_res.scalar() or 0
+
+        # Current user's questions & time from UserDailyStats
+        q_time_stmt = select(
+            func.sum(UserDailyStats.questions_attempted).label("total_q"),
+            func.sum(UserDailyStats.total_time_seconds).label("total_time")
+        ).where(UserDailyStats.user_id == current_user_id)
+        if start_date:
+            q_time_stmt = q_time_stmt.where(UserDailyStats.date >= start_date.date())
+        q_time_res = (await db.execute(q_time_stmt)).one_or_none()
+        cur_questions = (q_time_res[0] if q_time_res else 0) or 0
+        cur_time = (q_time_res[1] if q_time_res else 0) or 0
+
+        # --- A. XP LEADERBOARD ---
         if time_filter == "all_time":
             stmt_xp = (
-                select(UserGamification.user_id, User.username, UserGamification.xp.label("xp"), UserGamification.level, UserGamification.streak_count)
-                .join(User, User.id == UserGamification.user_id)
+                select(
+                    User.id, User.username, User.full_name,
+                    UserGamification.xp.label("val"), UserGamification.level, UserGamification.streak_count
+                )
+                .join(UserGamification, User.id == UserGamification.user_id)
                 .order_by(desc(UserGamification.xp))
-                .limit(5)
+                .limit(50)
             )
+            xp_res = await db.execute(stmt_xp)
+            xp_rows = xp_res.all()
+            
+            ahead_xp_res = await db.execute(
+                select(func.count(UserGamification.user_id))
+                .where(UserGamification.xp > cur_xp)
+            )
+            xp_rank = (ahead_xp_res.scalar() or 0) + 1
         else:
             stmt_xp = (
                 select(
-                    XPTransaction.user_id, 
-                    User.username, 
-                    func.sum(XPTransaction.amount).label("xp"),
-                    UserGamification.level,
-                    UserGamification.streak_count
+                    User.id, User.username, User.full_name,
+                    func.sum(XPTransaction.amount).label("val"),
+                    func.coalesce(UserGamification.level, 1).label("level"),
+                    func.coalesce(UserGamification.streak_count, 0).label("streak_count")
                 )
                 .join(User, User.id == XPTransaction.user_id)
                 .outerjoin(UserGamification, UserGamification.user_id == XPTransaction.user_id)
                 .where(XPTransaction.created_at >= start_date)
-                .group_by(XPTransaction.user_id, User.username, UserGamification.level, UserGamification.streak_count)
+                .group_by(User.id, User.username, User.full_name, UserGamification.level, UserGamification.streak_count)
                 .order_by(desc(func.sum(XPTransaction.amount)))
-                .limit(5)
+                .limit(50)
             )
-            
-        results_xp = await db.execute(stmt_xp)
-        rows_xp = results_xp.all()
+            xp_res = await db.execute(stmt_xp)
+            xp_rows = xp_res.all()
 
-        leaderboard = []
-        current_user_rank = None
-        current_user_obj = await db.execute(select(User).where(User.id == current_user_id))
-        current_user = current_user_obj.scalar_one_or_none()
+            ahead_sub = (
+                select(XPTransaction.user_id)
+                .where(XPTransaction.created_at >= start_date)
+                .group_by(XPTransaction.user_id)
+                .having(func.sum(XPTransaction.amount) > cur_xp)
+                .subquery()
+            )
+            ahead_xp_res = await db.execute(select(func.count()).select_from(ahead_sub))
+            xp_rank = (ahead_xp_res.scalar() or 0) + 1
 
-        for rank, row in enumerate(rows_xp, start=1):
-            entry = {
-                "rank": rank,
-                "user_id": row.user_id,
-                "username": row.username,
-                "xp": row.xp,
-                "level": row.level or 1,
-                "streak": row.streak_count or 0,
-                "is_current_user": row.user_id == current_user_id,
+        xp_list = [
+            {
+                "rank": idx,
+                "user_id": r.id,
+                "username": r.username,
+                "full_name": r.full_name or r.username,
+                "value": int(r.val or 0),
+                "level": r.level or 1,
+                "streak": r.streak_count or 0,
+                "active_status": "online",
+                "active_text": "Active now"
             }
-            leaderboard.append(entry)
-            if row.user_id == current_user_id:
-                current_user_rank = rank
+            for idx, r in enumerate(xp_rows, 1)
+        ]
 
-        # If current user isn't in top 5, find their rank
-        if current_user_id and current_user_rank is None and current_user:
-            user_xp = 0
-            ahead_count = 0
-            if time_filter == "all_time":
-                uxp_res = await db.execute(select(UserGamification.xp).where(UserGamification.user_id == current_user_id))
-                user_xp = uxp_res.scalar() or 0
-                cnt_res = await db.execute(select(func.count(UserGamification.user_id)).where(UserGamification.xp > user_xp))
-                ahead_count = cnt_res.scalar() or 0
-            else:
-                uxp_res = await db.execute(select(func.sum(XPTransaction.amount)).where(XPTransaction.user_id == current_user_id, XPTransaction.created_at >= start_date))
-                user_xp = uxp_res.scalar() or 0
-                cnt_res = await db.execute(
-                    select(func.count(func.distinct(XPTransaction.user_id)))
-                    .where(XPTransaction.created_at >= start_date)
-                    .group_by(XPTransaction.user_id)
-                    .having(func.sum(XPTransaction.amount) > user_xp)
-                )
-                ahead_count = len(cnt_res.all())
+        # --- B. STREAK LEADERBOARD ---
+        stmt_streak = (
+            select(
+                User.id, User.username, User.full_name,
+                UserGamification.streak_count.label("val"), UserGamification.level, UserGamification.streak_count
+            )
+            .join(UserGamification, User.id == UserGamification.user_id)
+            .order_by(desc(UserGamification.streak_count))
+            .limit(50)
+        )
+        streak_res = await db.execute(stmt_streak)
+        streak_rows = streak_res.all()
+        ahead_streak_res = await db.execute(
+            select(func.count(UserGamification.user_id))
+            .where(UserGamification.streak_count > cur_streak)
+        )
+        streak_rank = (ahead_streak_res.scalar() or 0) + 1
 
-            current_user_rank = ahead_count + 1
-            
-            cur_gam_res = await db.execute(select(UserGamification).where(UserGamification.user_id == current_user_id))
-            cur_gam = cur_gam_res.scalar_one_or_none()
-            leaderboard.append({
-                "rank": current_user_rank,
-                "user_id": current_user_id,
-                "username": current_user.username,
-                "xp": user_xp,
-                "level": cur_gam.level if cur_gam else 1,
-                "streak": cur_gam.streak_count if cur_gam else 0,
-                "is_current_user": True,
-                "out_of_top_5": True,
-            })
+        streak_list = [
+            {
+                "rank": idx,
+                "user_id": r.id,
+                "username": r.username,
+                "full_name": r.full_name or r.username,
+                "value": int(r.val or 0),
+                "level": r.level or 1,
+                "streak": r.streak_count or 0,
+                "active_status": "online",
+                "active_text": "Active now"
+            }
+            for idx, r in enumerate(streak_rows, 1)
+        ]
 
-        # 2. Fetch Time Leaderboard
-        stmt_time = (
-            select(UserDailyStats.user_id, User.username, func.sum(UserDailyStats.total_time_seconds).label("total_time"))
+        # --- C. QUESTIONS LEADERBOARD ---
+        stmt_q = (
+            select(
+                User.id, User.username, User.full_name,
+                func.sum(UserDailyStats.questions_attempted).label("val"),
+                func.coalesce(UserGamification.level, 1).label("level"),
+                func.coalesce(UserGamification.streak_count, 0).label("streak_count")
+            )
             .join(User, User.id == UserDailyStats.user_id)
+            .outerjoin(UserGamification, UserGamification.user_id == User.id)
+        )
+        if start_date:
+            stmt_q = stmt_q.where(UserDailyStats.date >= start_date.date())
+        stmt_q = (
+            stmt_q.group_by(User.id, User.username, User.full_name, UserGamification.level, UserGamification.streak_count)
+            .order_by(desc(func.sum(UserDailyStats.questions_attempted)))
+            .limit(50)
+        )
+        q_res = await db.execute(stmt_q)
+        q_rows = q_res.all()
+
+        ahead_q_stmt = select(func.count(func.distinct(UserDailyStats.user_id))).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.questions_attempted) > cur_questions)
+        if start_date:
+            ahead_q_stmt = select(func.count(func.distinct(UserDailyStats.user_id))).where(UserDailyStats.date >= start_date.date()).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.questions_attempted) > cur_questions)
+        ahead_q_res = await db.execute(ahead_q_stmt)
+        q_rank = len(ahead_q_res.all()) + 1
+
+        questions_list = [
+            {
+                "rank": idx,
+                "user_id": r.id,
+                "username": r.username,
+                "full_name": r.full_name or r.username,
+                "value": int(r.val or 0),
+                "level": r.level or 1,
+                "streak": r.streak_count or 0,
+                "active_status": "online",
+                "active_text": "Active now"
+            }
+            for idx, r in enumerate(q_rows, 1)
+        ]
+
+        # --- D. TIME LEADERBOARD ---
+        stmt_time = (
+            select(
+                User.id, User.username, User.full_name,
+                func.sum(UserDailyStats.total_time_seconds).label("val"),
+                func.coalesce(UserGamification.level, 1).label("level"),
+                func.coalesce(UserGamification.streak_count, 0).label("streak_count")
+            )
+            .join(User, User.id == UserDailyStats.user_id)
+            .outerjoin(UserGamification, UserGamification.user_id == User.id)
         )
         if start_date:
             stmt_time = stmt_time.where(UserDailyStats.date >= start_date.date())
-            
-        stmt_time = stmt_time.group_by(UserDailyStats.user_id, User.username).order_by(desc(func.sum(UserDailyStats.total_time_seconds))).limit(5)
-        
-        time_results = await db.execute(stmt_time)
-        time_rows = time_results.all()
+        stmt_time = (
+            stmt_time.group_by(User.id, User.username, User.full_name, UserGamification.level, UserGamification.streak_count)
+            .order_by(desc(func.sum(UserDailyStats.total_time_seconds)))
+            .limit(50)
+        )
+        time_res = await db.execute(stmt_time)
+        time_rows = time_res.all()
 
-        time_leaderboard = []
-        current_user_time_rank = None
-        for rank, row in enumerate(time_rows, start=1):
-            uid = row.user_id
-            time_leaderboard.append({
-                "rank": rank,
-                "user_id": uid,
-                "username": row.username,
-                "total_time": int(row.total_time or 0),
-                "is_current_user": uid == current_user_id,
-            })
-            if uid == current_user_id:
-                current_user_time_rank = rank
+        ahead_time_stmt = select(func.count(func.distinct(UserDailyStats.user_id))).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.total_time_seconds) > cur_time)
+        if start_date:
+            ahead_time_stmt = select(func.count(func.distinct(UserDailyStats.user_id))).where(UserDailyStats.date >= start_date.date()).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.total_time_seconds) > cur_time)
+        ahead_time_res = await db.execute(ahead_time_stmt)
+        time_rank = len(ahead_time_res.all()) + 1
 
-        if current_user_id and current_user_time_rank is None and current_user:
-            stmt_my_time = select(func.sum(UserDailyStats.total_time_seconds)).where(UserDailyStats.user_id == current_user_id)
-            if start_date:
-                stmt_my_time = stmt_my_time.where(UserDailyStats.date >= start_date.date())
-            user_time_res = await db.execute(stmt_my_time)
-            user_time = int(user_time_res.scalar() or 0)
-            
-            stmt_ahead_time = select(func.count(func.distinct(UserDailyStats.user_id))).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.total_time_seconds) > user_time)
-            if start_date:
-                stmt_ahead_time = select(func.count(func.distinct(UserDailyStats.user_id))).where(UserDailyStats.date >= start_date.date()).group_by(UserDailyStats.user_id).having(func.sum(UserDailyStats.total_time_seconds) > user_time)
-            
-            ahead_time_res = await db.execute(stmt_ahead_time)
-            current_user_time_rank = len(ahead_time_res.all()) + 1
-            
-            time_leaderboard.append({
-                "rank": current_user_time_rank,
-                "user_id": current_user_id,
-                "username": current_user.username,
-                "total_time": user_time,
-                "is_current_user": True,
-                "out_of_top_5": True,
-                })
+        time_list = [
+            {
+                "rank": idx,
+                "user_id": r.id,
+                "username": r.username,
+                "full_name": r.full_name or r.username,
+                "value": int(r.val or 0),
+                "total_time": int(r.val or 0),
+                "level": r.level or 1,
+                "streak": r.streak_count or 0,
+                "active_status": "online",
+                "active_text": "Active now"
+            }
+            for idx, r in enumerate(time_rows, 1)
+        ]
+
+        # Compatibility list for older widgets in Dashboard.tsx
+        compat_leaderboard = [
+            {
+                "rank": x["rank"],
+                "user_id": x["user_id"],
+                "username": x["username"],
+                "xp": x["value"],
+                "level": x["level"],
+                "streak": x["streak"],
+                "is_current_user": x["user_id"] == current_user_id
+            }
+            for x in xp_list[:5]
+        ]
+        compat_time = [
+            {
+                "rank": t["rank"],
+                "user_id": t["user_id"],
+                "username": t["username"],
+                "total_time": t["value"],
+                "is_current_user": t["user_id"] == current_user_id
+            }
+            for t in time_list[:5]
+        ]
 
         return {
-            "leaderboard": leaderboard,
-            "current_user_rank": current_user_rank,
-            "time_leaderboard": time_leaderboard,
-            "current_user_time_rank": current_user_time_rank,
+            "xp": {
+                "list": xp_list,
+                "user_rank": xp_rank,
+                "user_value": cur_xp
+            },
+            "streak": {
+                "list": streak_list,
+                "user_rank": streak_rank,
+                "user_value": cur_streak
+            },
+            "questions": {
+                "list": questions_list,
+                "user_rank": q_rank,
+                "user_value": cur_questions
+            },
+            "time": {
+                "list": time_list,
+                "user_rank": time_rank,
+                "user_value": cur_time
+            },
+            # Dashboard.tsx compatibility
+            "leaderboard": compat_leaderboard,
+            "current_user_rank": xp_rank,
+            "time_leaderboard": compat_time,
+            "current_user_time_rank": time_rank
+        }
+
+    @staticmethod
+    async def get_weekly_report(db: AsyncSession, user_id: int):
+        today = datetime.utcnow().date()
+        start_cur = today - timedelta(days=6)
+        
+        cur_stmt = select(
+            func.sum(UserDailyStats.questions_attempted).label("total_q"),
+            func.sum(UserDailyStats.correct_answers).label("total_correct"),
+            func.sum(UserDailyStats.total_time_seconds).label("total_time")
+        ).where(
+            UserDailyStats.user_id == user_id,
+            UserDailyStats.date >= start_cur
+        )
+        cur_res = (await db.execute(cur_stmt)).one_or_none()
+        
+        start_prev = today - timedelta(days=13)
+        end_prev = today - timedelta(days=7)
+        prev_stmt = select(
+            func.sum(UserDailyStats.questions_attempted).label("total_q"),
+            func.sum(UserDailyStats.correct_answers).label("total_correct"),
+            func.sum(UserDailyStats.total_time_seconds).label("total_time")
+        ).where(
+            UserDailyStats.user_id == user_id,
+            UserDailyStats.date >= start_prev,
+            UserDailyStats.date <= end_prev
+        )
+        prev_res = (await db.execute(prev_stmt)).one_or_none()
+        
+        cur_q = (cur_res.total_q if cur_res and cur_res.total_q else 0) or 0
+        cur_correct = (cur_res.total_correct if cur_res and cur_res.total_correct else 0) or 0
+        cur_time = (cur_res.total_time if cur_res and cur_res.total_time else 0) or 0
+        cur_accuracy = round((cur_correct / cur_q * 100), 1) if cur_q > 0 else 0.0
+        
+        prev_q = (prev_res.total_q if prev_res and prev_res.total_q else 0) or 0
+        prev_correct = (prev_res.total_correct if prev_res and prev_res.total_correct else 0) or 0
+        prev_accuracy = round((prev_correct / prev_q * 100), 1) if prev_q > 0 else 0.0
+        
+        q_delta = cur_q - prev_q
+        q_pct_change = round((q_delta / prev_q * 100), 1) if prev_q > 0 else (100.0 if cur_q > 0 else 0.0)
+        accuracy_delta = round(cur_accuracy - prev_accuracy, 1)
+        
+        best_stmt = select(
+            UserDailyStats.date,
+            UserDailyStats.questions_attempted
+        ).where(
+            UserDailyStats.user_id == user_id,
+            UserDailyStats.date >= start_cur
+        ).order_by(desc(UserDailyStats.questions_attempted)).limit(1)
+        best_res = (await db.execute(best_stmt)).first()
+        
+        best_day = "N/A"
+        if best_res and best_res[0]:
+            dt = best_res[0]
+            if isinstance(dt, str):
+                try:
+                    dt = datetime.strptime(dt[:10], "%Y-%m-%d")
+                except Exception:
+                    pass
+            if isinstance(dt, (datetime, date)):
+                best_day = dt.strftime("%A")
+                
+        insights = []
+        if cur_q == 0:
+            insights = [
+                "You haven't practiced any questions this week yet. Start with a quick 5-question session today! 🚀",
+                "Regular daily practice builds strong retention and prevents memory decay."
+            ]
+        else:
+            insights.append(f"Great pace! You answered {cur_q} questions this week. Keep up this momentum! 🔥")
+            if accuracy_delta > 0:
+                insights.append(f"Precision Boost! Your accuracy increased by {accuracy_delta}% compared to last week. Solid mastery! 🎯")
+            elif accuracy_delta < 0:
+                insights.append("Focus Tip: Your accuracy dipped slightly. Try using 'Review' mode to strengthen weak questions. 🧠")
+            else:
+                insights.append("Great consistency! Your learning accuracy is holding perfectly steady. 📈")
+                
+            if cur_time > 1200:
+                insights.append(f"Deep Focus: You invested {round(cur_time / 60, 1)} minutes in focused study. Outstanding stamina! ⏱️")
+            else:
+                insights.append("Tip: Even 3 to 5 minutes of daily practice reinforces neural pathways effectively! ⚡")
+                
+        return {
+            "current_week": {
+                "questions": cur_q,
+                "accuracy": cur_accuracy,
+                "time_minutes": round(cur_time / 60, 1)
+            },
+            "previous_week": {
+                "questions": prev_q,
+                "accuracy": prev_accuracy
+            },
+            "deltas": {
+                "questions_change_pct": q_pct_change,
+                "questions_change_absolute": q_delta,
+                "accuracy_change": accuracy_delta
+            },
+            "best_day": best_day,
+            "ai_insights": insights
+        }
+
+    @staticmethod
+    async def get_speed_accuracy_stats(db: AsyncSession, user_id: int):
+        stmt = select(
+            func.sum(case((UserAnswer.active_time <= 3.0, 1), else_=0)).label("fast_total"),
+            func.sum(case(((UserAnswer.active_time <= 3.0) & (UserAnswer.is_correct == True), 1), else_=0)).label("fast_correct"),
+            
+            func.sum(case(((UserAnswer.active_time > 3.0) & (UserAnswer.active_time <= 7.0), 1), else_=0)).label("optimal_total"),
+            func.sum(case(((UserAnswer.active_time > 3.0) & (UserAnswer.active_time <= 7.0) & (UserAnswer.is_correct == True), 1), else_=0)).label("optimal_correct"),
+            
+            func.sum(case(((UserAnswer.active_time > 7.0) & (UserAnswer.active_time <= 15.0), 1), else_=0)).label("calculated_total"),
+            func.sum(case(((UserAnswer.active_time > 7.0) & (UserAnswer.active_time <= 15.0) & (UserAnswer.is_correct == True), 1), else_=0)).label("calculated_correct"),
+            
+            func.sum(case((UserAnswer.active_time > 15.0, 1), else_=0)).label("deep_total"),
+            func.sum(case(((UserAnswer.active_time > 15.0) & (UserAnswer.is_correct == True), 1), else_=0)).label("deep_correct"),
+            
+            func.sum(case((UserAnswer.is_correct == True, UserAnswer.active_time), else_=0.0)).label("sum_time_correct"),
+            func.sum(case((UserAnswer.is_correct == True, 1), else_=0)).label("count_correct"),
+            
+            func.sum(case((UserAnswer.is_correct == False, UserAnswer.active_time), else_=0.0)).label("sum_time_wrong"),
+            func.sum(case((UserAnswer.is_correct == False, 1), else_=0)).label("count_wrong"),
+            
+            func.count().label("total_answers_analyzed")
+        ).join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)\
+         .where(QuizAttempt.user_id == user_id, UserAnswer.active_time > 0)
+         
+        results = await db.execute(stmt)
+        row = results.first()
+        
+        if not row or not row.total_answers_analyzed:
+            return {
+                "bins": [
+                    {"bin": "fast", "label": "Fast (0-3s)", "accuracy": 0.0, "total": 0, "correct": 0},
+                    {"bin": "optimal", "label": "Optimal (3-7s)", "accuracy": 0.0, "total": 0, "correct": 0},
+                    {"bin": "calculated", "label": "Calculated (7-15s)", "accuracy": 0.0, "total": 0, "correct": 0},
+                    {"bin": "deep", "label": "Deep Focus (>15s)", "accuracy": 0.0, "total": 0, "correct": 0}
+                ],
+                "avg_speed_correct": 0.0,
+                "avg_speed_wrong": 0.0,
+                "total_answers_analyzed": 0
+            }
+            
+        fast_t = row.fast_total or 0
+        fast_c = row.fast_correct or 0
+        fast_acc = round((fast_c / fast_t * 100), 1) if fast_t > 0 else 0.0
+        
+        opt_t = row.optimal_total or 0
+        opt_c = row.optimal_correct or 0
+        opt_acc = round((opt_c / opt_t * 100), 1) if opt_t > 0 else 0.0
+        
+        calc_t = row.calculated_total or 0
+        calc_c = row.calculated_correct or 0
+        calc_acc = round((calc_c / calc_t * 100), 1) if calc_t > 0 else 0.0
+        
+        deep_t = row.deep_total or 0
+        deep_c = row.deep_correct or 0
+        deep_acc = round((deep_c / deep_t * 100), 1) if deep_t > 0 else 0.0
+        
+        avg_correct = round(float(row.sum_time_correct or 0) / max(1, row.count_correct or 1), 1) if row.count_correct else 0.0
+        avg_wrong = round(float(row.sum_time_wrong or 0) / max(1, row.count_wrong or 1), 1) if row.count_wrong else 0.0
+        
+        return {
+            "bins": [
+                {"bin": "fast", "label": "Fast (0-3s)", "accuracy": fast_acc, "total": fast_t, "correct": fast_c},
+                {"bin": "optimal", "label": "Optimal (3-7s)", "accuracy": opt_acc, "total": opt_t, "correct": opt_c},
+                {"bin": "calculated", "label": "Calculated (7-15s)", "accuracy": calc_acc, "total": calc_t, "correct": calc_c},
+                {"bin": "deep", "label": "Deep Focus (>15s)", "accuracy": deep_acc, "total": deep_t, "correct": deep_c}
+            ],
+            "avg_speed_correct": avg_correct,
+            "avg_speed_wrong": avg_wrong,
+            "total_answers_analyzed": row.total_answers_analyzed
         }
 
     @staticmethod
