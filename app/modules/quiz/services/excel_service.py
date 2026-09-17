@@ -242,8 +242,9 @@ class ExcelQuizService:
         # Discover all custom keys present in any question's others dict
         custom_cols = set()
         for q in questions:
-            if q.others and isinstance(q.others, dict):
-                for k in q.others.keys():
+            others = q.get("others") if isinstance(q, dict) else getattr(q, "others", None)
+            if others and isinstance(others, dict):
+                for k in others.keys():
                     if k not in ("id", "item_id", "order_in_container", "question", "option_a", "option_b", "option_c", "option_d", "answer", "correct_answer", "correct_answer_text", "question_image_file", "question_audio_file", "guidance", "explanation", "image", "audio"):
                         custom_cols.add(k)
                         
@@ -251,57 +252,91 @@ class ExcelQuizService:
         
         rows = []
         for q in questions:
-            # Safely extract options without triggering async lazy-load
-            options_list = q.__dict__.get("options")
-            if options_list is None and hasattr(q, "options"):
-                try:
-                    options_list = q.options
-                except Exception:
-                    options_list = []
-            options_list = options_list or []
+            is_dict = isinstance(q, dict)
+            if is_dict:
+                q_id = q.get("id")
+                q_content = q.get("content", "")
+                q_explanation = q.get("explanation", "")
+                q_ai_explanation = q.get("ai_explanation", "")
+                q_image = q.get("image", "")
+                q_audio = q.get("audio", "")
+                q_type = q.get("question_type", "normal")
+                q_allow_shuffle = q.get("allow_shuffle", True)
+                q_order = q.get("order_in_group", "")
+                group_id = q.get("group_code", "")
+                group_title = q.get("group_title", "")
+                passage = q.get("passage_text", "")
+                group_audio = q.get("group_audio", "")
+                group_image = q.get("group_image", "")
+                others = q.get("others") or {}
+                
+                raw_opts = q.get("options", [])
+                opt_a = raw_opts[0].get("content", "") if len(raw_opts) > 0 else ""
+                opt_b = raw_opts[1].get("content", "") if len(raw_opts) > 1 else ""
+                opt_c = raw_opts[2].get("content", "") if len(raw_opts) > 2 else ""
+                opt_d = raw_opts[3].get("content", "") if len(raw_opts) > 3 else ""
+                correct_opt = next((o.get("content", "") for o in raw_opts if o.get("is_correct")), "")
+            else:
+                q_id = q.id
+                q_content = q.content
+                q_explanation = q.explanation or ""
+                q_ai_explanation = q.ai_explanation or ""
+                q_image = q.image or ""
+                q_audio = q.audio or ""
+                q_type = q.question_type or "normal"
+                q_allow_shuffle = getattr(q, "allow_shuffle", True)
+                q_order = getattr(q, "order_in_group", "") or ""
+                others = q.others if isinstance(q.others, dict) else {}
+                
+                options_list = q.__dict__.get("options")
+                if options_list is None and hasattr(q, "options"):
+                    try: options_list = q.options
+                    except Exception: options_list = []
+                options_list = options_list or []
 
-            opt_a = options_list[0].content if len(options_list) > 0 else ""
-            opt_b = options_list[1].content if len(options_list) > 1 else ""
-            opt_c = options_list[2].content if len(options_list) > 2 else ""
-            opt_d = options_list[3].content if len(options_list) > 3 else ""
-            
-            # The correct answer text:
-            correct_opt = next((o.content for o in options_list if getattr(o, "is_correct", False)), "")
-            
-            # Safely extract group without triggering async lazy-load
-            group_obj = q.__dict__.get("group")
-            if group_obj is None and hasattr(q, "group"):
-                try:
-                    group_obj = q.group
-                except Exception:
-                    group_obj = None
+                opt_a = options_list[0].content if len(options_list) > 0 else ""
+                opt_b = options_list[1].content if len(options_list) > 1 else ""
+                opt_c = options_list[2].content if len(options_list) > 2 else ""
+                opt_d = options_list[3].content if len(options_list) > 3 else ""
+                correct_opt = next((o.content for o in options_list if getattr(o, "is_correct", False)), "")
+                
+                group_obj = q.__dict__.get("group")
+                if group_obj is None and hasattr(q, "group"):
+                    try: group_obj = q.group
+                    except Exception: group_obj = None
+
+                group_id = getattr(group_obj, "group_code", "") if group_obj else ""
+                group_title = getattr(group_obj, "title", "") if group_obj else ""
+                passage = getattr(group_obj, "passage_text", "") if group_obj else ""
+                group_audio = getattr(group_obj, "audio_url", "") if group_obj else ""
+                group_image = getattr(group_obj, "image_url", "") if group_obj else ""
 
             row = {
-                "id": q.id,
-                "group_id": getattr(group_obj, "group_code", "") if group_obj else "",
-                "group_title": getattr(group_obj, "title", "") if group_obj else "",
-                "passage": getattr(group_obj, "passage_text", "") if group_obj else "",
-                "group_audio": getattr(group_obj, "audio_url", "") if group_obj else "",
-                "group_image": getattr(group_obj, "image_url", "") if group_obj else "",
-                "group_order": getattr(q, "order_in_group", "") or "",
-                "allow_shuffle": "NO" if getattr(q, "allow_shuffle", True) is False else "YES",
-                "question": q.content,
+                "id": q_id,
+                "group_id": group_id,
+                "group_title": group_title,
+                "passage": passage,
+                "group_audio": group_audio,
+                "group_image": group_image,
+                "group_order": q_order,
+                "allow_shuffle": "NO" if q_allow_shuffle is False else "YES",
+                "question": q_content,
                 "option_a": opt_a,
                 "option_b": opt_b,
                 "option_c": opt_c,
                 "option_d": opt_d,
                 "answer": correct_opt,
-                "explanation": q.explanation or "",
-                "ai_explanation": q.ai_explanation or "",
-                "image": q.image or "",
-                "audio": q.audio or "",
-                "type": q.question_type or "normal"
+                "explanation": q_explanation,
+                "ai_explanation": q_ai_explanation,
+                "image": q_image,
+                "audio": q_audio,
+                "type": q_type
             }
             
             # Add custom columns
-            if q.others and isinstance(q.others, dict):
+            if others and isinstance(others, dict):
                 for col in custom_cols:
-                    row[col] = q.others.get(col, "")
+                    row[col] = others.get(col, "")
             else:
                 for col in custom_cols:
                     row[col] = ""

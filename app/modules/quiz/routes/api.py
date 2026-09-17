@@ -971,7 +971,35 @@ async def export_quiz(quiz_id: int, request: Request, db: AsyncSession = Depends
             
         category_name = quiz.category.name if quiz.category else "General"
         tags = [t.name for t in quiz.tags] if quiz.tags else []
-        questions = list(quiz.questions or [])
+        
+        extracted_questions = []
+        for q in (quiz.questions or []):
+            opts = []
+            for o in (q.options or []):
+                opts.append({
+                    "content": o.content or "",
+                    "is_correct": bool(o.is_correct)
+                })
+            
+            grp = q.group
+            extracted_questions.append({
+                "id": q.id,
+                "content": q.content or "",
+                "explanation": q.explanation or "",
+                "ai_explanation": q.ai_explanation or "",
+                "image": q.image or "",
+                "audio": q.audio or "",
+                "question_type": q.question_type or "normal",
+                "allow_shuffle": getattr(q, "allow_shuffle", True),
+                "order_in_group": getattr(q, "order_in_group", "") or "",
+                "group_code": getattr(grp, "group_code", "") if grp else "",
+                "group_title": getattr(grp, "title", "") if grp else "",
+                "passage_text": getattr(grp, "passage_text", "") if grp else "",
+                "group_audio": getattr(grp, "audio_url", "") if grp else "",
+                "group_image": getattr(grp, "image_url", "") if grp else "",
+                "options": opts,
+                "others": q.others if isinstance(q.others, dict) else {}
+            })
 
         import asyncio
         excel_bytes = await asyncio.to_thread(
@@ -980,7 +1008,7 @@ async def export_quiz(quiz_id: int, request: Request, db: AsyncSession = Depends
             quiz_description=quiz.description or "",
             category_name=category_name,
             tags=tags,
-            questions=questions
+            questions=extracted_questions
         )
         
         from fastapi.responses import Response
