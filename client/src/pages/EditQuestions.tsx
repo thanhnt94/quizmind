@@ -100,7 +100,8 @@ const EditQuestions = () => {
         explanation: editingQuestion.explanation,
         options: editingQuestion.options,
         image: editingQuestion.image,
-        audio: editingQuestion.audio
+        audio: editingQuestion.audio,
+        others: editingQuestion.others
       })
       setQuestions(questions.map(q => q.id === editingQuestion.id ? editingQuestion : q))
       setEditingQuestion(null)
@@ -359,8 +360,30 @@ const EditQuestions = () => {
                         </div>
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Explanation</label>
-                           <textarea rows={3} value={editingQuestion.explanation} onChange={(e) => setEditingQuestion({ ...editingQuestion, explanation: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-medium text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-300 transition-all resize-none shadow-sm leading-relaxed" placeholder="Add explanation for correct answer..." />
+                           <textarea rows={3} value={editingQuestion.explanation || ''} onChange={(e) => setEditingQuestion({ ...editingQuestion, explanation: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-medium text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-300 transition-all resize-none shadow-sm leading-relaxed" placeholder="Add explanation for correct answer..." />
                         </div>
+
+                        {/* Custom Fields if any */}
+                        {editingQuestion.others && typeof editingQuestion.others === 'object' && Object.keys(editingQuestion.others).length > 0 && (
+                          <div className="space-y-3 pt-3 border-t border-slate-100">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Custom Columns & Fields</label>
+                            {Object.entries(editingQuestion.others).map(([key, val]) => (
+                              <div key={key} className="space-y-1">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono ml-2">{key}</span>
+                                <textarea
+                                  rows={2}
+                                  value={String(val ?? '')}
+                                  onChange={(e) => setEditingQuestion({
+                                    ...editingQuestion,
+                                    others: { ...editingQuestion.others, [key]: e.target.value }
+                                  })}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-300 transition-all resize-none shadow-sm"
+                                  placeholder={`Enter value for ${key}...`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                      </div>
                   </div>
                </motion.div>
@@ -388,14 +411,14 @@ const EditQuestions = () => {
               
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-wider">
-                  {isUpdatingExcel && "Đang cập nhật từ Excel..."}
-                  {excelUpdateError && "Lỗi cập nhật"}
-                  {excelUpdateSuccess && "Cập nhật thành công!"}
+                  {isUpdatingExcel && "Updating from Excel..."}
+                  {excelUpdateError && "Update Failed"}
+                  {excelUpdateSuccess && "Update Successful!"}
                 </p>
                 <p className="text-[9px] font-bold opacity-80 mt-0.5 truncate">
-                  {isUpdatingExcel && "Đang xử lý cấu trúc và đồng bộ hóa câu hỏi..."}
+                  {isUpdatingExcel && "Processing questions and syncing database..."}
                   {excelUpdateError && excelUpdateError}
-                  {excelUpdateSuccess && "Toàn bộ bộ đề thi đã được đồng bộ & cập nhật thành công."}
+                  {excelUpdateSuccess && "All questions and custom fields synchronized successfully."}
                 </p>
               </div>
               

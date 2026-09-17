@@ -85,7 +85,13 @@ async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_o
         print(f"DEBUG: Quiz created ID={db_quiz.id}. Adding {len(questions)} questions...")
         
         question_schemas = []
+        discovered_custom_cols = []
         for q in questions:
+            oth = q.get("others")
+            if isinstance(oth, dict):
+                for k in oth.keys():
+                    if k not in discovered_custom_cols:
+                        discovered_custom_cols.append(k)
             question_schemas.append(QuestionSchema(
                 content=q["content"],
                 image=q.get("image"),
@@ -96,9 +102,27 @@ async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_o
                 allow_shuffle=q.get("allow_shuffle", True),
                 explanation=q.get("explanation"),
                 ai_explanation=q.get("ai_explanation"),
+                others=oth,
                 options=[OptionSchema(content=o["content"], is_correct=o["is_correct"]) for o in q["options"]]
             ))
         await QuizService.bulk_add_questions(db, db_quiz.id, question_schemas, groups_data=metadata.get("groups", []))
+
+        # Auto-register custom columns in practice_settings
+        if discovered_custom_cols:
+            from sqlalchemy.orm.attributes import flag_modified
+            p_sett = dict(db_quiz.practice_settings or {})
+            existing_custom = list(p_sett.get("custom_columns", []))
+            existing_insight = list(p_sett.get("insight_columns", []))
+            for col in discovered_custom_cols:
+                if col not in existing_custom:
+                    existing_custom.append(col)
+                if col not in existing_insight:
+                    existing_insight.append(col)
+            p_sett["custom_columns"] = existing_custom
+            p_sett["insight_columns"] = existing_insight
+            db_quiz.practice_settings = p_sett
+            flag_modified(db_quiz, "practice_settings")
+            await db.commit()
             
         # Add tags if present
         if metadata.get("tags"):
@@ -597,6 +621,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
         "category_id": quiz.category_id,
         "creator_id": quiz.creator_id,
         "is_collaborator": is_collaborator,
+        "practice_settings": quiz.practice_settings or {},
         "user_total_xp": user_stats.get("xp", 0),
         "groups": [
             {
@@ -621,6 +646,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 "content": q.content,
                 "explanation": q.explanation,
                 "ai_explanation": q.ai_explanation,
+                "others": q.others if isinstance(q.others, dict) else {},
                 "stats": getattr(q, 'stats', None),
                 "box_level": mastery_map.get(q.id, {}).get("box_level", 1),
                 "is_ignored": mastery_map.get(q.id, {}).get("is_ignored", False),
@@ -1194,6 +1220,7 @@ async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size
                 "points": q.points,
                 "image": q.image,
                 "audio": q.audio,
+                "others": q.others if isinstance(q.others, dict) else {},
                 "stats": stats_map.get(q.id, {"total": 0, "correct": 0, "wrong": 0}),
                 "is_ignored": ignored_map.get(q.id, False),
                 "options": [
@@ -1411,6 +1438,10 @@ async def update_question(question_id: int, data: dict, db: AsyncSession = Depen
     if "points" in data: question.points = data["points"]
     if "image" in data: question.image = data["image"]
     if "audio" in data: question.audio = data["audio"]
+    if "others" in data:
+        from sqlalchemy.orm.attributes import flag_modified
+        question.others = data["others"]
+        flag_modified(question, "others")
     
     # Update options if provided
     if "options" in data:
@@ -2618,7 +2649,7 @@ async def get_quiz_roadmap_calendar(
 
 @router.get("/{quiz_id}/practice-settings")
 async def get_quiz_practice_settings(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import Quiz, UserQuizSettings
+    from app.modules.quiz.models import Quiz, UserQuizSettings, Question
     user_id = await get_request_user_id(request, db)
 
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
@@ -2633,10 +2664,29 @@ async def get_quiz_practice_settings(request: Request, quiz_id: int, db: AsyncSe
     )
     user_sett = user_sett_res.scalar_one_or_none()
 
+    # Discover custom columns from question others
+    res_q = await db.execute(select(Question.others).where(Question.quiz_id == quiz_id))
+    system_cols = {"content", "explanation", "ai_explanation", "image", "audio", "options", "points", "question_type", "order_in_group", "allow_shuffle", "id", "item_id"}
+    dynamic_cols = set()
+    for row in res_q.all():
+        oth = row[0]
+        if oth and isinstance(oth, dict):
+            for k in oth.keys():
+                if k not in system_cols:
+                    dynamic_cols.add(k)
+    p_settings = quiz.practice_settings if isinstance(quiz.practice_settings, dict) else {}
+    for cc in p_settings.get("custom_columns", []):
+        if cc not in system_cols:
+            dynamic_cols.add(cc)
+
+    available_columns = ["content", "explanation", "ai_explanation", "options"] + sorted(list(dynamic_cols))
+
     return {
         "creator_settings": quiz.practice_settings or {},
         "user_settings": user_sett.settings if (user_sett and user_sett.settings) else {},
-        "available_columns": ["content", "explanation", "options"]
+        "available_columns": available_columns,
+        "custom_columns": p_settings.get("custom_columns", []),
+        "insight_columns": p_settings.get("insight_columns", [])
     }
 
 
@@ -2647,7 +2697,8 @@ async def save_quiz_practice_settings(
     payload: dict,
     db: AsyncSession = Depends(get_db)
 ):
-    from app.modules.quiz.models import Quiz, UserQuizSettings
+    from app.modules.quiz.models import Quiz, UserQuizSettings, QuizCollaborator
+    from sqlalchemy.orm.attributes import flag_modified
     user_id = await get_request_user_id(request, db)
 
     settings_data = payload.get("settings", {})
@@ -2655,9 +2706,15 @@ async def save_quiz_practice_settings(
 
     if is_creator:
         quiz = await QuizService.get_quiz_by_id(db, quiz_id)
-        if quiz and (quiz.creator_id == user_id or user_id == 1):
-            quiz.practice_settings = settings_data
-            await db.commit()
+        if quiz:
+            collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+            is_collab = collab_res.scalar() is not None
+            if quiz.creator_id == user_id or user_id == 1 or is_collab:
+                current = dict(quiz.practice_settings or {})
+                current.update(settings_data)
+                quiz.practice_settings = current
+                flag_modified(quiz, "practice_settings")
+                await db.commit()
 
     user_sett_res = await db.execute(
         select(UserQuizSettings).where(
@@ -2675,10 +2732,195 @@ async def save_quiz_practice_settings(
         )
         db.add(user_sett)
     else:
-        user_sett.settings = settings_data
+        current_u = dict(user_sett.settings or {})
+        current_u.update(settings_data)
+        user_sett.settings = current_u
+        flag_modified(user_sett, "settings")
 
     await db.commit()
     return {"status": "success", "settings": settings_data}
+
+
+@router.get("/{quiz_id}/columns-overview")
+async def get_quiz_columns_overview(quiz_id: int, db: AsyncSession = Depends(get_db)):
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+
+    from app.modules.quiz.models import Question
+    res = await db.execute(select(Question).where(Question.quiz_id == quiz_id))
+    questions = res.scalars().all()
+    total_questions = len(questions)
+
+    col_counts = {
+        "content": sum(1 for q in questions if q.content and str(q.content).strip()),
+        "explanation": sum(1 for q in questions if q.explanation and str(q.explanation).strip()),
+        "ai_explanation": sum(1 for q in questions if q.ai_explanation and str(q.ai_explanation).strip()),
+        "image": sum(1 for q in questions if q.image and str(q.image).strip()),
+        "audio": sum(1 for q in questions if q.audio and str(q.audio).strip()),
+    }
+
+    system_cols = {"content", "explanation", "ai_explanation", "image", "audio", "options", "points", "question_type", "order_in_group", "allow_shuffle", "id", "item_id"}
+    dynamic_cols = set()
+
+    for q in questions:
+        if q.others and isinstance(q.others, dict):
+            for k, v in q.others.items():
+                if k not in system_cols:
+                    dynamic_cols.add(k)
+                    if k not in col_counts:
+                        col_counts[k] = 0
+                    if v is not None and str(v).strip():
+                        col_counts[k] += 1
+
+    practice_settings = quiz.practice_settings if isinstance(quiz.practice_settings, dict) else {}
+    custom_cols = list(practice_settings.get("custom_columns", []))
+    for cc in custom_cols:
+        if cc not in system_cols:
+            dynamic_cols.add(cc)
+            if cc not in col_counts:
+                col_counts[cc] = 0
+
+    insight_columns = list(practice_settings.get("insight_columns", []))
+
+    return {
+        "total_questions": total_questions,
+        "custom_columns": custom_cols,
+        "dynamic_columns": sorted(list(dynamic_cols)),
+        "column_counts": col_counts,
+        "insight_columns": insight_columns
+    }
+
+
+@router.post("/{quiz_id}/add-column")
+async def add_quiz_column(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz, QuizCollaborator
+    from sqlalchemy.orm.attributes import flag_modified
+    user_id = await get_request_user_id(request, db)
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+
+    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+    is_collab = collab_res.scalar() is not None
+    if not (quiz.creator_id == user_id or user_id == 1 or is_collab):
+        return JSONResponse(status_code=403, content={"error": "Permission denied"})
+
+    col_name = payload.get("column_name", "").strip().lower().replace(" ", "_")
+    if not col_name:
+        return JSONResponse(status_code=400, content={"error": "Column name is required"})
+
+    if not quiz.practice_settings or not isinstance(quiz.practice_settings, dict):
+        quiz.practice_settings = {}
+
+    custom_cols = list(quiz.practice_settings.get("custom_columns", []))
+    if col_name in custom_cols or col_name in ["content", "explanation", "options", "answer", "points", "image", "audio"]:
+        return JSONResponse(status_code=400, content={"error": "Column already exists"})
+
+    custom_cols.append(col_name)
+    quiz.practice_settings["custom_columns"] = custom_cols
+
+    if payload.get("is_insight", True):
+        insight_cols = list(quiz.practice_settings.get("insight_columns", []))
+        if col_name not in insight_cols:
+            insight_cols.append(col_name)
+            quiz.practice_settings["insight_columns"] = insight_cols
+
+    flag_modified(quiz, "practice_settings")
+    await db.commit()
+    return {"status": "ok", "column_name": col_name}
+
+
+@router.post("/{quiz_id}/rename-column")
+async def rename_quiz_column(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz, Question, QuizCollaborator
+    from sqlalchemy.orm.attributes import flag_modified
+    user_id = await get_request_user_id(request, db)
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+
+    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+    is_collab = collab_res.scalar() is not None
+    if not (quiz.creator_id == user_id or user_id == 1 or is_collab):
+        return JSONResponse(status_code=403, content={"error": "Permission denied"})
+
+    old_name = payload.get("old_name", "").strip()
+    new_name = payload.get("new_name", "").strip().lower().replace(" ", "_")
+    if not old_name or not new_name:
+        return JSONResponse(status_code=400, content={"error": "Old and new column names are required"})
+    if old_name == new_name:
+        return {"status": "ok"}
+
+    if quiz.practice_settings and isinstance(quiz.practice_settings, dict):
+        custom_cols = list(quiz.practice_settings.get("custom_columns", []))
+        if old_name in custom_cols:
+            idx = custom_cols.index(old_name)
+            custom_cols[idx] = new_name
+            quiz.practice_settings["custom_columns"] = custom_cols
+
+        insight_cols = list(quiz.practice_settings.get("insight_columns", []))
+        if old_name in insight_cols:
+            idx = insight_cols.index(old_name)
+            insight_cols[idx] = new_name
+            quiz.practice_settings["insight_columns"] = insight_cols
+
+        flag_modified(quiz, "practice_settings")
+
+    res = await db.execute(select(Question).where(Question.quiz_id == quiz_id))
+    questions = res.scalars().all()
+    for q in questions:
+        if q.others and isinstance(q.others, dict) and old_name in q.others:
+            q.others[new_name] = q.others.pop(old_name)
+            flag_modified(q, "others")
+
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/{quiz_id}/delete-column")
+async def delete_quiz_column(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Quiz, Question, QuizCollaborator
+    from sqlalchemy.orm.attributes import flag_modified
+    user_id = await get_request_user_id(request, db)
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+
+    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+    is_collab = collab_res.scalar() is not None
+    if not (quiz.creator_id == user_id or user_id == 1 or is_collab):
+        return JSONResponse(status_code=403, content={"error": "Permission denied"})
+
+    col_name = payload.get("column_name", "").strip()
+    if not col_name:
+        return JSONResponse(status_code=400, content={"error": "Column name is required"})
+
+    if col_name in ["content", "explanation", "options", "answer", "image", "audio", "points"]:
+        return JSONResponse(status_code=400, content={"error": "Cannot delete core system column"})
+
+    if quiz.practice_settings and isinstance(quiz.practice_settings, dict):
+        custom_cols = list(quiz.practice_settings.get("custom_columns", []))
+        if col_name in custom_cols:
+            custom_cols.remove(col_name)
+            quiz.practice_settings["custom_columns"] = custom_cols
+
+        insight_cols = list(quiz.practice_settings.get("insight_columns", []))
+        if col_name in insight_cols:
+            insight_cols.remove(col_name)
+            quiz.practice_settings["insight_columns"] = insight_cols
+
+        flag_modified(quiz, "practice_settings")
+
+    res = await db.execute(select(Question).where(Question.quiz_id == quiz_id))
+    questions = res.scalars().all()
+    for q in questions:
+        if q.others and isinstance(q.others, dict) and col_name in q.others:
+            q.others.pop(col_name, None)
+            flag_modified(q, "others")
+
+    await db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/{quiz_id}/roadmap-test-questions")

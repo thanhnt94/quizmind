@@ -19,14 +19,16 @@ import {
   Clock,
   Shuffle,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Columns3
 } from 'lucide-react'
 import axios from 'axios'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { QuizExcelManager } from './QuizExcelManager'
+import { QuizColumnSettings } from './QuizColumnSettings'
 
-export type QuizSettingsSubTab = 'general' | 'practice' | 'ai' | 'excel' | 'collab' | 'danger'
+export type QuizSettingsSubTab = 'general' | 'practice' | 'columns' | 'ai' | 'excel' | 'collab' | 'danger'
 
 export interface QuizSettingsTabProps {
   quizId: string | number
@@ -236,6 +238,7 @@ export function QuizSettingsTab({ quizId, initialData, isOwner = true, onSaved }
   const subTabs = [
     { id: 'general' as const, label: 'General', shortLabel: 'General', icon: FileText, color: 'text-indigo-600 dark:text-indigo-400' },
     { id: 'practice' as const, label: 'Practice & Exam', shortLabel: 'Practice', icon: Sliders, color: 'text-amber-600 dark:text-amber-400' },
+    { id: 'columns' as const, label: 'Columns & Fields', shortLabel: 'Columns', icon: Columns3, color: 'text-teal-600 dark:text-teal-400' },
     { id: 'ai' as const, label: 'AI & Guidance', shortLabel: 'AI Rules', icon: Sparkles, color: 'text-purple-600 dark:text-purple-400', badge: 'AI' },
     { id: 'excel' as const, label: 'Excel Data', shortLabel: 'Excel', icon: FileSpreadsheet, color: 'text-emerald-600 dark:text-emerald-400' },
     { id: 'collab' as const, label: 'Collaborators', shortLabel: 'Collab', icon: Users, color: 'text-blue-600 dark:text-blue-400' },
@@ -588,7 +591,15 @@ export function QuizSettingsTab({ quizId, initialData, isOwner = true, onSaved }
             </form>
           )}
 
-          {/* ══════════════ SUBTAB 3: AI & GUIDANCE ══════════════ */}
+          {/* ══════════════ SUBTAB 3: COLUMNS & FIELDS ══════════════ */}
+          {activeSubTab === 'columns' && (
+            <QuizColumnSettings
+              quizId={quizId}
+              isOwner={isOwner}
+            />
+          )}
+
+          {/* ══════════════ SUBTAB 4: AI & GUIDANCE ══════════════ */}
           {activeSubTab === 'ai' && (
             <form onSubmit={handleSaveSettings} className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">

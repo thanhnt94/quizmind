@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send } from 'lucide-react'
@@ -63,6 +63,7 @@ interface Question {
   allow_shuffle?: boolean
   audio_url?: string
   image_url?: string
+  others?: Record<string, any>
 }
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('')
@@ -169,6 +170,7 @@ export default function QuizPlay() {
   const [isEditingAI, setIsEditingAI] = useState(false)
   const [isEditingInsight, setIsEditingInsight] = useState(false)
   const [insightInput, setInsightInput] = useState('')
+  const [selectedInsightField, setSelectedInsightField] = useState<string>('explanation')
   const [aiInput, setAiInput] = useState('')
   const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
@@ -245,6 +247,46 @@ export default function QuizPlay() {
   const questionIndexInGroup = currentQuestion?.group_id
     ? groupQuestions.findIndex((q: any) => q.id === currentQuestion.id) + 1
     : 0
+
+  // ── Custom Columns & Learning Insight Fields ──
+  const insightFields = useMemo(() => {
+    const list: { key: string; label: string; hasContent: boolean }[] = [
+      {
+        key: 'explanation',
+        label: 'Main Explanation',
+        hasContent: !!(currentQuestion?.explanation && currentQuestion.explanation.trim())
+      }
+    ]
+
+    const configuredCols: string[] = Array.isArray(session?.practice_settings?.insight_columns)
+      ? session.practice_settings.insight_columns
+      : []
+
+    const keysOnQuestion = currentQuestion?.others && typeof currentQuestion.others === 'object'
+      ? Object.keys(currentQuestion.others)
+      : []
+
+    const allKeys = Array.from(new Set([...configuredCols, ...keysOnQuestion]))
+
+    for (const k of allKeys) {
+      if (['explanation', 'ai_explanation', 'content', 'image', 'audio', 'options', 'id', 'item_id'].includes(k)) continue
+      const val = currentQuestion?.others?.[k]
+      const hasContent = val !== undefined && val !== null && String(val).trim() !== ''
+      const label = k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      list.push({ key: k, label, hasContent })
+    }
+
+    return list
+  }, [session?.practice_settings, currentQuestion])
+
+  const getSelectedInsightContent = (): string => {
+    if (!currentQuestion) return ''
+    if (selectedInsightField === 'explanation') {
+      return currentQuestion.explanation || ''
+    }
+    const val = currentQuestion.others?.[selectedInsightField]
+    return val !== undefined && val !== null ? String(val) : ''
+  }
 
   const getMasteryPill = (boxLevel: number) => {
     switch (boxLevel) {
@@ -376,6 +418,8 @@ export default function QuizPlay() {
   useEffect(() => {
     if (currentQuestion) {
       fetchNote()
+      setIsEditingInsight(false)
+      setSelectedInsightField('explanation')
     }
   }, [currentIndex, currentQuestion])
 
@@ -1260,14 +1304,26 @@ export default function QuizPlay() {
   const saveInsight = async () => {
     if (!currentQuestion) return
     try {
-      await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, { 
-        explanation: insightInput 
-      })
-      setSession((prev: any) => {
-        const newQs = [...prev.questions]
-        newQs[currentIndex].explanation = insightInput
-        return { ...prev, questions: newQs }
-      })
+      if (selectedInsightField === 'explanation') {
+        await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, { 
+          explanation: insightInput 
+        })
+        setSession((prev: any) => {
+          const newQs = [...prev.questions]
+          newQs[currentIndex] = { ...newQs[currentIndex], explanation: insightInput }
+          return { ...prev, questions: newQs }
+        })
+      } else {
+        const updatedOthers = { ...(currentQuestion.others || {}), [selectedInsightField]: insightInput }
+        await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, { 
+          others: updatedOthers 
+        })
+        setSession((prev: any) => {
+          const newQs = [...prev.questions]
+          newQs[currentIndex] = { ...newQs[currentIndex], others: updatedOthers }
+          return { ...prev, questions: newQs }
+        })
+      }
       setIsEditingInsight(false)
     } catch (e) {
       alert("Failed to save insight.")
@@ -1333,7 +1389,7 @@ export default function QuizPlay() {
 
   const copyCurrentTabContent = (type: 'default' | 'prompt' | 'question' = 'default') => {
     let content = ''
-    if (activeFeedbackTab === 'insight') content = currentQuestion?.explanation || ''
+    if (activeFeedbackTab === 'insight') content = getSelectedInsightContent()
     else if (activeFeedbackTab === 'ai') {
       if (type === 'question') {
         content = currentQuestion?.content || ''
@@ -1371,7 +1427,7 @@ export default function QuizPlay() {
     if (activeFeedbackTab === 'insight') {
       if (isEditingInsight) saveInsight()
       else {
-        setInsightInput(currentQuestion?.explanation || '')
+        setInsightInput(getSelectedInsightContent())
         setIsEditingInsight(true)
       }
     } else if (activeFeedbackTab === 'ai') {
@@ -1397,39 +1453,131 @@ export default function QuizPlay() {
   const renderFeedbackArea = (isMobile = false) => {
     if (!showFeedback) return null
     
+    const hasInsightContent = insightFields.some((f: any) => f.hasContent)
     const tabs = [
-      { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-100', hasContent: !!currentQuestion?.explanation },
+      { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-100', hasContent: hasInsightContent },
       { id: 'ai', label: 'AI ANALYSIS', icon: Sparkles, color: 'text-indigo-600', bg: 'bg-indigo-100', hasContent: !!currentQuestion?.ai_explanation },
       { id: 'note', label: 'PERSONAL NOTE', icon: StickyNote, color: 'text-slate-400', bg: 'bg-slate-100', hasContent: !!personalNote }
     ]
 
     const renderTabContent = () => {
       switch (activeFeedbackTab) {
-        case 'insight':
+        case 'insight': {
+          const activeContent = getSelectedInsightContent()
+          const currentFieldObj = insightFields.find((f: any) => f.key === selectedInsightField)
+          const currentFieldLabel = currentFieldObj?.label || 'Explanation'
+
           return (
-            <div className="p-6 rounded-[2rem] bg-indigo-50/30 border border-indigo-100 shadow-sm animate-in fade-in slide-in-from-bottom-2">
-                 <div className="flex items-center gap-2 mb-3">
-                   <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                      <Lightbulb className="w-3.5 h-3.5 fill-amber-500" />
+            <div className="p-6 rounded-[2rem] bg-indigo-50/30 border border-indigo-100 dark:border-indigo-950/40 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                 <div className="flex flex-col gap-2.5 mb-3.5">
+                   <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                       <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center">
+                          <Lightbulb className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                       </div>
+                       <span className="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">
+                         LEARNING INSIGHT
+                       </span>
+                     </div>
+                     {canEdit && (
+                       <button
+                         type="button"
+                         onClick={() => {
+                           if (isEditingInsight) saveInsight()
+                           else {
+                             setInsightInput(activeContent)
+                             setIsEditingInsight(true)
+                           }
+                         }}
+                         className={cn(
+                           "text-[9px] font-black uppercase tracking-widest transition-all px-2.5 py-1 rounded-md cursor-pointer",
+                           isEditingInsight
+                             ? "bg-emerald-600 text-white shadow-xs"
+                             : "text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 bg-white dark:bg-slate-800 border border-indigo-100 dark:border-slate-700 shadow-2xs"
+                         )}
+                       >
+                         {isEditingInsight ? 'SAVE' : 'EDIT'}
+                       </button>
+                     )}
                    </div>
-                   <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">INSIGHT</span>
+
+                   {/* Sub-tabs for Insight Fields when there are custom columns */}
+                   {insightFields.length > 1 && (
+                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                       {insightFields.map((field: any) => {
+                         const isSelected = selectedInsightField === field.key
+                         return (
+                           <button
+                             key={field.key}
+                             type="button"
+                             onClick={() => {
+                               if (isEditingInsight) {
+                                 if (!window.confirm("Switch fields without saving changes?")) return
+                                 setIsEditingInsight(false)
+                               }
+                               setSelectedInsightField(field.key)
+                             }}
+                             className={cn(
+                               "px-2.5 py-1 rounded-lg text-xs font-black transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
+                               isSelected
+                                 ? "bg-amber-500 text-white shadow-2xs"
+                                 : "bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700 hover:bg-white"
+                             )}
+                           >
+                             <span>{field.label}</span>
+                             {field.hasContent && (
+                               <span className={cn(
+                                 "w-1.5 h-1.5 rounded-full",
+                                 isSelected ? "bg-white" : "bg-emerald-500"
+                               )} />
+                             )}
+                           </button>
+                         )
+                       })}
+                     </div>
+                   )}
                  </div>
-                 <div className="text-slate-600 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words pr-2">
+
+                 <div className="text-slate-600 dark:text-slate-300 font-medium text-sm leading-relaxed markdown-content whitespace-pre-wrap break-words pr-2">
                     {isEditingInsight ? (
-                      <textarea
-                        value={insightInput}
-                        onChange={(e) => setInsightInput(e.target.value)}
-                        className="w-full h-80 p-3 bg-white border border-indigo-100 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
-                        placeholder="Enter explanation for this question..."
-                      />
-                    ) : (
+                      <div className="space-y-2">
+                        <textarea
+                          value={insightInput}
+                          onChange={(e) => setInsightInput(e.target.value)}
+                          className="w-full h-80 p-3 bg-white dark:bg-slate-800 border border-indigo-100 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
+                          placeholder={`Enter content for ${currentFieldLabel}...`}
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                          <span>Editing: {currentFieldLabel}</span>
+                          <span>Markdown supported</span>
+                        </div>
+                      </div>
+                    ) : activeContent ? (
                       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={MarkdownComponents}>
-                        {currentQuestion?.explanation || 'No detail.'}
+                        {activeContent}
                       </ReactMarkdown>
+                    ) : (
+                      <div className="text-center py-6 text-slate-400 font-medium italic text-xs">
+                        No {currentFieldLabel.toLowerCase()} available for this question.
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInsightInput('')
+                              setIsEditingInsight(true)
+                            }}
+                            className="block mx-auto mt-2 text-[10px] font-black uppercase tracking-wider text-indigo-500 hover:text-indigo-600 underline cursor-pointer"
+                          >
+                            + Add {currentFieldLabel}
+                          </button>
+                        )}
+                      </div>
                     )}
                  </div>
             </div>
           )
+        }
         case 'ai':
           return (
             <div className="p-6 rounded-[2rem] ai-glow animate-in fade-in slide-in-from-bottom-2">
