@@ -37,9 +37,15 @@ export function QuizMindLogo({
           style={size ? { width: size, height: size } : undefined}
         >
           <img
-            src="/mascot/excited.png"
+            src={`${import.meta.env.BASE_URL || '/static/dist/'}mascot/owl_excited.png?v=20260917`}
             alt="QuizMind Mascot"
             className="w-full h-full object-contain drop-shadow-xs"
+            onError={(e) => {
+              const el = e.currentTarget
+              if (!el.src.includes('/static/dist/')) {
+                el.src = '/static/dist/mascot/owl_excited.png'
+              }
+            }}
           />
         </div>
       </div>
@@ -56,9 +62,15 @@ export function QuizMindLogo({
         style={size ? { height: size } : undefined}
       >
         <img
-          src="/mascot/quizmind_logo_transparent.png"
+          src={`${import.meta.env.BASE_URL || '/static/dist/'}mascot/quizmind_logo_transparent.png?v=20260917`}
           alt="QuizMind"
           className="h-full w-auto max-w-none object-contain drop-shadow-xs"
+          onError={(e) => {
+            const el = e.currentTarget
+            if (!el.src.includes('/static/dist/')) {
+              el.src = '/static/dist/mascot/quizmind_logo_transparent.png'
+            }
+          }}
         />
       </div>
     </div>

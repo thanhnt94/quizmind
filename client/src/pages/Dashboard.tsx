@@ -371,149 +371,593 @@ export default function Dashboard() {
     updateUserSettings({ home_active_tab: tab }).catch(console.error)
   }
 
-  return (
-    <div 
-      className="min-h-screen bg-[#F8FAFC] pb-24 text-slate-800 selection:bg-indigo-100 select-none font-sans"
-      onTouchStart={(e) => {
-        touchStartXRef.current = e.touches[0].clientX
-        touchStartYRef.current = e.touches[0].clientY
-      }}
-      onTouchEnd={(e) => {
-        const startX = touchStartXRef.current
-        const startY = touchStartYRef.current
-        if (startX === null || startY === null) return
-        const endX = e.changedTouches[0].clientX
-        const endY = e.changedTouches[0].clientY
-        const diffX = endX - startX
-        const diffY = endY - startY
+  // ─── Render Roadmap Hero Card (Mobile & Desktop) ──────────────────────
+  const renderRoadmapCard = (isMobile: boolean) => {
+    if (isRoadmapLoading) {
+      return (
+        <div className={cn(
+          "bg-white rounded-3xl border border-slate-200/90 shadow-sm flex flex-col items-center justify-center text-center space-y-3",
+          isMobile ? "h-full p-8" : "p-12"
+        )}>
+          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-bold text-slate-400">Loading your roadmap...</p>
+        </div>
+      )
+    }
 
-        // Pull to refresh detection
-        if (diffY > 120 && Math.abs(diffX) < 50) {
-          if (navigator.vibrate) navigator.vibrate(20)
-          queryClient.invalidateQueries()
-          return
-        }
+    if (roadmapQuizzes.length === 0) {
+      return (
+        <div className={cn(
+          "bg-white rounded-3xl border border-slate-200/90 shadow-sm flex flex-col items-center justify-center text-center space-y-4",
+          isMobile ? "h-full p-6" : "p-8 sm:p-12"
+        )}>
+          <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+            🗺️
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-black text-slate-900">No Active Roadmaps Yet</h3>
+            <p className="text-xs text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
+              Select a quiz from your library and enable Roadmap to set daily study targets and maintain your flame streak!
+            </p>
+          </div>
+          <Link
+            to="/quizzes"
+            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-indigo-200 transition-all inline-block active:scale-95 cursor-pointer"
+          >
+            Explore Quizzes 📚
+          </Link>
+        </div>
+      )
+    }
 
-        // Horizontal Swipe detection (Swipe left: Roadmap -> Quizzes, Swipe right: Quizzes -> Roadmap)
-        if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
-          if (diffX < -40 && activeHomeTab === 'roadmap') {
-            switchHomeTab('quizzes')
-          } else if (diffX > 40 && activeHomeTab === 'quizzes') {
-            switchHomeTab('roadmap')
-          }
+    const safeIndex = Math.min(activeRoadmapIdx, Math.max(0, roadmapQuizzes.length - 1))
+    const item = roadmapQuizzes[safeIndex]
+    if (!item) return null
+
+    const st = item.status || {}
+    const isDone = Boolean(st.all_done)
+    const pipeline = st.pipeline || []
+    const deckStreak = st.streak || 0
+    const currentStepIdx = st.current_step_index ?? 0
+
+    // Mascot calculation with distinct owl mascot images & cache busting
+    let mascotImg = `${import.meta.env.BASE_URL}mascot/owl_sleepy.png?v=20260917`
+    let mascotLine1 = 'Ready for today?'
+    let mascotLine2 = "Let's conquer today's questions! 🚀"
+
+    if (isDone) {
+      mascotImg = `${import.meta.env.BASE_URL}mascot/owl_celebrating.png?v=20260917`
+      mascotLine1 = 'Outstanding!'
+      mascotLine2 = 'Completed today’s roadmap! 🎉'
+    } else if (st.stage_1_done) {
+      mascotImg = `${import.meta.env.BASE_URL}mascot/owl_excited.png?v=20260917`
+      mascotLine1 = 'On Fire!'
+      mascotLine2 = 'Keep up the blazing momentum 🔥'
+    } else if ((st.new_learned_today || 0) > 0 || (st.review_completed_today || 0) > 0) {
+      mascotImg = `${import.meta.env.BASE_URL}mascot/owl_excited.png?v=20260917`
+      mascotLine1 = 'Great start!'
+      mascotLine2 = 'Finish all remaining steps today 💪'
+    }
+
+    const handleRoadmapWheel = (e: React.WheelEvent) => {
+      if (roadmapQuizzes.length <= 1) return
+      if (wheelCooldownRef.current) return
+      if (Math.abs(e.deltaY) > 20 || Math.abs(e.deltaX) > 20) {
+        wheelCooldownRef.current = true
+        if (e.deltaY > 0 || e.deltaX > 0) {
+          setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
+        } else {
+          setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
         }
-        touchStartXRef.current = null
-        touchStartYRef.current = null
-      }}
-    >
-      
-      {/* ========================================================================= */}
-      {/* MOBILE TOP HEADER & 2-TAB SEGMENTED BAR                                  */}
-      {/* ========================================================================= */}
-      <div className="md:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
-        <div className="px-4 py-2.5 flex items-center justify-between">
-          <QuizMindLogo height="sm" />
+        setTimeout(() => {
+          wheelCooldownRef.current = false
+        }, 350)
+      }
+    }
+
+    return (
+      <div 
+        onWheel={!isMobile ? handleRoadmapWheel : undefined}
+        className={cn(
+          "bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col transition-all select-none",
+          isMobile ? "h-full justify-between p-3 sm:p-3.5 gap-2" : "hover:shadow-md"
+        )}
+      >
+        {/* Subheader bar with Navigation */}
+        <div className={cn(
+          "flex items-center justify-between text-xs font-semibold text-slate-500 shrink-0",
+          !isMobile && "px-4 py-2.5 bg-slate-50/80 border-b border-slate-100"
+        )}>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="font-extrabold text-slate-800">Roadmap Pipeline</span>
+            {roadmapQuizzes.length > 1 ? (
+              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-full shadow-2xs">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
+                  }}
+                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-600 active:scale-90 font-black cursor-pointer"
+                  title="Previous Quiz"
+                >
+                  ‹
+                </button>
+                <span className="text-xs font-black text-indigo-600 px-1">
+                  {safeIndex + 1} / {roadmapQuizzes.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
+                  }}
+                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-600 active:scale-90 font-black cursor-pointer"
+                  title="Next Quiz"
+                >
+                  ›
+                </button>
+              </div>
+            ) : (
+              <span className="text-slate-400">1 / 1</span>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
-            {/* Today Activity Trigger Pill */}
-            <button
-              type="button"
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(8)
-                setIsDailyDrawerOpen(true)
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-indigo-50 border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-full text-xs font-black shadow-2xs active:scale-95 transition-all cursor-pointer"
-              title="Today's Activity Report"
+            {roadmapQuizzes.length > 1 && !isMobile && (
+              <div className="hidden sm:flex items-center gap-1 mr-1">
+                {roadmapQuizzes.map((_, dotIdx) => (
+                  <button
+                    key={dotIdx}
+                    type="button"
+                    onClick={() => setActiveRoadmapIdx(dotIdx)}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all cursor-pointer",
+                      dotIdx === safeIndex ? "bg-indigo-600 w-4" : "bg-slate-300 hover:bg-slate-400 w-1.5"
+                    )}
+                    title={`Switch to quiz ${dotIdx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+            <Link
+              to={`/quiz/${item.quiz_id || item.deck_id}/roadmap`}
+              className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer shrink-0"
             >
-              <Activity className="w-3.5 h-3.5 text-indigo-600 stroke-[2.4]" />
-              <span className="text-[11px]">Today</span>
-            </button>
+              <span>Details</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
 
-            {/* Streak Pill (Also triggers Daily Activity Drawer) */}
-            <button
-              type="button"
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(8)
-                setIsDailyDrawerOpen(true)
-              }}
-              className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white text-xs font-black shadow-xs active:scale-95 transition-all cursor-pointer"
-              title="Study Streak"
+        {/* HERO MASCOT CARD WITH ANIMATION */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={item.quiz_id || item.deck_id || safeIndex}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className={cn("flex flex-col", isMobile && "flex-1 min-h-0 justify-between gap-2")}
+          >
+            <div className={cn(
+              "bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-100/50 border border-amber-200/60 rounded-2xl relative overflow-hidden flex flex-row items-center justify-between",
+              isMobile ? "flex-1 min-h-0 p-3 sm:p-3.5" : "p-4 sm:p-5 min-h-[165px]"
+            )}>
+              {/* Left Column */}
+              <div className="relative z-20 flex-1 max-w-[62%] sm:max-w-[70%] min-w-0 flex flex-col justify-center gap-2 py-0.5">
+                {/* TOP BADGES */}
+                <div className="flex flex-col gap-1.5">
+                  {/* ROW 1: Streak & Countdown */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white rounded-full text-xs font-black shadow-xs shrink-0">
+                      <span>🔥</span>
+                      <span>{deckStreak} days streak</span>
+                    </div>
+                    {isDone ? (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
+                        <span>✓ Done</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-900 border border-amber-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>{remainingTime} left</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ROW 2: Quiz Title */}
+                  <div className="flex items-center max-w-full">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/90 border border-indigo-100 text-indigo-950 rounded-xl text-xs font-extrabold shadow-2xs max-w-full">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span className="truncate max-w-[240px] sm:max-w-[360px] font-extrabold">
+                        {item.title}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ROW 3: Progress & Est Date */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <div 
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white/90 border border-slate-200/80 text-slate-800 rounded-full text-[11px] font-bold shadow-2xs shrink-0"
+                      title="Learned questions / Total questions"
+                    >
+                      <span>🎓</span>
+                      <span>{st.learned_questions || 0}/{st.total_questions || 0} questions</span>
+                    </div>
+                    <div 
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white/90 border border-slate-200/80 text-slate-800 rounded-full text-[11px] font-bold shadow-2xs shrink-0"
+                      title="Estimated completion date"
+                    >
+                      <Calendar className="w-3 h-3 text-indigo-600 shrink-0" />
+                      <span>Est: {st.estimated_completion_date || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Motivation text */}
+                <div className="flex flex-col gap-0.5 mt-0.5">
+                  <h4 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-snug">
+                    {mascotCheer || mascotLine1}
+                  </h4>
+                  <p className="text-[11px] sm:text-xs text-slate-600 font-medium leading-relaxed">
+                    {mascotCheer ? "QuizMind Mascot is rooting for you! ⭐" : mascotLine2}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Column: Cute Chibi Owl Mascot (Tap to cheer) */}
+              <div 
+                onClick={handleMascotTap}
+                className="w-[38%] sm:w-[30%] max-w-[180px] absolute right-1 sm:right-2 bottom-0 top-0 flex items-end justify-center z-10 cursor-pointer group"
+                title="Tap mascot for encouragement!"
+              >
+                <motion.img
+                  key={mascotImg}
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.3 }}
+                  src={mascotImg}
+                  alt="QuizMind Mascot"
+                  onError={(e) => {
+                    const el = e.currentTarget
+                    if (!el.src.includes('/static/dist/')) {
+                      el.src = `${import.meta.env.BASE_URL}mascot/owl_excited.png?v=20260917`
+                    }
+                  }}
+                  className="h-[96%] max-h-[180px] w-auto max-w-none object-contain object-bottom drop-shadow-xl translate-y-1 transition-transform select-none"
+                />
+              </div>
+            </div>
+
+            {/* PIPELINE STEPS LIST & CTA */}
+            <div className={cn(
+              "flex flex-col gap-2.5 shrink-0",
+              !isMobile && "p-4 sm:p-5 bg-white border-t border-slate-100 gap-4"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <span>🗺️</span>
+                  <span>Today's Steps</span>
+                </span>
+                <span className="text-xs font-bold text-slate-400">
+                  Step {(st.current_step_index ?? 0) + 1}/{pipeline.length}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {pipeline.map((step: any, sIdx: number) => {
+                  const isCurrent = sIdx === currentStepIdx && !isDone
+                  const stepDone = step.done
+                  return (
+                    <div
+                      key={step.id || sIdx}
+                      className={cn(
+                        "p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-between gap-1.5 transition-all",
+                        stepDone
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : isCurrent
+                            ? "bg-indigo-50 text-indigo-800 border-indigo-300 ring-2 ring-indigo-500/20 animate-pulse"
+                            : "bg-slate-50 text-slate-400 border-slate-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="font-extrabold">{stepDone ? '✓' : `${sIdx + 1}.`}</span>
+                        <span className="truncate">{step.label}</span>
+                      </div>
+                      {stepDone && <span className="text-[10px] font-black text-emerald-600 shrink-0">Done</span>}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Big Action CTA Button */}
+              <button
+                type="button"
+                onClick={() => navigate(st.next_action_url || `/quiz/${item.quiz_id || item.deck_id}/play?mode=roadmap`)}
+                className={cn(
+                  "w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98",
+                  isDone
+                    ? "bg-slate-900 hover:bg-slate-800 text-white"
+                    : "bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500 hover:from-indigo-700 hover:to-rose-600 text-white shadow-indigo-200"
+                )}
+              >
+                <Play className="w-4 h-4 fill-white" />
+                <span>{st.next_action_label || 'Continue Roadmap 🚀'}</span>
+              </button>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    )
+  }
+
+  // ─── Render Quizzes Tab Content (Mobile & Desktop) ─────────────────────
+  const renderQuizzesTab = (isMobile: boolean) => (
+    <div className={cn("space-y-4", isMobile && "flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-3")}>
+      {/* Search & Actions Bar */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="relative w-full sm:max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={quizSearch}
+            onChange={(e) => setQuizSearch(e.target.value)}
+            placeholder="Search quizzes by title or topic..."
+            className="w-full h-9 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Link
+            to="/quizzes"
+            className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>All Quizzes</span>
+          </Link>
+          <Link
+            to="/manage/import"
+            className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Import</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Quizzes Grid */}
+      {filteredQuizzes.length === 0 ? (
+        <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/90 shadow-sm space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl">
+            🔍
+          </div>
+          <h3 className="text-sm font-black text-slate-800">No quizzes match your search</h3>
+          <p className="text-xs text-slate-400">Try searching for other keywords or explore the public library.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {filteredQuizzes.map(quiz => (
+            <div
+              key={quiz.id}
+              className="bg-white border border-slate-200/90 hover:border-indigo-200 rounded-3xl p-4 sm:p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between gap-3.5 group"
             >
-              <span>🔥</span>
-              <span>{gamify.streak || 0}d</span>
-            </button>
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-base shrink-0 group-hover:scale-105 transition-transform">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600">
+                    {quiz.questions_count || 0} questions
+                  </span>
+                </div>
 
-            {/* User Level */}
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
-              {gamify.level || 1}
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                    {quiz.title}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium line-clamp-2 mt-1">
+                    {quiz.description || "Practice multiple choice questions and track your accuracy."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/quiz/${quiz.id}/play`)}
+                  className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  <span>Practice</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/quiz/${quiz.id}`)}
+                  className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Details
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="bg-[#F8FAFC] text-slate-800 selection:bg-indigo-100 select-none font-sans">
+      
+      {/* ========================================================================= */}
+      {/* 📱 MOBILE VIEWPORT CONTAINER — EXACT VOCABURN NO-SCROLL ARCHITECTURE      */}
+      {/* ========================================================================= */}
+      <div 
+        className="md:hidden flex flex-col bg-[#f8fafc] fixed inset-0 top-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-30 overflow-hidden select-none font-sans"
+        onTouchStart={(e) => {
+          touchStartXRef.current = e.touches[0].clientX
+          touchStartYRef.current = e.touches[0].clientY
+        }}
+        onTouchEnd={(e) => {
+          const startX = touchStartXRef.current
+          const startY = touchStartYRef.current
+          if (startX === null || startY === null) return
+          const endX = e.changedTouches[0].clientX
+          const endY = e.changedTouches[0].clientY
+          const diffX = endX - startX
+          const diffY = endY - startY
+
+          // Pull to refresh detection
+          if (diffY > 120 && Math.abs(diffX) < 50) {
+            if (navigator.vibrate) navigator.vibrate(20)
+            queryClient.invalidateQueries()
+            return
+          }
+
+          // Horizontal Swipe detection (Swipe left: Roadmap -> Quizzes, Swipe right: Quizzes -> Roadmap)
+          if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
+            if (diffX < -40 && activeHomeTab === 'roadmap') {
+              switchHomeTab('quizzes')
+            } else if (diffX > 40 && activeHomeTab === 'quizzes') {
+              switchHomeTab('roadmap')
+            }
+          }
+          touchStartXRef.current = null
+          touchStartYRef.current = null
+        }}
+      >
+        {/* TOP MOBILE APP HEADER */}
+        <div className="bg-white border-b border-slate-200/70 flex flex-col flex-shrink-0 z-30 shadow-xs">
+          <div className="flex items-center justify-between px-3.5 pt-2 pb-1.5 w-full">
+            <Link to="/" className="active:scale-95 transition-transform flex items-center">
+              <QuizMindLogo height="sm" />
+            </Link>
+
+            <div className="flex items-center gap-2">
+              {/* Today Activity Trigger Pill */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(8)
+                  setIsDailyDrawerOpen(true)
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-indigo-50 border border-slate-200/80 hover:border-indigo-200 text-slate-700 hover:text-indigo-600 rounded-full text-xs font-black shadow-2xs active:scale-95 transition-all cursor-pointer"
+                title="Today's Activity Report"
+              >
+                <Activity className="w-3.5 h-3.5 text-indigo-600 stroke-[2.4]" />
+                <span className="text-[11px]">Today</span>
+              </button>
+
+              {/* Streak Pill */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(8)
+                  setIsDailyDrawerOpen(true)
+                }}
+                className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white text-xs font-black shadow-xs active:scale-95 transition-all cursor-pointer"
+                title="Study Streak"
+              >
+                <span>🔥</span>
+                <span>{gamify.streak || 0}d</span>
+              </button>
+
+              {/* User Level */}
+              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                {gamify.level || 1}
+              </div>
+            </div>
+          </div>
+
+          {/* 2-TAB SEGMENTED BAR */}
+          <div className="bg-white border-t border-slate-100/90 px-3.5 flex items-center justify-between w-full select-none flex-shrink-0 h-10">
+            <div className="flex items-center gap-6 h-full">
+              {/* Tab 1: Roadmap */}
+              <button
+                type="button"
+                onClick={() => switchHomeTab('roadmap')}
+                className={cn(
+                  "relative h-full flex items-center gap-1.5 text-xs font-black tracking-tight transition-colors cursor-pointer select-none",
+                  activeHomeTab === 'roadmap' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                <Layers className={cn(
+                  "w-3.5 h-3.5 transition-colors",
+                  activeHomeTab === 'roadmap' ? "text-indigo-600 stroke-[2.4]" : "text-slate-400"
+                )} />
+                <span className="text-[13px]">Roadmap</span>
+                {roadmapQuizzes.length > 0 && (
+                  <span className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.2 rounded-full tabular-nums transition-colors",
+                    activeHomeTab === 'roadmap' ? "bg-indigo-50 text-indigo-600 border border-indigo-200/60" : "bg-slate-100 text-slate-400"
+                  )}>
+                    {roadmapQuizzes.length}
+                  </span>
+                )}
+                {activeHomeTab === 'roadmap' && (
+                  <motion.div
+                    layoutId="homeTabUnderlineMobile"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full"
+                    transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
+                  />
+                )}
+              </button>
+
+              {/* Tab 2: Quizzes */}
+              <button
+                type="button"
+                onClick={() => switchHomeTab('quizzes')}
+                className={cn(
+                  "relative h-full flex items-center gap-1.5 text-xs font-black tracking-tight transition-colors cursor-pointer select-none",
+                  activeHomeTab === 'quizzes' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                <BookOpen className={cn(
+                  "w-3.5 h-3.5 transition-colors",
+                  activeHomeTab === 'quizzes' ? "text-indigo-600 stroke-[2.4]" : "text-slate-400"
+                )} />
+                <span className="text-[13px]">Quizzes</span>
+                {allAvailableQuizzes.length > 0 && (
+                  <span className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.2 rounded-full tabular-nums transition-colors",
+                    activeHomeTab === 'quizzes' ? "bg-indigo-50 text-indigo-600 border border-indigo-200/60" : "bg-slate-100 text-slate-400"
+                  )}>
+                    {allAvailableQuizzes.length}
+                  </span>
+                )}
+                {activeHomeTab === 'quizzes' && (
+                  <motion.div
+                    layoutId="homeTabUnderlineMobile"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full"
+                    transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
+                  />
+                )}
+              </button>
             </div>
           </div>
         </div>
 
-        {/* 2 Tabs: Roadmap vs Quizzes */}
-        <div className="grid grid-cols-2 border-t border-slate-100 text-center h-11">
-          {/* Tab 1: Roadmap */}
-          <button
-            type="button"
-            onClick={() => switchHomeTab('roadmap')}
-            className={cn(
-              "relative h-full flex items-center justify-center gap-1.5 text-xs font-black tracking-tight transition-colors cursor-pointer select-none",
-              activeHomeTab === 'roadmap' ? "text-indigo-600" : "text-slate-400 hover:text-slate-700"
-            )}
-          >
-            <Layers className={cn("w-3.5 h-3.5", activeHomeTab === 'roadmap' ? "text-indigo-600" : "text-slate-400")} />
-            <span>Roadmap</span>
-            {roadmapQuizzes.length > 0 && (
-              <span className={cn(
-                "text-[10px] font-bold px-1.5 py-0.2 rounded-full tabular-nums",
-                activeHomeTab === 'roadmap' ? "bg-indigo-50 text-indigo-600 border border-indigo-200/60" : "bg-slate-100 text-slate-400"
-              )}>
-                {roadmapQuizzes.length}
-              </span>
-            )}
-            {activeHomeTab === 'roadmap' && (
-              <motion.div
-                layoutId="homeTabUnderlineMobile"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full"
-                transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
-              />
-            )}
-          </button>
-
-          {/* Tab 2: Quizzes */}
-          <button
-            type="button"
-            onClick={() => switchHomeTab('quizzes')}
-            className={cn(
-              "relative h-full flex items-center justify-center gap-1.5 text-xs font-black tracking-tight transition-colors cursor-pointer select-none",
-              activeHomeTab === 'quizzes' ? "text-indigo-600" : "text-slate-400 hover:text-slate-700"
-            )}
-          >
-            <BookOpen className={cn("w-3.5 h-3.5", activeHomeTab === 'quizzes' ? "text-indigo-600" : "text-slate-400")} />
-            <span>Quizzes</span>
-            {allAvailableQuizzes.length > 0 && (
-              <span className={cn(
-                "text-[10px] font-bold px-1.5 py-0.2 rounded-full tabular-nums",
-                activeHomeTab === 'quizzes' ? "bg-indigo-50 text-indigo-600 border border-indigo-200/60" : "bg-slate-100 text-slate-400"
-              )}>
-                {allAvailableQuizzes.length}
-              </span>
-            )}
-            {activeHomeTab === 'quizzes' && (
-              <motion.div
-                layoutId="homeTabUnderlineMobile"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full"
-                transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
-              />
-            )}
-          </button>
+        {/* MOBILE MAIN CONTENT AREA */}
+        <div className="flex-1 bg-[#f8fafc] overflow-hidden relative flex flex-col min-h-0">
+          {activeHomeTab === 'roadmap' ? (
+            <div className="h-full w-full p-2.5 sm:p-3 overflow-hidden flex flex-col justify-between">
+              {renderRoadmapCard(true)}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-hidden p-2.5 sm:p-3 flex flex-col min-h-0">
+              {renderQuizzesTab(true)}
+            </div>
+          )}
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* DESKTOP SPLIT VIEW & MAIN CONTENT                                         */}
+      {/* 💻 DESKTOP SPLIT VIEW & MAIN CONTENT                                      */}
       {/* ========================================================================= */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+      <div className="hidden md:block min-h-screen pb-24 max-w-7xl mx-auto px-4 sm:px-6 pt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* ─── LEFT SIDEBAR (DESKTOP) ────────────────────────────────────────── */}
@@ -606,11 +1050,11 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* ─── MAIN CONTENT AREA (DESKTOP & MOBILE) ─────────────────────────── */}
+          {/* ─── MAIN CONTENT AREA (DESKTOP) ──────────────────────────────────── */}
           <div className="lg:col-span-8 space-y-6">
 
             {/* DESKTOP 2-TAB SEGMENTED BAR */}
-            <div className="hidden md:flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-1.5 shadow-2xs">
+            <div className="flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-1.5 shadow-2xs">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -642,21 +1086,18 @@ export default function Dashboard() {
               </div>
 
               <Link
-                to="/library"
-                className="px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-600 font-black text-xs flex items-center gap-1.5 transition-all"
+                to="/quizzes"
+                className="px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-600 font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Explore Library</span>
               </Link>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* VIEW 1: ROADMAP TAB CONTENT                                        */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {activeHomeTab === 'roadmap' && (
+            {/* DESKTOP CONTENT VIEW */}
+            {activeHomeTab === 'roadmap' ? (
               <div className="space-y-6">
-                
-                {/* 1. ROADMAP QUIZZES SECTION */}
+                {/* Roadmap Quizzes Section */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2">
@@ -672,7 +1113,7 @@ export default function Dashboard() {
                     </div>
                     
                     <Link
-                      to="/library"
+                      to="/quizzes"
                       className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-black text-xs flex items-center gap-1 active:scale-95 transition-all shadow-2xs cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -680,305 +1121,17 @@ export default function Dashboard() {
                     </Link>
                   </div>
 
-                  {isRoadmapLoading ? (
-                    <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/90 shadow-sm space-y-3">
-                      <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                      <p className="text-xs font-bold text-slate-400">Loading your roadmap...</p>
-                    </div>
-                  ) : roadmapQuizzes.length === 0 ? (
-                    <div className="bg-white rounded-3xl p-8 sm:p-12 text-center border border-slate-200/90 shadow-sm space-y-4">
-                      <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto text-2xl shadow-inner">
-                        🗺️
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="text-base font-black text-slate-900">No Active Roadmaps Yet</h3>
-                        <p className="text-xs text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
-                          Select a quiz from the library and enable Roadmap to set daily study targets, track missed questions, and maintain your flame streak!
-                        </p>
-                      </div>
-                      <Link
-                        to="/library"
-                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-indigo-200 transition-all inline-block active:scale-95"
-                      >
-                        Explore Library Quizzes 📚
-                      </Link>
-                    </div>
-                  ) : (() => {
-                    const safeIndex = Math.min(activeRoadmapIdx, Math.max(0, roadmapQuizzes.length - 1))
-                    const item = roadmapQuizzes[safeIndex]
-                    if (!item) return null
-
-                    const st = item.status || {}
-                    const isDone = Boolean(st.all_done)
-                    const pipeline = st.pipeline || []
-                    const deckStreak = st.streak || 0
-                    const currentStepIdx = st.current_step_index ?? 0
-
-                    // Mascot calculation
-                    let mascotImg = `${import.meta.env.BASE_URL}mascot/sleepy.png`
-                    let mascotLine1 = 'Ready for today?'
-                    let mascotLine2 = "Let's conquer today's questions! 🚀"
-
-                    if (isDone) {
-                      mascotImg = `${import.meta.env.BASE_URL}mascot/celebrating.png`
-                      mascotLine1 = 'Outstanding!'
-                      mascotLine2 = 'Completed today’s roadmap! 🎉'
-                    } else if (st.stage_1_done) {
-                      mascotImg = `${import.meta.env.BASE_URL}mascot/excited.png`
-                      mascotLine1 = 'On Fire!'
-                      mascotLine2 = 'Keep up the blazing momentum 🔥'
-                    } else if ((st.new_learned_today || 0) > 0 || (st.review_completed_today || 0) > 0) {
-                      mascotImg = `${import.meta.env.BASE_URL}mascot/excited.png`
-                      mascotLine1 = 'Great start!'
-                      mascotLine2 = 'Finish all remaining steps today 💪'
-                    }
-
-                    const handleRoadmapWheel = (e: React.WheelEvent) => {
-                      if (roadmapQuizzes.length <= 1) return
-                      if (wheelCooldownRef.current) return
-                      if (Math.abs(e.deltaY) > 20 || Math.abs(e.deltaX) > 20) {
-                        wheelCooldownRef.current = true
-                        if (e.deltaY > 0 || e.deltaX > 0) {
-                          setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
-                        } else {
-                          setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
-                        }
-                        setTimeout(() => {
-                          wheelCooldownRef.current = false
-                        }, 350)
-                      }
-                    }
-
-                    return (
-                      <div 
-                        onWheel={handleRoadmapWheel}
-                        className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md select-none"
-                      >
-                        {/* Subheader bar with Navigation & Telegram */}
-                        <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
-                          <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="font-extrabold text-slate-800">Roadmap Pipeline</span>
-                            {roadmapQuizzes.length > 1 ? (
-                              <div className="flex items-center gap-1 bg-white border border-slate-200/80 px-2 py-0.5 rounded-full shadow-2xs">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setActiveRoadmapIdx(prev => (prev - 1 + roadmapQuizzes.length) % roadmapQuizzes.length)
-                                  }}
-                                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 active:scale-90 font-black cursor-pointer"
-                                  title="Previous Quiz"
-                                >
-                                  ‹
-                                </button>
-                                <span className="text-xs font-black text-indigo-600 px-1">
-                                  {safeIndex + 1} / {roadmapQuizzes.length}
-                                </span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setActiveRoadmapIdx(prev => (prev + 1) % roadmapQuizzes.length)
-                                  }}
-                                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 active:scale-90 font-black cursor-pointer"
-                                  title="Next Quiz"
-                                >
-                                  ›
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-slate-400">1 / 1</span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {roadmapQuizzes.length > 1 && (
-                              <div className="hidden sm:flex items-center gap-1 mr-1">
-                                {roadmapQuizzes.map((_, dotIdx) => (
-                                  <button
-                                    key={dotIdx}
-                                    onClick={() => setActiveRoadmapIdx(dotIdx)}
-                                    className={cn(
-                                      "h-1.5 rounded-full transition-all cursor-pointer",
-                                      dotIdx === safeIndex ? "bg-indigo-600 w-4" : "bg-slate-300 hover:bg-slate-400 w-1.5"
-                                    )}
-                                    title={`Switch to quiz ${dotIdx + 1}`}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                            <Link
-                              to={`/quiz/${item.quiz_id || item.deck_id}/roadmap`}
-                              className="font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer shrink-0"
-                            >
-                              <span>Details</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </Link>
-                          </div>
-                        </div>
-
-                        {/* HERO MASCOT CARD WITH ANIMATION */}
-                        <AnimatePresence mode="wait">
-                          <motion.div
-                            key={item.quiz_id || item.deck_id || safeIndex}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -8 }}
-                            transition={{ duration: 0.2, ease: "easeOut" }}
-                            className="flex flex-col"
-                          >
-                            <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-100/50 relative overflow-hidden flex flex-row items-center justify-between min-h-[165px]">
-                              
-                              {/* Left Column */}
-                              <div className="relative z-20 flex-1 max-w-[68%] sm:max-w-[72%] min-w-0 flex flex-col justify-center gap-2.5 py-1">
-                                
-                                {/* TOP BADGES: 3 DISTINCT CLEAN ROWS */}
-                                <div className="flex flex-col gap-2">
-                                  {/* ROW 1: Streak & UTC Countdown */}
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white rounded-full text-xs font-black shadow-xs shrink-0">
-                                      <span>🔥</span>
-                                      <span>{deckStreak} days streak</span>
-                                    </div>
-                                    {isDone ? (
-                                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
-                                        <span>✓</span>
-                                        <span>Done for today</span>
-                                      </div>
-                                    ) : (
-                                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-900 border border-amber-300/80 rounded-full text-xs font-black shadow-2xs shrink-0">
-                                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                        <span>{remainingTime} left</span>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* ROW 2: Quiz Title */}
-                                  <div className="flex items-center max-w-full">
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/80 border border-indigo-100/90 text-indigo-950 rounded-xl text-xs font-bold shadow-2xs max-w-full">
-                                      <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                      <span className="truncate max-w-[280px] sm:max-w-[400px] font-extrabold text-indigo-950">
-                                        {item.title}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* ROW 3: Progress & Est Date */}
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div 
-                                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-950 border border-emerald-300/80 rounded-full text-xs font-black shadow-2xs shrink-0"
-                                      title="Learned questions / Total questions"
-                                    >
-                                      <span>🎓</span>
-                                      <span>{st.learned_questions || 0}/{st.total_questions || 0} questions</span>
-                                    </div>
-                                    <div 
-                                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/15 text-indigo-950 border border-indigo-300/80 rounded-full text-xs font-black shadow-2xs shrink-0"
-                                      title="Estimated completion date"
-                                    >
-                                      <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                      <span>Est: {st.estimated_completion_date || '—'}</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Mascot Motivation Text with Cheer Support */}
-                                <div className="flex flex-col gap-0.5 mt-1">
-                                  <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-snug">
-                                    {mascotCheer || mascotLine1}
-                                  </h4>
-                                  <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
-                                    {mascotCheer ? "QuizMind Mascot is rooting for you! ⭐" : mascotLine2}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {/* Right Column: Mascot Character (Tap to cheer) */}
-                              <div 
-                                onClick={handleMascotTap}
-                                className="w-[38%] sm:w-[32%] max-w-[200px] absolute right-2 bottom-0 top-0 flex items-end justify-center z-10 cursor-pointer group"
-                                title="Tap mascot for encouragement!"
-                              >
-                                <motion.img
-                                  key={mascotImg}
-                                  initial={{ scale: 0.9, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  transition={{ duration: 0.3 }}
-                                  src={mascotImg}
-                                  alt="QuizMind Mascot"
-                                  className="h-[95%] max-h-[190px] w-auto max-w-none object-contain object-bottom drop-shadow-xl translate-y-1 transition-transform"
-                                />
-                              </div>
-                            </div>
-
-                            {/* PIPELINE STEPS LIST & CTA */}
-                            <div className="p-4 sm:p-5 bg-white border-t border-slate-100 flex flex-col gap-4">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                  <span>🗺️</span>
-                                  <span>Today's Steps</span>
-                                </span>
-                                <span className="text-xs font-bold text-slate-400">
-                                  Step {(st.current_step_index ?? 0) + 1}/{pipeline.length}
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                {pipeline.map((step: any, sIdx: number) => {
-                                  const isCurrent = sIdx === currentStepIdx && !isDone
-                                  const stepDone = step.done
-                                  return (
-                                    <div
-                                      key={step.id || sIdx}
-                                      className={cn(
-                                        "p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-between gap-2 transition-all",
-                                        stepDone
-                                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                          : isCurrent
-                                            ? "bg-indigo-50 text-indigo-800 border-indigo-300 ring-2 ring-indigo-500/20 animate-pulse"
-                                            : "bg-slate-50 text-slate-400 border-slate-200"
-                                      )}
-                                    >
-                                      <div className="flex items-center gap-1.5 truncate">
-                                        <span>{stepDone ? '✓' : `${sIdx + 1}.`}</span>
-                                        <span className="truncate">{step.label}</span>
-                                      </div>
-                                      {stepDone && <span className="text-[10px] font-black text-emerald-600 shrink-0">Done</span>}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-
-                              {/* Big Continue CTA Button */}
-                              <button
-                                onClick={() => navigate(st.next_action_url || `/quiz/${item.quiz_id || item.deck_id}/play?mode=roadmap`)}
-                                className={cn(
-                                  "w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98",
-                                  isDone
-                                    ? "bg-slate-900 hover:bg-slate-800 text-white"
-                                    : "bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500 hover:from-indigo-700 hover:to-rose-600 text-white shadow-indigo-200"
-                                )}
-                              >
-                                <Play className="w-4 h-4 fill-white" />
-                                <span>{st.next_action_label || 'Continue Roadmap 🚀'}</span>
-                              </button>
-                            </div>
-                          </motion.div>
-                        </AnimatePresence>
-
-                      </div>
-                    )
-                  })()}
+                  {renderRoadmapCard(false)}
                 </div>
 
-                {/* 2. DAILY COMPARISON CHART */}
+                {/* Daily Comparison Chart */}
                 <DailyComparisonChart 
                   data={dailyComparisonData?.days} 
                   allTimeAvg={dailyComparisonData?.all_time_avg} 
                   isLoading={isDailyCompLoading} 
                 />
 
-                {/* 3. ACHIEVEMENTS & BADGES */}
+                {/* Achievements & Badges */}
                 {Array.isArray(badgesData) && badgesData.length > 0 && (
                   <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
@@ -1024,103 +1177,8 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* VIEW 2: QUIZZES TAB CONTENT                                        */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {activeHomeTab === 'quizzes' && (
-              <div className="space-y-5">
-                
-                {/* Search & Actions Bar */}
-                <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="relative w-full sm:max-w-md">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={quizSearch}
-                      onChange={(e) => setQuizSearch(e.target.value)}
-                      placeholder="Search quizzes by title or topic..."
-                      className="w-full h-9 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Link
-                      to="/quizzes"
-                      className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                      <span>All Quizzes</span>
-                    </Link>
-                    <Link
-                      to="/manage/import"
-                      className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Import</span>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Quizzes Grid */}
-                {filteredQuizzes.length === 0 ? (
-                  <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/90 shadow-sm space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl">
-                      🔍
-                    </div>
-                    <h3 className="text-sm font-black text-slate-800">No quizzes match your search</h3>
-                    <p className="text-xs text-slate-400">Try searching for other keywords or explore the public library.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {filteredQuizzes.map(quiz => (
-                      <div
-                        key={quiz.id}
-                        className="bg-white border border-slate-200/90 hover:border-indigo-200 rounded-3xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between gap-4 group"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-base shrink-0 group-hover:scale-105 transition-transform">
-                              <BookOpen className="w-5 h-5" />
-                            </div>
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600">
-                              {quiz.questions_count || 0} questions
-                            </span>
-                          </div>
-
-                          <div>
-                            <h3 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                              {quiz.title}
-                            </h3>
-                            <p className="text-xs text-slate-400 font-medium line-clamp-2 mt-1">
-                              {quiz.description || "Practice multiple choice questions and track your accuracy."}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                          <button
-                            onClick={() => navigate(`/quiz/${quiz.id}/play`)}
-                            className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-white" />
-                            <span>Practice</span>
-                          </button>
-                          <button
-                            onClick={() => navigate(`/quiz/${quiz.id}`)}
-                            className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
-                          >
-                            Details
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              </div>
+            ) : (
+              renderQuizzesTab(false)
             )}
 
           </div>
