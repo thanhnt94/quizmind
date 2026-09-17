@@ -135,7 +135,7 @@ async def get_telegram_config(request: Request, db: AsyncSession = Depends(get_d
         "streak_guard_enabled": config.streak_guard_enabled,
         "weekly_summary_enabled": config.weekly_summary_enabled,
         "inactivity_alert_enabled": config.inactivity_alert_enabled,
-        "bot_username": bot_config.get("bot_username", "VocaburnBot")
+        "bot_username": bot_config.get("bot_username", "QuizMindBot")
     }
 
 @router.post("/telegram/config")

@@ -25,7 +25,9 @@ class UserSettingsService:
             "theme", "focus_timer_active", "sfx_enabled", "haptic_enabled",
             "autoplay_audio", "quiz_learning_mode", "practice_range",
             "score_mode", "time_mode", "last_quiz_id",
-            "home_active_tab", "roadmap_quiz_order", "quizzes_quiz_order"
+            "home_active_tab", "roadmap_quiz_order", "quizzes_quiz_order",
+            "shuffle_choices", "shuffle_questions", "auto_expand_explanation",
+            "exam_batch_size", "instant_feedback"
         }
         
         updated = False
@@ -63,5 +65,10 @@ class UserSettingsService:
             "home_active_tab": settings_obj.home_active_tab or "roadmap",
             "roadmap_quiz_order": settings_obj.roadmap_quiz_order or [],
             "quizzes_quiz_order": settings_obj.quizzes_quiz_order or [],
+            "shuffle_choices": True if settings_obj.shuffle_choices is None else settings_obj.shuffle_choices,
+            "shuffle_questions": True if settings_obj.shuffle_questions is None else settings_obj.shuffle_questions,
+            "auto_expand_explanation": True if settings_obj.auto_expand_explanation is None else settings_obj.auto_expand_explanation,
+            "exam_batch_size": 10 if settings_obj.exam_batch_size is None else settings_obj.exam_batch_size,
+            "instant_feedback": True if settings_obj.instant_feedback is None else settings_obj.instant_feedback,
             "updated_at": settings_obj.updated_at.isoformat() if settings_obj.updated_at else None
         }

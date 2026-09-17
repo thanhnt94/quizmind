@@ -504,6 +504,33 @@ async def login_api(
         }
     }
 
+@app.post("/api/v1/auth/change-password")
+async def change_password(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    from app.modules.auth.services.auth_service import AuthService
+    from app.modules.sso_module.service import SSOService
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    sso_config = await SSOService.get_config(db)
+    if sso_config.is_enabled:
+        return {"status": "error", "message": "SSO is active. Please change your password via the CentralAuth SSO portal."}
+        
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+    
+    if not current_password or not new_password:
+        return {"status": "error", "message": "Missing current or new password"}
+        
+    authenticated_user = await AuthService.authenticate_user(db, user.username, current_password)
+    if not authenticated_user:
+        return {"status": "error", "message": "Incorrect current password"}
+        
+    authenticated_user.hashed_password = AuthService.get_password_hash(new_password)
+    await db.commit()
+    
+    return {"status": "success", "message": "Password updated successfully!"}
+
 @app.get("/api/v1/admin/stats")
 async def api_admin_stats(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.auth.services.auth_service import AuthService

@@ -18,6 +18,11 @@ export interface UserSettings {
   home_active_tab: string;
   roadmap_quiz_order?: number[];
   quizzes_quiz_order?: number[];
+  shuffle_choices?: boolean;
+  shuffle_questions?: boolean;
+  auto_expand_explanation?: boolean;
+  exam_batch_size?: number;
+  instant_feedback?: boolean;
   updated_at?: string | null;
 }
 
@@ -35,6 +40,11 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   home_active_tab: 'roadmap',
   roadmap_quiz_order: [],
   quizzes_quiz_order: [],
+  shuffle_choices: true,
+  shuffle_questions: true,
+  auto_expand_explanation: true,
+  exam_batch_size: 10,
+  instant_feedback: true,
   updated_at: null,
 };
 

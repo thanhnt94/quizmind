@@ -77,11 +77,11 @@ export function QuizStartModal({
   // Calculate available quotas based on totalQuestions
   const maxTotal = totalQuestions || countsSummary?.totalCount || 0
   const quotaOptions: Array<{ val: number | 'all'; label: string; desc?: string }> = [
-    { val: 5, label: '5 câu' },
-    { val: 10, label: '10 câu' },
-    { val: 20, label: '20 câu' },
-    { val: 50, label: '50 câu' },
-    { val: 'all' as const, label: maxTotal > 0 ? `Tất cả (${maxTotal})` : 'Tất cả' },
+    { val: 5, label: '5 Questions' },
+    { val: 10, label: '10 Questions' },
+    { val: 20, label: '20 Questions' },
+    { val: 50, label: '50 Questions' },
+    { val: 'all' as const, label: maxTotal > 0 ? `All (${maxTotal})` : 'All Questions' },
   ].filter(opt => {
     if (opt.val === 'all') return true
     if (typeof opt.val === 'number') {
@@ -134,7 +134,7 @@ export function QuizStartModal({
               </div>
               <div className="min-w-0">
                 <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 block">
-                  Thiết lập lượt học
+                  Study Session Setup
                 </span>
                 <h3 className="text-sm sm:text-base font-black text-slate-900 truncate leading-tight mt-0.5">
                   {quizTitle}
@@ -145,25 +145,25 @@ export function QuizStartModal({
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center active:scale-90 transition-all cursor-pointer shrink-0"
-              title="Đóng"
+              title="Close"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* ═══════════ SECTION 1: KIỂU LÀM BÀI (FORMAT) ═══════════ */}
+          {/* ═══════════ SECTION 1: SESSION FORMAT ═══════════ */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-                <span>1. Kiểu làm bài</span>
+                <span>1. Session Format</span>
               </span>
               <span className="text-[10px] font-bold text-slate-400">
-                {format === 'practice' ? 'Check từng câu' : 'Nộp bài 1 lượt'}
+                {format === 'practice' ? 'Instant Feedback' : 'Batch Exam'}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 p-1 bg-slate-100/80 rounded-2xl border border-slate-200/60">
-              {/* Option 1: Luyện tập từng câu */}
+              {/* Option 1: Practice Mode */}
               <button
                 type="button"
                 onClick={() => {
@@ -189,14 +189,14 @@ export function QuizStartModal({
                   )}
                 </div>
                 <div className="mt-1">
-                  <span className="text-xs font-black block leading-tight">Luyện tập</span>
+                  <span className="text-xs font-black block leading-tight">Practice</span>
                   <span className="text-[10px] text-slate-400 font-medium block leading-tight mt-0.5">
-                    Giải thích tức thì
+                    Instant explanations
                   </span>
                 </div>
               </button>
 
-              {/* Option 2: Thi thử 1 lượt */}
+              {/* Option 2: Exam Mode */}
               <button
                 type="button"
                 onClick={() => {
@@ -222,28 +222,28 @@ export function QuizStartModal({
                   )}
                 </div>
                 <div className="mt-1">
-                  <span className="text-xs font-black block leading-tight">Thi thử</span>
+                  <span className="text-xs font-black block leading-tight">Exam Mode</span>
                   <span className="text-[10px] text-slate-400 font-medium block leading-tight mt-0.5">
-                    {timeLimitMinutes ? `${timeLimitMinutes}p đếm ngược` : 'Bấm giờ & nộp bài'}
+                    {timeLimitMinutes ? `${timeLimitMinutes}m countdown` : 'Timed & submit at once'}
                   </span>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* ═══════════ SECTION 2: CHẾ ĐỘ CÂU HỎI (SCOPE) ═══════════ */}
+          {/* ═══════════ SECTION 2: QUESTION SOURCE (SCOPE) ═══════════ */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-900 tracking-tight">
-                2. Nguồn câu hỏi
+                2. Question Source
               </span>
               <span className="text-[10px] font-bold text-slate-400">
-                {scope === 'mix' ? 'Xen kẽ thông minh' : scope === 'new' ? 'Chỉ câu mới' : 'Chỉ câu ôn tập'}
+                {scope === 'mix' ? 'Smart Interleaving' : scope === 'new' ? 'Unlearned Only' : 'Review Due'}
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              {/* Scope 1: Trộn thông minh */}
+              {/* Scope 1: Smart Mix */}
               <button
                 type="button"
                 onClick={() => {
@@ -265,20 +265,20 @@ export function QuizStartModal({
                     <Shuffle className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
-                    Khuyên dùng
+                    Recommended
                   </span>
                 </div>
                 <div className="mt-2">
                   <h4 className={cn("text-xs font-black leading-tight", scope === 'mix' ? "text-indigo-900" : "text-slate-800")}>
-                    Trộn xen kẽ
+                    Smart Mix
                   </h4>
                   <p className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">
-                    Mới + Đã học
+                    New + Review
                   </p>
                 </div>
               </button>
 
-              {/* Scope 2: Học câu mới */}
+              {/* Scope 2: New Only */}
               <button
                 type="button"
                 onClick={() => {
@@ -307,15 +307,15 @@ export function QuizStartModal({
                 </div>
                 <div className="mt-2">
                   <h4 className={cn("text-xs font-black leading-tight", scope === 'new' ? "text-purple-900" : "text-slate-800")}>
-                    Câu mới
+                    New Only
                   </h4>
                   <p className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">
-                    Chưa từng làm
+                    Unseen questions
                   </p>
                 </div>
               </button>
 
-              {/* Scope 3: Ôn tập */}
+              {/* Scope 3: Review */}
               <button
                 type="button"
                 onClick={() => {
@@ -344,24 +344,24 @@ export function QuizStartModal({
                 </div>
                 <div className="mt-2">
                   <h4 className={cn("text-xs font-black leading-tight", scope === 'review' ? "text-amber-900" : "text-slate-800")}>
-                    Ôn tập
+                    Review Due
                   </h4>
                   <p className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">
-                    Ưu tiên câu sai
+                    Missed & spaced
                   </p>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* ═══════════ SECTION 3: SỐ LƯỢNG CÂU HỎI (QUOTA) ═══════════ */}
+          {/* ═══════════ SECTION 3: QUESTION QUOTA ═══════════ */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-black text-slate-900 tracking-tight">
-                3. Số lượng câu trong lượt này
+                3. Question Batch Size
               </span>
               <span className="text-[10px] font-black text-indigo-600">
-                {count === 'all' ? 'Toàn bộ câu hỏi' : `${count} câu`}
+                {count === 'all' ? 'All Questions' : `${count} Questions`}
               </span>
             </div>
 
@@ -377,7 +377,7 @@ export function QuizStartModal({
                       setCount(opt.val)
                     }}
                     className={cn(
-                      "flex-1 min-w-[65px] py-2.5 px-3 rounded-2xl text-xs font-black transition-all cursor-pointer text-center border active:scale-95",
+                      "flex-1 min-w-[70px] py-2.5 px-3 rounded-2xl text-xs font-black transition-all cursor-pointer text-center border active:scale-95",
                       isSelected
                         ? "bg-slate-900 text-white border-slate-900 shadow-sm shadow-slate-900/20"
                         : "bg-slate-100/90 text-slate-700 border-slate-200/80 hover:bg-slate-200/80"
@@ -404,7 +404,7 @@ export function QuizStartModal({
             >
               <Play className="w-4 h-4 fill-white" />
               <span>
-                {format === 'exam' ? 'Bắt đầu Thi thử' : 'Bắt đầu Luyện tập'} ({count === 'all' ? 'Tất cả' : `${count} câu`})
+                {format === 'exam' ? 'Start Exam' : 'Start Practice'} ({count === 'all' ? 'All' : `${count} Qs`})
               </span>
             </button>
           </div>

@@ -42,6 +42,13 @@ class UserGlobalSettings(Base):
     roadmap_quiz_order = Column(JSON, nullable=True, default=list)
     quizzes_quiz_order = Column(JSON, nullable=True, default=list)
     
+    # Quiz Specific Preferences
+    shuffle_choices = Column(Boolean, default=True)
+    shuffle_questions = Column(Boolean, default=True)
+    auto_expand_explanation = Column(Boolean, default=True)
+    exam_batch_size = Column(Integer, default=10)
+    instant_feedback = Column(Boolean, default=True)
+    
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     user = relationship("User")
