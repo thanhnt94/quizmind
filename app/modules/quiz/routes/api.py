@@ -540,14 +540,25 @@ async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depen
     collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
     is_collaborator = collab_res.scalar() is not None
     
+    category_name = quiz.category.name if quiz.category else "General"
+    is_owner = (quiz.creator_id == user_id or user_id == 1)
+
     return {
         "id": quiz.id,
         "title": quiz.title,
         "description": quiz.description,
         "instruction": quiz.instruction,
         "ai_prompt": quiz.ai_prompt,
+        "cover_image": quiz.cover_image,
+        "time_limit": quiz.time_limit or 0,
+        "category_id": quiz.category_id,
+        "category_name": category_name,
+        "is_active": quiz.is_active,
+        "practice_settings": quiz.practice_settings or {},
         "creator_id": quiz.creator_id,
+        "is_creator": is_owner,
         "is_collaborator": is_collaborator,
+        "can_edit": is_owner or is_collaborator,
         "questions_count": q_count,
         "tags": [t.name for t in quiz.tags]
     }
@@ -1020,10 +1031,14 @@ async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = 
         )
         existing_q_map = {q.id: q for q in existing_q_res.scalars().all()}
         
+        updated_count = 0
+        added_count = 0
+
         for q_data in questions:
             q_id = q_data.get("id")
             
             if q_id and q_id in existing_q_map:
+                updated_count += 1
                 db_q = existing_q_map[q_id]
                 db_q.content = q_data["content"]
                 db_q.explanation = q_data["explanation"]
@@ -1051,6 +1066,7 @@ async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = 
                     elif i >= len(new_options):
                         await db.delete(old_options[i])
             else:
+                added_count += 1
                 db_q = Question(
                     quiz_id=quiz_id,
                     content=q_data["content"],
@@ -1073,7 +1089,13 @@ async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = 
                     db.add(new_opt)
                     
         await db.commit()
-        return {"status": "ok", "message": "Quiz updated successfully."}
+        return {
+            "status": "ok",
+            "message": "Quiz updated successfully.",
+            "updated_count": updated_count,
+            "added_count": added_count,
+            "total_excel_rows": len(questions)
+        }
         
     except Exception as e:
         import traceback
@@ -1213,14 +1235,50 @@ async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSessi
     if "description" in data: quiz.description = data["description"]
     if "cover_image" in data: quiz.cover_image = data["cover_image"]
     if "category_id" in data: quiz.category_id = data["category_id"]
+    if "category_name" in data:
+        cat_name = str(data["category_name"]).strip()
+        if cat_name:
+            from app.modules.quiz.models import Category
+            cat_res = await db.execute(select(Category).filter(Category.name == cat_name))
+            db_cat = cat_res.scalar_one_or_none()
+            if not db_cat:
+                db_cat = Category(name=cat_name)
+                db.add(db_cat)
+                await db.flush()
+            quiz.category_id = db_cat.id
     if "ai_prompt" in data: quiz.ai_prompt = data["ai_prompt"]
     if "instruction" in data: quiz.instruction = data["instruction"]
+    if "time_limit" in data:
+        try: quiz.time_limit = int(data["time_limit"])
+        except (ValueError, TypeError): pass
+    if "practice_settings" in data: quiz.practice_settings = data["practice_settings"]
     
     if "tags" in data:
         await QuizService.set_quiz_tags(db, quiz_id, data["tags"])
     
     await db.commit()
     return {"status": "ok"}
+
+@router.post("/{quiz_id}/reset-progress")
+async def reset_quiz_progress(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
+    user_id = int(request.cookies.get("user_id", 1))
+    from app.modules.quiz.models import QuizAttempt, UserAnswer, UserQuestionMastery, Question
+    
+    # 1. Delete user attempts and their answers
+    att_res = await db.execute(select(QuizAttempt.id).where(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == user_id))
+    att_ids = att_res.scalars().all()
+    if att_ids:
+        await db.execute(delete(UserAnswer).where(UserAnswer.attempt_id.in_(att_ids)))
+        await db.execute(delete(QuizAttempt).where(QuizAttempt.id.in_(att_ids)))
+        
+    # 2. Reset Leitner question mastery for questions belonging to this quiz
+    q_res = await db.execute(select(Question.id).where(Question.quiz_id == quiz_id))
+    q_ids = q_res.scalars().all()
+    if q_ids:
+        await db.execute(delete(UserQuestionMastery).where(UserQuestionMastery.user_id == user_id, UserQuestionMastery.question_id.in_(q_ids)))
+        
+    await db.commit()
+    return {"status": "ok", "message": "Study progress and Leitner box mastery reset successfully."}
 
 # --- Collaborator Endpoints ---
 

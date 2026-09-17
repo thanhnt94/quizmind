@@ -12,6 +12,7 @@ import axios from 'axios'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { QuizStartModal } from '@/components/QuizStartModal'
+import { QuizSettingsTab } from '@/components/quiz'
 
 interface Question {
   id: number
@@ -67,63 +68,11 @@ export default function QuizDetail() {
     count: 10
   })
 
-  const [isSavingEdit, setIsSavingEdit] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [editFormData, setEditFormData] = useState<any>(null)
-  const [userSearch, setUserSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [collaborators, setCollaborators] = useState<any[]>([])
-
   useEffect(() => {
     if (id === 'import') {
       navigate('/manage', { replace: true })
     }
   }, [id, navigate])
-
-  const fetchCollaborators = async () => {
-    try {
-      const res = await axios.get(`/api/v1/quiz/${id}/collaborators`)
-      setCollaborators(res.data)
-    } catch (e) {}
-  }
-
-  useEffect(() => {
-    if (activeTab === 'settings') {
-      fetchCollaborators()
-    }
-  }, [activeTab, id])
-
-  const handleSearchUsers = async (q: string) => {
-    setUserSearch(q)
-    if (q.length < 2) {
-      setSearchResults([])
-      return
-    }
-    try {
-      const res = await axios.get(`/api/v1/quiz/users/search`, { params: { q } })
-      setSearchResults(res.data)
-    } catch (e) {}
-  }
-
-  const addCollaborator = async (userId: number) => {
-    try {
-      await axios.post(`/api/v1/quiz/${id}/collaborators`, { user_id: userId })
-      fetchCollaborators()
-      setUserSearch('')
-      setSearchResults([])
-    } catch (e) {
-      alert("Error adding collaborator!")
-    }
-  }
-
-  const removeCollaborator = async (userId: number) => {
-    try {
-      await axios.delete(`/api/v1/quiz/${id}/collaborators/${userId}`)
-      fetchCollaborators()
-    } catch (e) {
-      alert("Error removing collaborator!")
-    }
-  }
 
   // 1. Quiz Details Data
   const { data: quiz, refetch: refetchQuiz } = useQuery({
@@ -193,53 +142,7 @@ export default function QuizDetail() {
 
   const allQuestions = questionsData?.pages.flatMap(p => p.questions) || []
 
-  // Initialize edit form data when quiz is loaded
-  useEffect(() => {
-    if (quiz && !editFormData) {
-      setEditFormData({
-        title: quiz.title || '',
-        description: quiz.description || '',
-        cover_image: quiz.cover_image || '',
-        tags: (quiz.tags || []).join(', ')
-      })
-    }
-  }, [quiz, editFormData])
 
-  const handleSaveEdit = async () => {
-    if (!editFormData) return
-    setIsSavingEdit(true)
-    try {
-      await axios.put(`/api/v1/quiz/${id}`, {
-        title: editFormData.title,
-        description: editFormData.description,
-        cover_image: editFormData.cover_image || null,
-        tags: editFormData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-      })
-      await refetchQuiz()
-      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })
-      alert("Quiz updated successfully!")
-    } catch (e) {
-      alert("Failed to update quiz.")
-    } finally {
-      setIsSavingEdit(false)
-    }
-  }
-
-  const handleDeleteQuiz = async () => {
-    if (!window.confirm("Are you sure you want to permanently delete this quiz and all associated questions? This action cannot be undone.")) {
-      return
-    }
-    setIsDeleting(true)
-    try {
-      await axios.delete(`/api/v1/quiz/${id}`)
-      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      navigate('/quizzes', { replace: true })
-    } catch (e) {
-      alert("Failed to delete quiz.")
-      setIsDeleting(false)
-    }
-  }
 
   // Touch swipe handling for horizontal tab navigation
   const touchStartX = React.useRef<number | null>(null)
@@ -638,188 +541,13 @@ export default function QuizDetail() {
         {/* TAB 4: SETTINGS & MANAGEMENT                                          */}
         {/* ═════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'settings' && (
-          <div className="space-y-6">
-            {isCreatorOrAdmin ? (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-7 shadow-sm border border-slate-200/90 dark:border-slate-800 space-y-6">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-slate-100">Quiz Properties & Settings</h3>
-                  <p className="text-xs text-slate-400 font-medium">Update title, description, cover image, and categorization tags.</p>
-                </div>
-
-                <div className="space-y-4 max-w-xl">
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Quiz Title</label>
-                    <input
-                      type="text"
-                      value={editFormData?.title || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
-                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Description</label>
-                    <textarea
-                      rows={3}
-                      value={editFormData?.description || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                      className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Cover Image URL</label>
-                    <input
-                      type="text"
-                      placeholder="https://example.com/cover.png"
-                      value={editFormData?.cover_image || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, cover_image: e.target.value })}
-                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                    />
-                    {editFormData?.cover_image && (
-                      <div className="mt-2 w-28 h-18 rounded-xl overflow-hidden border border-slate-200 shadow-2xs">
-                        <img src={editFormData.cover_image} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Tags (comma separated)</label>
-                    <input
-                      type="text"
-                      value={editFormData?.tags || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, tags: e.target.value })}
-                      placeholder="e.g. IT, Security, Certification"
-                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleSaveEdit}
-                    disabled={isSavingEdit}
-                    className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-indigo-200 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    {isSavingEdit ? 'Saving...' : 'Save Properties'}
-                  </button>
-                </div>
-
-                {/* Quick Editor Jump Cards */}
-                <div className="pt-6 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
-                  <Link
-                    to={`/manage/edit/${id}/questions`}
-                    className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100/80 border border-indigo-200/80 dark:border-indigo-800 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-black text-xs">
-                      <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-indigo-600" />
-                        <span>Question Editor</span>
-                      </div>
-                      <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
-                      Edit options, correct answers, explanations, and import from Excel.
-                    </p>
-                  </Link>
-
-                  <Link
-                    to={`/manage/edit/${id}`}
-                    className="p-4 rounded-2xl bg-violet-50/70 dark:bg-violet-950/40 hover:bg-violet-100/80 border border-violet-200/80 dark:border-violet-800 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between text-violet-700 dark:text-violet-300 font-black text-xs">
-                      <div className="flex items-center gap-2">
-                        <Settings className="w-4 h-4 text-violet-600" />
-                        <span>Full Quiz Settings</span>
-                      </div>
-                      <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
-                      Configure AI prompting rules, instructions, and categories.
-                    </p>
-                  </Link>
-                </div>
-
-                {/* Collaborators Section */}
-                <div className="pt-6 border-t border-slate-100 dark:border-slate-800 space-y-4 max-w-xl">
-                  <div>
-                    <h4 className="text-sm font-black text-slate-900 dark:text-slate-100">Manage Collaborators</h4>
-                    <p className="text-xs text-slate-400 font-medium">Grant other users editing and management permissions.</p>
-                  </div>
-
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={userSearch}
-                      onChange={(e) => handleSearchUsers(e.target.value)}
-                      placeholder="Search user by username or email..."
-                      className="w-full h-10 pl-9 pr-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-
-                  {searchResults.length > 0 && (
-                    <div className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-1">
-                      {searchResults.map(u => (
-                        <div key={u.id} className="flex items-center justify-between p-2 hover:bg-white rounded-xl transition-colors">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{u.username}</span>
-                          <button
-                            onClick={() => addCollaborator(u.id)}
-                            className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-[10px] font-black cursor-pointer"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {collaborators.length > 0 && (
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active Collaborators</span>
-                      {collaborators.map(c => (
-                        <div key={c.id} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{c.username}</span>
-                          <button
-                            onClick={() => removeCollaborator(c.id)}
-                            className="text-rose-500 hover:text-rose-700 text-xs p-1 cursor-pointer"
-                            title="Remove Collaborator"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Danger Zone: Delete Quiz */}
-                <div className="pt-6 border-t border-rose-100 dark:border-rose-950/60 space-y-3 max-w-xl">
-                  <div>
-                    <h4 className="text-xs font-black text-rose-600 uppercase tracking-wider">Danger Zone</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Permanently delete this quiz and all its associated questions.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleDeleteQuiz}
-                    disabled={isDeleting}
-                    className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-black transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>{isDeleting ? 'Deleting...' : 'Delete This Quiz'}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Read-only info card for standard members */
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-7 shadow-sm border border-slate-200/90 dark:border-slate-800 space-y-4">
-                <h3 className="text-base font-black text-slate-900 dark:text-slate-100">Quiz Information</h3>
-                <p className="text-xs text-slate-400 font-medium">This quiz is managed by @{quiz?.creator_name || 'Author'}.</p>
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 space-y-2 text-xs">
-                  <div><strong>Title:</strong> {quiz?.title}</div>
-                  <div><strong>Total Questions:</strong> {quiz?.questions_count}</div>
-                  <div><strong>Description:</strong> {quiz?.description || 'None'}</div>
-                </div>
-              </div>
-            )}
+          <div className="space-y-4">
+            <QuizSettingsTab
+              quizId={id || ''}
+              initialData={quiz}
+              isOwner={isCreatorOrAdmin}
+              onSaved={refetchQuiz}
+            />
           </div>
         )}
 
