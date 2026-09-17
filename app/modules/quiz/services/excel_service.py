@@ -251,22 +251,38 @@ class ExcelQuizService:
         
         rows = []
         for q in questions:
-            # Extract options
-            opt_a = q.options[0].content if len(q.options) > 0 else ""
-            opt_b = q.options[1].content if len(q.options) > 1 else ""
-            opt_c = q.options[2].content if len(q.options) > 2 else ""
-            opt_d = q.options[3].content if len(q.options) > 3 else ""
+            # Safely extract options without triggering async lazy-load
+            options_list = q.__dict__.get("options")
+            if options_list is None and hasattr(q, "options"):
+                try:
+                    options_list = q.options
+                except Exception:
+                    options_list = []
+            options_list = options_list or []
+
+            opt_a = options_list[0].content if len(options_list) > 0 else ""
+            opt_b = options_list[1].content if len(options_list) > 1 else ""
+            opt_c = options_list[2].content if len(options_list) > 2 else ""
+            opt_d = options_list[3].content if len(options_list) > 3 else ""
             
             # The correct answer text:
-            correct_opt = next((o.content for o in q.options if o.is_correct), "")
+            correct_opt = next((o.content for o in options_list if getattr(o, "is_correct", False)), "")
             
+            # Safely extract group without triggering async lazy-load
+            group_obj = q.__dict__.get("group")
+            if group_obj is None and hasattr(q, "group"):
+                try:
+                    group_obj = q.group
+                except Exception:
+                    group_obj = None
+
             row = {
                 "id": q.id,
-                "group_id": getattr(q.group, "group_code", "") if getattr(q, "group", None) else "",
-                "group_title": getattr(q.group, "title", "") if getattr(q, "group", None) else "",
-                "passage": getattr(q.group, "passage_text", "") if getattr(q, "group", None) else "",
-                "group_audio": getattr(q.group, "audio_url", "") if getattr(q, "group", None) else "",
-                "group_image": getattr(q.group, "image_url", "") if getattr(q, "group", None) else "",
+                "group_id": getattr(group_obj, "group_code", "") if group_obj else "",
+                "group_title": getattr(group_obj, "title", "") if group_obj else "",
+                "passage": getattr(group_obj, "passage_text", "") if group_obj else "",
+                "group_audio": getattr(group_obj, "audio_url", "") if group_obj else "",
+                "group_image": getattr(group_obj, "image_url", "") if group_obj else "",
                 "group_order": getattr(q, "order_in_group", "") or "",
                 "allow_shuffle": "NO" if getattr(q, "allow_shuffle", True) is False else "YES",
                 "question": q.content,

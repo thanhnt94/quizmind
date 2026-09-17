@@ -155,7 +155,8 @@ class QuizService:
                 selectinload(Quiz.questions).selectinload(Question.options),
                 selectinload(Quiz.questions).selectinload(Question.group),
                 selectinload(Quiz.groups),
-                selectinload(Quiz.tags)
+                selectinload(Quiz.tags),
+                selectinload(Quiz.category)
             )
         )
         return result.scalar_one_or_none()
@@ -169,7 +170,8 @@ class QuizService:
                 selectinload(Quiz.questions).selectinload(Question.options),
                 selectinload(Quiz.questions).selectinload(Question.group),
                 selectinload(Quiz.groups),
-                selectinload(Quiz.tags)
+                selectinload(Quiz.tags),
+                selectinload(Quiz.category)
             )
         )
         quiz = result.scalar_one_or_none()

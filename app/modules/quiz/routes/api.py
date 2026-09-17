@@ -951,37 +951,54 @@ async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depe
 
 @router.get("/{quiz_id}/export")
 async def export_quiz(quiz_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
-    if not quiz:
-        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+    try:
+        from app.modules.quiz.models import Quiz, Question, Category, Tag, QuestionGroup
+        stmt = (
+            select(Quiz)
+            .where(Quiz.id == quiz_id)
+            .options(
+                selectinload(Quiz.category),
+                selectinload(Quiz.tags),
+                selectinload(Quiz.groups),
+                selectinload(Quiz.questions).selectinload(Question.options),
+                selectinload(Quiz.questions).selectinload(Question.group)
+            )
+        )
+        res = await db.execute(stmt)
+        quiz = res.scalar_one_or_none()
+        if not quiz:
+            return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+            
+        category_name = quiz.category.name if quiz.category else "General"
+        tags = [t.name for t in quiz.tags] if quiz.tags else []
+        questions = list(quiz.questions or [])
+
+        import asyncio
+        excel_bytes = await asyncio.to_thread(
+            ExcelQuizService.export_quiz_to_excel,
+            quiz_title=quiz.title or "Quiz",
+            quiz_description=quiz.description or "",
+            category_name=category_name,
+            tags=tags,
+            questions=questions
+        )
         
-    from app.modules.quiz.models import Question
-    q_stmt = select(Question).where(Question.quiz_id == quiz_id).options(selectinload(Question.options))
-    res = await db.execute(q_stmt)
-    questions = res.scalars().all()
-    
-    category_name = quiz.category.name if quiz.category else "General"
-    tags = [t.name for t in quiz.tags]
-    
-    excel_bytes = ExcelQuizService.export_quiz_to_excel(
-        quiz_title=quiz.title,
-        quiz_description=quiz.description,
-        category_name=category_name,
-        tags=tags,
-        questions=questions
-    )
-    
-    from fastapi.responses import Response
-    import urllib.parse
-    encoded_filename = urllib.parse.quote(f"{quiz.title}.xlsx")
-    
-    return Response(
-        content=excel_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
-        }
-    )
+        from fastapi.responses import Response
+        import urllib.parse
+        clean_title = "".join(c for c in (quiz.title or "Quiz") if c.isalnum() or c in (" ", "_", "-")).strip() or "Quiz"
+        encoded_filename = urllib.parse.quote(f"{clean_title}.xlsx")
+        
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{clean_title}.xlsx"; filename*=UTF-8\'\'{encoded_filename}'
+            }
+        )
+    except Exception as e:
+        import traceback
+        print(f"CRITICAL EXPORT ERROR: {traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to export quiz: {str(e)}"})
 
 @router.post("/{quiz_id}/import-update")
 async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
