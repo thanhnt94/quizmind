@@ -27,52 +27,52 @@ export interface PipelineStep {
 
 const STEP_META: Record<StepType, { title: string; icon: string; gradient: string; color: string; desc: string; ring: string }> = {
   new_cards: {
-    title: 'Học Câu Mới',
+    title: 'New Questions',
     icon: '📝',
     gradient: 'from-orange-500 to-amber-500',
     color: 'text-orange-500',
-    desc: 'Luyện tập các câu hỏi mới tinh trong bộ đề',
+    desc: 'Learn and answer brand-new questions in the quiz bank',
     ring: 'ring-orange-500/20'
   },
   mcq: {
-    title: 'Trắc Nghiệm MCQ',
+    title: 'MCQ Quiz',
     icon: '🎯',
     gradient: 'from-purple-500 to-fuchsia-500',
     color: 'text-purple-500',
-    desc: 'Bài test trắc nghiệm chọn đáp án đúng để đánh giá',
+    desc: 'Multiple choice practice test to assess mastery',
     ring: 'ring-purple-500/20'
   },
   typing: {
-    title: 'Gõ Đáp Án',
+    title: 'Typing Test',
     icon: '⌨️',
     gradient: 'from-emerald-500 to-teal-500',
     color: 'text-emerald-500',
-    desc: 'Bài test gõ chính xác đáp án cần ghi nhớ',
+    desc: 'Active recall typing practice for high retention',
     ring: 'ring-emerald-500/20'
   },
   review: {
-    title: 'Ôn Tập Củng Cố',
+    title: 'Review Due Questions',
     icon: '🔄',
     gradient: 'from-indigo-500 to-blue-500',
     color: 'text-indigo-500',
-    desc: 'Ôn tập câu hỏi sai hoặc chưa nắm vững',
+    desc: 'Reinforce questions needing review and fix mistakes',
     ring: 'ring-indigo-500/20'
   },
   study_time: {
-    title: 'Thời Gian Học',
+    title: 'Study Time',
     icon: '⏱️',
     gradient: 'from-blue-500 to-cyan-500',
     color: 'text-blue-500',
-    desc: 'Tích lũy tổng thời gian học trong ngày',
+    desc: 'Accumulate dedicated focus study minutes',
     ring: 'ring-blue-500/20'
   }
 }
 
 const TABS = [
-  { id: 'today', label: 'Hôm Nay', icon: Zap },
-  { id: 'history', label: 'Lịch Sử', icon: History },
-  { id: 'config', label: 'Cấu Hình', icon: Settings },
-  { id: 'stats', label: 'Thống Kê', icon: BarChart3 },
+  { id: 'today', label: 'Today', icon: Zap },
+  { id: 'history', label: 'History', icon: History },
+  { id: 'config', label: 'Settings', icon: Settings },
+  { id: 'stats', label: 'Stats', icon: BarChart3 },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -157,9 +157,8 @@ export default function QuizRoadmap() {
         roadmap_pass_threshold: roadmapPassThreshold,
         roadmap_daily_review_max: roadmapDailyReviewMax,
         pipeline: [
-          { id: 'step_new', type: 'new_cards', label: 'Học câu mới', daily_count: roadmapDailyNew },
-          { id: 'step_mcq', type: 'mcq', label: 'Bài kiểm tra MCQ', question_count: roadmapDailyNew, pass_threshold: roadmapPassThreshold },
-          { id: 'step_review', type: 'review', label: 'Ôn tập củng cố', max_count: roadmapDailyReviewMax }
+          { id: 'step_new', type: 'new_cards', label: 'New Questions', daily_count: roadmapDailyNew },
+          { id: 'step_review', type: 'review', label: 'Review Due', max_count: roadmapDailyReviewMax }
         ]
       }
       await axios.post(`/api/v1/quiz/${id}/practice-settings`, {
@@ -172,9 +171,9 @@ export default function QuizRoadmap() {
       await queryClient.invalidateQueries({ queryKey: ['roadmapDecks'] })
       refetch()
       refetchSettings()
-      alert('Đã lưu cấu hình Lộ Trình thành công!')
+      alert('Roadmap settings saved successfully!')
     } catch (e: any) {
-      alert('Lỗi khi lưu cấu hình: ' + (e?.response?.data?.error || e.message))
+      alert('Failed to save settings: ' + (e?.response?.data?.error || e.message))
     } finally {
       setIsSavingSettings(false)
     }
@@ -278,19 +277,19 @@ export default function QuizRoadmap() {
                     "px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border",
                     allDone ? "bg-emerald-500 text-white border-emerald-600" : "bg-amber-100 text-amber-900 border-amber-300"
                   )}>
-                    {allDone ? '✓ Đã hoàn thành hôm nay' : `Đang học: Bước ${currentStepIndex + 1}/${pipeline.length}`}
+                    {allDone ? '✓ Completed Today' : `In Progress: Step ${currentStepIndex + 1}/${pipeline.length}`}
                   </span>
                   <span className="text-xs font-bold text-slate-500">
-                    🎯 Mục tiêu: {status?.new_target_today || 10} câu/ngày
+                    🎯 Target: {status?.new_target_today || 10} questions/day
                   </span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {allDone ? 'Xuất sắc! Bạn đã xong lộ trình hôm nay! 🎉' : 'Hoàn thành các bước để duy trì chuỗi Streak 🔥'}
+                  {allDone ? "Awesome! You've finished today's roadmap! 🎉" : 'Complete all steps to keep your Streak alive 🔥'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-xl">
                   {allDone 
-                    ? 'Hãy nghỉ ngơi hoặc ôn tập thêm nếu muốn củng cố kiến thức vững chắc hơn.' 
-                    : 'Học đều đặn mỗi ngày theo lộ trình giúp bạn thuộc nhanh và nhớ lâu gấp 10 lần.'}
+                    ? 'Take a rest or do extra practice if you want to further solidify your memory.' 
+                    : 'Consistent daily practice keeps knowledge fresh and boosts long-term recall.'}
                 </p>
               </div>
 
@@ -305,7 +304,7 @@ export default function QuizRoadmap() {
                   )}
                 >
                   <Play className="w-4 h-4 fill-white" />
-                  <span>{status?.next_action_label || 'Bắt Đầu Học'}</span>
+                  <span>{status?.next_action_label || 'Start Learning'}</span>
                 </button>
               </div>
             </div>
@@ -313,7 +312,7 @@ export default function QuizRoadmap() {
             {/* Pipeline Stepper List */}
             <div className="space-y-3">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 px-1">
-                Các bước luyện tập trong ngày
+                Daily Learning Pipeline
               </h3>
               <div className="grid grid-cols-1 gap-3">
                 {pipeline.map((step: any, idx: number) => {
@@ -349,19 +348,19 @@ export default function QuizRoadmap() {
                         <div className="space-y-1 min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold text-slate-400">
-                              Bước {idx + 1}
+                              Step {idx + 1}
                             </span>
                             <h4 className="text-sm font-black text-slate-900">
                               {step.label || meta.title}
                             </h4>
                             {isCompleted && (
                               <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
-                                Đã xong
+                                Done
                               </span>
                             )}
                             {isCurrent && (
                               <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[10px] font-black uppercase tracking-wider animate-pulse">
-                                Đang thực hiện
+                                In Progress
                               </span>
                             )}
                           </div>
@@ -373,13 +372,13 @@ export default function QuizRoadmap() {
                           {step.progress && (
                             <div className="text-[11px] font-bold text-slate-600 pt-1">
                               {step.type === 'new_cards' && (
-                                <span>Tiến độ: {step.progress.done || 0} / {step.progress.target || 10} câu</span>
+                                <span>Progress: {step.progress.done || 0} / {step.progress.target || 10} questions</span>
                               )}
                               {step.type === 'mcq' && (
-                                <span>Điểm cao nhất hôm nay: {step.progress.best_score || 0}% (Cần đạt ≥ {step.progress.threshold || 80}%)</span>
+                                <span>Highest Score Today: {step.progress.best_score || 0}% (Target ≥ {step.progress.threshold || 80}%)</span>
                               )}
                               {step.type === 'review' && (
-                                <span>Đã ôn: {step.progress.done || 0} / {step.progress.target || 0} câu</span>
+                                <span>Reviewed: {step.progress.done || 0} / {step.progress.target || 0} questions</span>
                               )}
                             </div>
                           )}
@@ -398,7 +397,7 @@ export default function QuizRoadmap() {
                                 : "bg-slate-100 hover:bg-slate-200 text-slate-600"
                           )}
                         >
-                          <span>{isCompleted ? 'Học Lại' : 'Bắt Đầu'}</span>
+                          <span>{isCompleted ? 'Review Again' : 'Start'}</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </Link>
                       </div>
@@ -416,8 +415,8 @@ export default function QuizRoadmap() {
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-black text-slate-900">Lịch Sử Học Tập Theo Tháng</h3>
-                  <p className="text-xs font-medium text-slate-500">Theo dõi chuỗi ngày duy trì bài học</p>
+                  <h3 className="text-base font-black text-slate-900">Monthly Study History</h3>
+                  <p className="text-xs font-medium text-slate-500">Track your daily streak and consistent habits</p>
                 </div>
                 <input
                   type="month"
@@ -428,10 +427,10 @@ export default function QuizRoadmap() {
               </div>
 
               {isCalendarLoading ? (
-                <div className="py-12 text-center text-xs font-bold text-slate-400">Đang tải lịch sử...</div>
+                <div className="py-12 text-center text-xs font-bold text-slate-400">Loading history...</div>
               ) : (
                 <div className="grid grid-cols-7 gap-2 pt-2">
-                  {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d, i) => (
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
                     <div key={i} className="text-center text-[10px] font-black text-slate-400 uppercase py-1">
                       {d}
                     </div>
@@ -452,7 +451,7 @@ export default function QuizRoadmap() {
                               ? "bg-amber-100 text-amber-900 border-amber-300 font-bold"
                               : "bg-slate-50 text-slate-400 border-slate-100 font-medium"
                         )}
-                        title={`${day.date}: ${day.study_minutes} phút học, ${day.answer_count} câu`}
+                        title={`${day.date}: ${day.study_minutes} mins, ${day.answer_count} questions`}
                       >
                         <span className="text-xs">{dayNum}</span>
                         {isDone && <span className="text-[9px]">🔥</span>}
@@ -470,16 +469,16 @@ export default function QuizRoadmap() {
           <div className="space-y-6">
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-5">
               <div>
-                <h3 className="text-base font-black text-slate-900">Cài Đặt Lộ Trình Học</h3>
-                <p className="text-xs font-medium text-slate-500">Tùy biến số câu hỏi mỗi ngày và tiêu chuẩn đạt bài test</p>
+                <h3 className="text-base font-black text-slate-900">Roadmap Settings</h3>
+                <p className="text-xs font-medium text-slate-500">Customize daily question targets and passing criteria</p>
               </div>
 
               <div className="space-y-4">
                 {/* Active Toggle */}
                 <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">Kích hoạt Lộ Trình cho bộ đề này</h4>
-                    <p className="text-xs text-slate-500 font-medium">Hiển thị trên trang chủ và nhắc nhở học hàng ngày</p>
+                    <h4 className="text-sm font-bold text-slate-900">Activate Roadmap for this quiz</h4>
+                    <p className="text-xs text-slate-500 font-medium">Display on Dashboard and send daily reminders</p>
                   </div>
                   <input
                     type="checkbox"
@@ -492,8 +491,8 @@ export default function QuizRoadmap() {
                 {/* Daily Target */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-slate-900">Mục tiêu câu hỏi mới mỗi ngày</label>
-                    <span className="text-sm font-black text-indigo-600">{roadmapDailyNew} câu</span>
+                    <label className="text-sm font-bold text-slate-900">Daily new questions target</label>
+                    <span className="text-sm font-black text-indigo-600">{roadmapDailyNew} questions</span>
                   </div>
                   <input
                     type="range"
@@ -509,7 +508,7 @@ export default function QuizRoadmap() {
                 {/* Pass Threshold */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-slate-900">Ngưỡng điểm đạt bài kiểm tra MCQ</label>
+                    <label className="text-sm font-bold text-slate-900">MCQ passing threshold</label>
                     <span className="text-sm font-black text-purple-600">{roadmapPassThreshold}%</span>
                   </div>
                   <input
@@ -526,8 +525,8 @@ export default function QuizRoadmap() {
                 {/* Daily Review Max */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-slate-900">Số câu ôn tập tối đa mỗi ngày</label>
-                    <span className="text-sm font-black text-emerald-600">{roadmapDailyReviewMax} câu</span>
+                    <label className="text-sm font-bold text-slate-900">Max daily review questions</label>
+                    <span className="text-sm font-black text-emerald-600">{roadmapDailyReviewMax} questions</span>
                   </div>
                   <input
                     type="range"
@@ -547,7 +546,7 @@ export default function QuizRoadmap() {
                   disabled={isSavingSettings}
                   className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-indigo-200 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {isSavingSettings ? 'Đang lưu...' : 'Lưu Cấu Hình 💾'}
+                  {isSavingSettings ? 'Saving...' : 'Save Settings 💾'}
                 </button>
               </div>
             </div>
@@ -559,24 +558,24 @@ export default function QuizRoadmap() {
           <div className="space-y-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Đã Thuộc</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Mastered</span>
                 <div className="text-2xl font-black text-emerald-600">{status?.learned_questions || 0}</div>
-                <span className="text-[10px] font-semibold text-slate-500">trên {status?.total_questions || 0} câu</span>
+                <span className="text-[10px] font-semibold text-slate-500">out of {status?.total_questions || 0}</span>
               </div>
               <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Còn Lại</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Remaining</span>
                 <div className="text-2xl font-black text-slate-800">{status?.unlearned_questions || 0}</div>
-                <span className="text-[10px] font-semibold text-slate-500">cần nạp thêm</span>
+                <span className="text-[10px] font-semibold text-slate-500">questions left</span>
               </div>
               <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ghi Nhớ</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Retention</span>
                 <div className="text-2xl font-black text-indigo-600">{status?.retention_rate || 0}%</div>
                 <span className="text-[10px] font-semibold text-slate-500">Retention rate</span>
               </div>
               <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Dự Kiến Xong</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Est. Finish</span>
                 <div className="text-lg font-black text-slate-900 truncate">{status?.estimated_completion_date || '—'}</div>
-                <span className="text-[10px] font-semibold text-slate-500">Khoảng {status?.days_left || 0} ngày</span>
+                <span className="text-[10px] font-semibold text-slate-500">~{status?.days_left || 0} days</span>
               </div>
             </div>
           </div>

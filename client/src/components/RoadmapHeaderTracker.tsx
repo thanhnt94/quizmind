@@ -309,7 +309,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
         {onExit && (
           <button
             onClick={onExit}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-slate-700 flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-sm"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200/90 flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-2xs"
             title="Exit Session"
           >
             <X className="w-4 h-4" />
@@ -320,10 +320,10 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
       {/* 2. FULL BAR FLIP CONTAINER */}
       <div 
         onClick={toggleViewMode}
-        className="flex-1 flex items-center min-w-0 h-full cursor-pointer z-[140]"
+        className="flex-1 flex items-center min-w-0 h-full cursor-pointer z-[140] group"
         title="Tap to toggle between (Quiz & Mode) ⇄ (Live HUD Stats)"
       >
-        <div className="w-full h-full flex items-center rounded-full bg-slate-900/80 hover:bg-slate-900/95 border border-slate-800 hover:border-slate-700/80 px-2.5 sm:px-3.5 backdrop-blur-md shadow-sm transition-all overflow-hidden relative">
+        <div className="w-full h-full flex items-center rounded-full bg-white/95 hover:bg-white border border-slate-200/90 hover:border-indigo-200/90 px-2.5 sm:px-3.5 backdrop-blur-md shadow-xs shadow-indigo-100/30 transition-all overflow-hidden relative">
           <AnimatePresence mode="wait" initial={false}>
             {viewMode === 0 ? (
               /* ========================================================================= */
@@ -337,10 +337,10 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 transition={{ duration: 0.18, ease: "easeInOut" }}
                 className="w-full flex items-center justify-between gap-2 min-w-0"
               >
-                {/* Left side of Face 1: Title */}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className="text-xs shrink-0">📝</span>
-                  <h1 className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight truncate" title={effectiveTitle}>
+                {/* Left side of Face 1: Title with glowing pulse dot */}
+                <div className="flex items-center gap-2 min-w-0 flex-1 pl-0.5">
+                  <span className="w-2 h-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 shadow-[0_0_6px_rgba(99,102,241,0.5)] shrink-0 animate-pulse" />
+                  <h1 className="text-xs sm:text-sm font-extrabold text-slate-800 tracking-tight truncate" title={effectiveTitle}>
                     {effectiveTitle}
                   </h1>
                 </div>
@@ -355,10 +355,10 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                         className={cn(
                           "h-1.5 rounded-full transition-all duration-300",
                           idx === currentStepIndex
-                            ? "w-3 bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]"
+                            ? "w-3.5 bg-gradient-to-r from-indigo-500 to-purple-600 shadow-[0_0_6px_rgba(99,102,241,0.5)]"
                             : idx < currentStepIndex
-                              ? "w-1.5 bg-emerald-400"
-                              : "w-1.5 bg-slate-700"
+                              ? "w-1.5 bg-emerald-500"
+                              : "w-1.5 bg-slate-200"
                         )}
                       />
                     ))}
@@ -367,8 +367,8 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                   {/* Mode Badge */}
                   <div 
                     className={cn(
-                      "flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-xs font-black shrink-0 tracking-wide shadow-sm",
-                      meta.style || "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                      "flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-black shrink-0 tracking-tight shadow-2xs",
+                      meta.style || "bg-indigo-50 text-indigo-700 border-indigo-200/80"
                     )}
                     title={currentStep?.label || meta.label}
                   >
@@ -380,13 +380,13 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
 
                   {/* Sub Progress Counter */}
                   {hasSubProg && (
-                    <div className="flex items-center gap-0.5 font-bold font-mono text-[11px] text-slate-300 shrink-0">
-                      <span className={isGoalReached ? "text-emerald-400 font-extrabold" : "text-amber-400 font-extrabold"}>
+                    <div className="flex items-center gap-0.5 font-bold font-mono text-[11px] text-slate-600 shrink-0">
+                      <span className={isGoalReached ? "text-emerald-600 font-extrabold" : "text-indigo-600 font-extrabold"}>
                         {isOverachieved ? `+${extraCount}` : subProgressCurr}
                       </span>
                       {!isOverachieved && (
                         <>
-                          <span className="text-slate-600">/</span>
+                          <span className="text-slate-400">/</span>
                           <span>{subProgressTotal}</span>
                         </>
                       )}
@@ -394,7 +394,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                   )}
 
                   {/* Flip Action Indicator Pill */}
-                  <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] font-bold text-slate-400 hover:text-slate-200 shrink-0">
+                  <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-[10px] font-bold text-slate-500 hover:text-slate-700 shrink-0">
                     <ArrowRightLeft className="w-2.5 h-2.5" />
                     <span>HUD</span>
                   </div>
@@ -414,34 +414,34 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
               >
                 {/* 1. Timer: Question & Today */}
                 <div className="flex items-center gap-1 shrink-0" title="Current Question Timer & Today's Study Time">
-                  <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-pulse" />
-                  <span className="text-emerald-300 font-black text-[11px]">{displayCardTime}</span>
-                  <span className="text-slate-600 hidden sm:inline">•</span>
-                  <span className="text-slate-400 text-[10px] hidden sm:inline" title="Today's Study Time">{displayTodayTime}</span>
+                  <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0 animate-pulse" />
+                  <span className="text-emerald-700 font-black text-[11px]">{displayCardTime}</span>
+                  <span className="text-slate-300 hidden sm:inline">•</span>
+                  <span className="text-slate-500 text-[10px] hidden sm:inline" title="Today's Study Time">{displayTodayTime}</span>
                 </div>
 
-                <div className="w-[1px] h-3 bg-slate-800 shrink-0" />
+                <div className="w-[1px] h-3 bg-slate-200 shrink-0" />
 
                 {/* 2. Progress & Remaining */}
                 <div className="flex items-center gap-1 shrink-0" title="Question Progress">
-                  <Target className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span className="text-slate-200 font-black text-[11px]">
+                  <Target className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span className="text-slate-700 font-black text-[11px]">
                     {hasSubProg ? `${subProgressCurr}/${subProgressTotal}` : `${currentIndex + 1}/${totalCards || '--'}`}
                   </span>
                   {cardsRemaining > 0 && (
-                    <span className="text-slate-500 text-[10px] hidden md:inline">({cardsRemaining} left)</span>
+                    <span className="text-slate-400 text-[10px] hidden md:inline">({cardsRemaining} left)</span>
                   )}
                 </div>
 
                 {/* 3. Accuracy Rate % */}
                 {accuracyPercent !== null && (
                   <>
-                    <div className="w-[1px] h-3 bg-slate-800 shrink-0 hidden sm:block" />
+                    <div className="w-[1px] h-3 bg-slate-200 shrink-0 hidden sm:block" />
                     <div className="hidden sm:flex items-center gap-1 shrink-0" title={`Accuracy: ${correctCount}/${answeredCount} correct`}>
-                      <Gauge className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                      <Gauge className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                       <span className={cn(
                         "font-black text-[11px]",
-                        accuracyPercent >= 80 ? "text-emerald-400" : accuracyPercent >= 60 ? "text-amber-400" : "text-rose-400"
+                        accuracyPercent >= 80 ? "text-emerald-600" : accuracyPercent >= 60 ? "text-amber-600" : "text-rose-600"
                       )}>
                         {accuracyPercent}%
                       </span>
@@ -452,9 +452,9 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 {/* 4. Average Speed */}
                 {avgSpeed && (
                   <>
-                    <div className="w-[1px] h-3 bg-slate-800 shrink-0 hidden lg:block" />
-                    <div className="hidden lg:flex items-center gap-1 shrink-0 text-slate-400 text-[10px]" title="Average speed per question">
-                      <Zap className="w-3 h-3 text-cyan-400 shrink-0" />
+                    <div className="w-[1px] h-3 bg-slate-200 shrink-0 hidden lg:block" />
+                    <div className="hidden lg:flex items-center gap-1 shrink-0 text-slate-500 text-[10px]" title="Average speed per question">
+                      <Zap className="w-3 h-3 text-indigo-600 shrink-0" />
                       <span>{avgSpeed}/q</span>
                     </div>
                   </>

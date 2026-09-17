@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
+import { QuizMindLogo } from './QuizMindLogo'
 
 export default function Layout() {
   const { user, gamify, setUser, setGamify, isLoggedIn, authConfig } = useAppStore()
@@ -61,11 +62,8 @@ export default function Layout() {
         )}>
           <div className="w-full max-w-[1700px] 2xl:max-w-[1900px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-6 lg:gap-8">
-              <Link to="/" className="flex items-center gap-2.5 group active:scale-95 transition-all select-none">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:rotate-6 transition-transform">
-                  <BrainCircuit className="w-5 h-5" />
-                </div>
-                <span className="text-lg font-black tracking-tight text-slate-900">Quiz<span className="text-indigo-600">Mind</span></span>
+              <Link to="/" className="flex items-center group active:scale-95 transition-all select-none">
+                <QuizMindLogo height="md" />
               </Link>
 
               {isLoggedIn && (

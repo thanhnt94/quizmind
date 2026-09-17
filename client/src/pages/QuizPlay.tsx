@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -2028,44 +2028,19 @@ export default function QuizPlay() {
               className="space-y-6"
             >
               {/* Question Content */}
-              <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-100/80 shadow-2xl shadow-indigo-100/20 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-                 {/* Question Stats Banner */}
-                                   <div className="flex flex-wrap items-center justify-between gap-4 md:mb-8 mb-4">
-                     <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-xl text-white font-black text-base shadow-lg shadow-indigo-100 animate-in zoom-in-50 duration-300">
-                        {currentIndex + 1}
+              <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-200/90 shadow-xs relative overflow-hidden">
+                 {/* Top Question Row */}
+                 <div className="flex items-center justify-between gap-4 md:mb-6 mb-4">
+                   <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
+                      {currentIndex + 1}
+                   </div>
+                   {activeGoal && (
+                     <div className="flex items-center gap-2">
+                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10.5px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                         🎯 Goal: {activeGoal.done_today}/{activeGoal.daily_target}
+                       </span>
                      </div>
-                     
-                     <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100/50">
-                       <Target className="w-3.5 h-3.5 text-indigo-400" />
-                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                         <span className="hidden sm:inline">Attempts: </span> <strong className="text-slate-700">{currentQuestion?.stats?.total || 0}</strong>
-                       </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100/50">
-                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                         <span className="hidden sm:inline">Correct: </span>
-                         <strong className="text-emerald-600">{currentQuestion?.stats?.correct || 0}</strong>
-                         <span className="text-emerald-400/80 ml-1 text-[10px]">({(currentQuestion?.stats?.total || 0) > 0 ? Math.round(((currentQuestion?.stats?.correct || 0) / (currentQuestion?.stats?.total || 1)) * 100) : 0}%)</span>
-                       </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-rose-50/50 px-2.5 py-1.5 rounded-lg border border-rose-100/50">
-                       <XCircle className="w-3.5 h-3.5 text-rose-500" />
-                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                         <span className="hidden sm:inline">Wrong: </span>
-                         <strong className="text-rose-600">{(currentQuestion?.stats?.total || 0) - (currentQuestion?.stats?.correct || 0)}</strong>
-                       </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-amber-50/50 px-2.5 py-1.5 rounded-lg border border-amber-100/50">
-                       <Clock className="w-3.5 h-3.5 text-amber-500" />
-                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                         <span className="hidden sm:inline">Avg Time: </span>
-                         <strong className="text-amber-600">{currentQuestion?.stats?.avg_time || 0}s</strong>
-                       </span>
-                    </div>
-                  </div>
+                   )}
                  </div>
                  {/* Community Difficulty Pill (before answering) + Post-answer Engagement Row */}
                  {!showFeedback && (currentQuestion?.stats?.total || 0) >= 5 && (() => {
@@ -2264,11 +2239,13 @@ export default function QuizPlay() {
             className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all"
             title="Change Smart Learning Mode"
           >
+            {(activeMode === 'roadmap' || activeMode?.startsWith('roadmap')) && <Compass className="w-5 h-5 text-indigo-600" />}
             {activeMode === 'sequential' && <ListOrdered className="w-5 h-5" />}
             {activeMode === 'random' && <Shuffle className="w-5 h-5" />}
             {activeMode === 'unseen' && <EyeOff className="w-5 h-5" />}
             {activeMode === 'review' && <AlertCircle className="w-5 h-5" />}
             {activeMode === 'hardest' && <TrendingUp className="w-5 h-5" />}
+            {!['roadmap', 'sequential', 'random', 'unseen', 'review', 'hardest'].includes(activeMode) && !activeMode?.startsWith('roadmap') && <Sliders className="w-5 h-5" />}
           </button>
           
           {showFeedback && (
@@ -2279,7 +2256,7 @@ export default function QuizPlay() {
                   ? 'bg-indigo-600 border border-indigo-600 text-white animate-[pulse_1.5s_infinite] ring-4 ring-indigo-300 ring-offset-1 drop-shadow-[0_0_12px_rgba(99,102,241,0.6)]' 
                   : 'bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100'
               }`}
-              title="Xem giải thích và hướng dẫn"
+              title="View explanation and tutorial"
             >
               <BookOpen className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
@@ -2287,16 +2264,15 @@ export default function QuizPlay() {
           )}
 
           {!showFeedback ? (
-            <button 
-              disabled={selectedOption === null}
-              className="flex-1 h-12 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black text-xs rounded-2xl shadow-lg shadow-slate-300/40 uppercase tracking-widest active:scale-[0.98] transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+            <div 
+              className="flex-1 h-12 bg-slate-50 border border-slate-200/80 text-slate-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 uppercase tracking-wider select-none shadow-xs"
             >
-              CONFIRM ANSWER
-            </button>
+              <span>Select an option above</span>
+            </div>
           ) : (
             <button 
               onClick={handleNext}
-              className="flex-1 h-12 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/50 flex items-center justify-center gap-2.5 uppercase tracking-widest active:scale-[0.98] transition-all hover:shadow-indigo-400/60 hover:shadow-xl"
+              className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/40 flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all"
             >
               NEXT QUESTION <ChevronRight className="w-4 h-4" />
             </button>
@@ -2304,20 +2280,23 @@ export default function QuizPlay() {
         </div>
       </footer>
 
-      {/* 💡 CHỒI LÊN BÊN DƯỚI - QUICK SWIPE-UP/CLICK HANDLE */}
+      {/* 💡 Quick Explanation & AI Tutor Float Handle */}
       {justAnswered && !isFeedbackOpen && (
         <div 
           onClick={() => setIsFeedbackOpen(true)}
-          className="fixed bottom-[76px] left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-gradient-to-r from-indigo-600/95 to-purple-600/95 text-white py-2.5 px-5 rounded-2xl shadow-[0_-8px_20px_rgba(99,102,241,0.25)] flex items-center justify-between cursor-pointer border border-indigo-400/20 backdrop-blur-md active:scale-98 transition-all hover:from-indigo-600 hover:to-purple-600 group select-none animate-[bounce_2s_infinite] xl:hidden"
+          className="fixed bottom-[76px] left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-white/95 border border-indigo-200 text-slate-800 py-2.5 px-4 rounded-2xl shadow-lg shadow-indigo-100/50 flex items-center justify-between cursor-pointer backdrop-blur-md active:scale-98 transition-all hover:border-indigo-300 group select-none xl:hidden"
         >
           <div className="flex items-center gap-2.5">
             <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-600"></span>
             </span>
-            <span className="text-xs font-black tracking-wide uppercase">💡 Xem hướng dẫn & Giải thích chi tiết</span>
+            <span className="text-xs font-bold tracking-tight">💡 View Explanation & AI Tutor</span>
           </div>
-          <ChevronRight className="w-4 h-4 animate-[translate-x_1s_infinite] group-hover:translate-x-0.5 transition-transform opacity-85" />
+          <div className="flex items-center gap-1 text-indigo-600 font-bold text-xs">
+            <span>Open</span>
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </div>
       )}
       {/* ✅ SESSION COMPLETE SUMMARY MODAL */}

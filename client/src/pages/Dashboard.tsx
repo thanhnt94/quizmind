@@ -14,6 +14,7 @@ import axios from 'axios'
 import DailyComparisonChart from '@/components/DailyComparisonChart'
 import { TelegramRoadmapReminderToggle } from '@/components/TelegramRoadmapReminderToggle'
 import { DashboardDailyDrawer } from '@/components/dashboard/DashboardDailyDrawer'
+import { QuizMindLogo } from '@/components/QuizMindLogo'
 
 interface DashboardData {
   user: { id: number; username: string; email: string; role?: string }
@@ -411,15 +412,7 @@ export default function Dashboard() {
       {/* ========================================================================= */}
       <div className="md:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
         <div className="px-4 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-orange-500 flex items-center justify-center text-white font-black text-sm shadow-xs">
-              ⚡
-            </div>
-            <div>
-              <h1 className="text-sm font-black text-slate-900 leading-none">QuizMind</h1>
-              <span className="text-[9px] font-bold text-slate-400">Multiple Choice Mastery</span>
-            </div>
-          </div>
+          <QuizMindLogo height="sm" />
 
           <div className="flex items-center gap-2">
             {/* Today Activity Trigger Pill */}
@@ -794,7 +787,6 @@ export default function Dashboard() {
                             ) : (
                               <span className="text-slate-400">1 / 1</span>
                             )}
-                            <TelegramRoadmapReminderToggle />
                           </div>
 
                           <div className="flex items-center gap-2">

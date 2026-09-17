@@ -1954,14 +1954,13 @@ async def get_quiz_roadmap_status_helper(
     roadmap_daily_new = settings.get("roadmap_daily_new", 10)
     roadmap_daily_review_max = settings.get("roadmap_daily_review_max", 30)
     roadmap_pass_threshold = settings.get("roadmap_pass_threshold", 80)
-
-    pipeline = settings.get("pipeline")
-    if not pipeline or not isinstance(pipeline, list):
-        pipeline = [
-            {"id": "step_new", "type": "new_cards", "label": "Học câu mới", "daily_count": roadmap_daily_new},
-            {"id": "step_mcq", "type": "mcq", "label": "Bài kiểm tra MCQ", "question_count": roadmap_daily_new, "pass_threshold": roadmap_pass_threshold},
-            {"id": "step_review", "type": "review", "label": "Ôn tập củng cố", "max_count": roadmap_daily_review_max}
-        ]
+    # QuizMind is strictly multiple choice questions:
+    # Step 1: New Questions (Learn new MCQs)
+    # Step 2: Review Due (Review questions due from Leitner boxes)
+    pipeline = [
+        {"id": "step_new", "type": "new_cards", "label": "New Questions", "daily_count": roadmap_daily_new},
+        {"id": "step_review", "type": "review", "label": "Review Due", "max_count": roadmap_daily_review_max}
+    ]
 
     # 4. Learned questions count
     mastery_map = {}
@@ -2021,29 +2020,22 @@ async def get_quiz_roadmap_status_helper(
         is_done = False
         progress_info = {}
 
-        if st_type == "new_cards":
+        if st_type in ("new_cards", "new"):
             target = step.get("daily_count", roadmap_daily_new)
             is_done = new_learned_today >= target or unlearned_questions == 0
             progress_info = {"done": new_learned_today, "target": target}
             url = f"/quiz/{quiz_id}/play?mode=roadmap_new"
-            label = step.get("label", "Học câu mới")
-        elif st_type in ("mcq", "typing"):
-            target = step.get("question_count", roadmap_daily_new)
-            threshold = step.get("pass_threshold", roadmap_pass_threshold)
-            is_done = mcq_passed_today
-            progress_info = {"best_score": best_score_today, "threshold": threshold, "target": target}
-            url = f"/quiz/{quiz_id}/play?mode=roadmap_test"
-            label = step.get("label", "Bài test MCQ")
-        elif st_type == "review":
+            label = "New Questions"
+        elif st_type in ("review", "fsrs_review"):
             target = min(review_due_today, step.get("max_count", roadmap_daily_review_max))
             is_done = review_completed_today >= target or review_due_today == 0
             progress_info = {"done": review_completed_today, "due": review_due_today, "target": target}
             url = f"/quiz/{quiz_id}/play?mode=roadmap_review"
-            label = step.get("label", "Ôn tập củng cố")
+            label = "Review Due"
         else:
             is_done = True
             url = f"/quiz/{quiz_id}/play?mode=roadmap"
-            label = step.get("label", "Luyện tập")
+            label = "Practice"
 
         if not is_done and first_incomplete_idx is None:
             first_incomplete_idx = idx
@@ -2078,9 +2070,7 @@ async def get_quiz_roadmap_status_helper(
         else:
             prog.count_done = new_learned_today + review_completed_today
             prog.is_target_met = all_done
-
-        if all_done:
-            goal.last_completed_date = today_str
+        await db.flush()
 
         all_progs_res = await db.execute(
             select(UserDailyProgress.date)
@@ -2124,10 +2114,10 @@ async def get_quiz_roadmap_status_helper(
 
     # 8. Estimated Completion Date
     if roadmap_type == "accumulation":
-        estimated_completion_date = "Tích lũy vô tận"
+        estimated_completion_date = "Continuous"
         days_left = 999
     elif unlearned_questions == 0:
-        estimated_completion_date = "Đã hoàn thành"
+        estimated_completion_date = "Completed"
         days_left = 0
     else:
         daily_target = roadmap_daily_new if roadmap_daily_new > 0 else 10
@@ -2138,21 +2128,29 @@ async def get_quiz_roadmap_status_helper(
     if len(pipeline_processed) > 0 and first_incomplete_idx is None:
         current_step_index = len(pipeline_processed)
         next_action_url = f"/quiz/{quiz_id}/roadmap"
-        next_action_label = "Đã xong lộ trình hôm nay"
+        next_action_label = "Completed Today's Roadmap 🎉"
     elif len(pipeline_processed) > 0:
         current_step_index = first_incomplete_idx
         next_action_url = pipeline_processed[first_incomplete_idx]["url"]
-        next_action_label = pipeline_processed[first_incomplete_idx]["label"]
+        active_step = pipeline_processed[first_incomplete_idx]
+        if active_step.get("type") in ("new_cards", "new"):
+            rem = max(1, active_step.get("daily_count", roadmap_daily_new) - new_learned_today)
+            next_action_label = f"Learn {rem} New Questions 🚀"
+        elif active_step.get("type") in ("review", "fsrs_review"):
+            rem = max(1, min(review_due_today, active_step.get("max_count", roadmap_daily_review_max)) - review_completed_today)
+            next_action_label = f"Review {rem} Due Questions 🔄"
+        else:
+            next_action_label = f"Continue {active_step.get('label', 'Roadmap')} 🚀"
     else:
         current_step_index = 0
         next_action_url = f"/quiz/{quiz_id}/roadmap"
-        next_action_label = "Chưa thiết lập lộ trình"
+        next_action_label = "Set Up Roadmap 🗺️"
 
     new_cards_step = next((st for st in pipeline_processed if st.get("type") == "new_cards"), None)
     stage_1_done = new_cards_step["done"] if new_cards_step else True
 
-    test_step = next((st for st in pipeline_processed if st.get("type") in ("mcq", "typing")), None)
-    stage_2_done = test_step["done"] if test_step else False
+    review_step = next((st for st in pipeline_processed if st.get("type") == "review"), None)
+    stage_2_done = review_step["done"] if review_step else False
 
     retention_rate = round((learned_questions / total_questions * 100)) if total_questions > 0 else 0
 
