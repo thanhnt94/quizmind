@@ -238,6 +238,8 @@ async def get_daily_summary(request: Request, tz_offset: int = -420, db: AsyncSe
 @app.get("/settings")
 @app.get("/manage")
 @app.get("/manage/{path:path}")
+@app.get("/quizzes")
+@app.get("/quizzes/{path:path}")
 @app.get("/library")
 @app.get("/library/{path:path}")
 @app.get("/room/{path:path}")
