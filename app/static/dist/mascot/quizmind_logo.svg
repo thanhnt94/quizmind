@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 290" width="880" height="290">
+  <defs>
+    <!-- Fonts -->
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@700;800;900&amp;display=swap');
+      .font-quiz {
+        font-family: 'Fredoka', 'Baloo 2', 'Arial Rounded MT Bold', sans-serif;
+        font-weight: 800;
+        font-size: 155px;
+        letter-spacing: -2px;
+      }
+      .font-mind {
+        font-family: 'Fredoka', 'Baloo 2', 'Arial Rounded MT Bold', sans-serif;
+        font-weight: 900;
+        font-size: 155px;
+        letter-spacing: -2px;
+      }
+    </style>
+
+    <!-- Filters for 3D Pop & Soft Dropshadow -->
+    <filter id="soft-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.18" />
+    </filter>
+    <filter id="glow-spark" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Gradients -->
+    <!-- QUIZ Vibrant Royal Indigo Gradient -->
+    <linearGradient id="quiz-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C7D2FE" />
+      <stop offset="25%" stop-color="#818CF8" />
+      <stop offset="65%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#4338CA" />
+    </linearGradient>
+
+    <linearGradient id="quiz-stroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="100%" stop-color="#1E1B4B" />
+    </linearGradient>
+
+    <!-- MIND Radiant Solar Gold / Warm Amber Gradient -->
+    <linearGradient id="mind-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="30%" stop-color="#FDE047" />
+      <stop offset="65%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+
+    <linearGradient id="mind-stroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#9A3412" />
+    </linearGradient>
+
+    <!-- Energy Aura behind MIND -->
+    <linearGradient id="energy-aura" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#EA580C" stop-opacity="0" />
+      <stop offset="30%" stop-color="#EA580C" stop-opacity="0.25" />
+      <stop offset="70%" stop-color="#F59E0B" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#FEF08A" stop-opacity="0.95" />
+    </linearGradient>
+
+    <!-- Gloss White Highlight -->
+    <linearGradient id="gloss-white" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#soft-shadow)">
+    <!-- ==================== BACKGROUND ENERGY SPARKS FOR MIND ==================== -->
+    <g transform="translate(415, 10)">
+      <!-- Radiant Genius Sunburst / Energy Rays behind MIND -->
+      <path d="M 30,195 
+               C 20,135 45,95 70,45 
+               C 85,90 105,100 125,60 
+               C 145,115 170,80 195,25 
+               C 215,70 245,90 270,50 
+               C 290,95 315,80 345,30 
+               C 365,75 390,90 415,45 
+               C 435,100 455,115 470,80 
+               C 485,130 480,175 475,205 
+               L 30,205 Z" 
+            fill="url(#energy-aura)" />
+
+      <!-- Cute Floating Brain Spark Stars / Dots -->
+      <circle cx="75" cy="30" r="5" fill="#FEF08A" filter="url(#glow-spark)" />
+      <circle cx="130" cy="45" r="3.5" fill="#FBBF24" />
+      <circle cx="200" cy="15" r="5.5" fill="#FEF08A" filter="url(#glow-spark)" />
+      <circle cx="275" cy="35" r="4" fill="#F59E0B" />
+      <circle cx="350" cy="18" r="5.5" fill="#FEF08A" filter="url(#glow-spark)" />
+      <circle cx="420" cy="35" r="4" fill="#FBBF24" />
+      <circle cx="480" cy="65" r="4.5" fill="#FEF08A" />
+
+      <!-- Mini 4-point Diamond Star Accents -->
+      <path d="M 195,5 Q 197,14 205,16 Q 197,18 195,27 Q 193,18 185,16 Q 193,14 195,5 Z" fill="#FFFFFF" />
+      <path d="M 345,8 Q 347,15 355,17 Q 347,19 345,26 Q 343,19 335,17 Q 343,15 345,8 Z" fill="#FFFFFF" />
+    </g>
+
+    <!-- ==================== QUIZ TEXT (VIBRANT INDIGO BUBBLY) ==================== -->
+    <g transform="translate(35, 205)">
+      <!-- 3D Extrusion / Deep Layers -->
+      <text class="font-quiz" x="0" y="8" fill="#1E1B4B" stroke="#1E1B4B" stroke-width="24" stroke-linejoin="round">Quiz</text>
+      <text class="font-quiz" x="0" y="4" fill="#312E81" stroke="#312E81" stroke-width="18" stroke-linejoin="round">Quiz</text>
+      
+      <!-- Stroke Outline -->
+      <text class="font-quiz" x="0" y="0" fill="url(#quiz-stroke)" stroke="url(#quiz-stroke)" stroke-width="14" stroke-linejoin="round">Quiz</text>
+      
+      <!-- Main Letter Fill with Royal Indigo Gradient -->
+      <text class="font-quiz" x="0" y="0" fill="url(#quiz-grad)">Quiz</text>
+
+      <!-- Glossy Specular Highlights on Q-u-i-z -->
+      <!-- Q Top Arc Highlight -->
+      <ellipse cx="65" cy="-90" rx="20" ry="8" transform="rotate(-30 65 -90)" fill="url(#gloss-white)" opacity="0.85" />
+      <ellipse cx="40" cy="-60" rx="8" ry="4" transform="rotate(-45 40 -60)" fill="#FFFFFF" opacity="0.8" />
+      
+      <!-- u Left Top Curve Highlight -->
+      <ellipse cx="160" cy="-70" rx="10" ry="5" transform="rotate(-20 160 -70)" fill="#FFFFFF" opacity="0.8" />
+      
+      <!-- i Body Highlight -->
+      <ellipse cx="230" cy="-65" rx="7" ry="4" transform="rotate(-15 230 -65)" fill="#FFFFFF" opacity="0.8" />
+
+      <!-- Sparkle Star on top of 'i' (Dot of i) -->
+      <g transform="translate(230, -118) scale(1.15)">
+        <path d="M 0,-18 Q 2,-4 16,-2 Q 2,0 0,16 Q -2,0 -16,-2 Q -2,-4 0,-18 Z" fill="#FEF08A" stroke="#F59E0B" stroke-width="2.5" />
+        <circle cx="0" cy="-1" r="3" fill="#FFFFFF" />
+      </g>
+      
+      <!-- z Top Horizontal Bar Highlight -->
+      <ellipse cx="305" cy="-95" rx="15" ry="5" transform="rotate(-5 305 -95)" fill="#FFFFFF" opacity="0.8" />
+    </g>
+
+    <!-- ==================== MIND TEXT (HOT RADIANT BLAZING BUBBLY) ==================== -->
+    <g transform="translate(425, 205)">
+      <!-- 3D Extrusion / Deep Layers -->
+      <text class="font-mind" x="0" y="8" fill="#7C2D12" stroke="#7C2D12" stroke-width="24" stroke-linejoin="round">MIND</text>
+      <text class="font-mind" x="0" y="4" fill="#9A3412" stroke="#9A3412" stroke-width="18" stroke-linejoin="round">MIND</text>
+      
+      <!-- Stroke Outline -->
+      <text class="font-mind" x="0" y="0" fill="#C2410C" stroke="#C2410C" stroke-width="14" stroke-linejoin="round">MIND</text>
+      
+      <!-- Main Letter Fill with Solar Gold to Amber Fire Gradient -->
+      <text class="font-mind" x="0" y="0" fill="url(#mind-grad)">MIND</text>
+
+      <!-- Glossy Hot Specular Highlights on M-I-N-D -->
+      <!-- M Highlights -->
+      <ellipse cx="35" cy="-95" rx="14" ry="6" transform="rotate(-25 35 -95)" fill="#FFFFFF" opacity="0.9" />
+      <ellipse cx="90" cy="-95" rx="12" ry="5" transform="rotate(-15 90 -95)" fill="#FFFFFF" opacity="0.85" />
+      
+      <!-- I Highlight -->
+      <ellipse cx="145" cy="-95" rx="9" ry="4" transform="rotate(-15 145 -95)" fill="#FFFFFF" opacity="0.9" />
+      
+      <!-- N Highlight -->
+      <ellipse cx="215" cy="-95" rx="14" ry="6" transform="rotate(-25 215 -95)" fill="#FFFFFF" opacity="0.9" />
+      
+      <!-- D Highlight -->
+      <ellipse cx="330" cy="-95" rx="16" ry="6" transform="rotate(-20 330 -95)" fill="#FFFFFF" opacity="0.9" />
+
+      <!-- Floating Electric Eureka Spark over MIND -->
+      <g transform="translate(385, -125) scale(0.95)" filter="url(#glow-spark)">
+        <path d="M 0,-16 Q 2,-3 14,-1 Q 2,1 0,14 Q -2,1 -14,-1 Q -2,-3 0,-16 Z" fill="#FEF08A" stroke="#FBBF24" stroke-width="2" />
+        <circle cx="0" cy="-1" r="2.5" fill="#FFFFFF" />
+      </g>
+    </g>
+  </g>
+</svg>
