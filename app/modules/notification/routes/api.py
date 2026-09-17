@@ -90,15 +90,17 @@ async def get_telegram_config(request: Request, db: AsyncSession = Depends(get_d
     from app.modules.auth.services.auth_service import AuthService
     
     user = await AuthService.get_current_user(request, db)
-    user_id = user.id if user else 1
-    sso_id = user.sso_id if user else None
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
+    sso_id = user.sso_id
 
     # Try CentralAuth proxy if SSO is active
     from app.modules.sso_module.service import SSOService
     sso_config = await SSOService.get_config(db)
     if sso_config and sso_config.is_enabled and sso_config.server_url and sso_id:
         from app.core.config import settings
-        queue_token = getattr(settings, "QUEUE_API_SECRET", "super-secret-token-123")
+        queue_token = getattr(settings, "CENTRALAUTH_QUEUE_TOKEN", getattr(settings, "QUEUE_API_SECRET", "super-secret-token-123"))
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
@@ -108,7 +110,14 @@ async def get_telegram_config(request: Request, db: AsyncSession = Depends(get_d
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    # If site-specific template is present, use it
+                    # If site-specific settings present, overlay them
+                    settings_dict = data.get("settings", {})
+                    qm_settings = settings_dict.get("quizmind", {})
+                    for k in ["reminder_time", "is_active", "streak_guard_enabled", "weekly_summary_enabled", "inactivity_alert_enabled"]:
+                        if k in qm_settings:
+                            data[k] = qm_settings[k]
+                    if not data.get("bot_username"):
+                        data["bot_username"] = "inmind_auth_bot"
                     return data
         except Exception as e:
             logger.error(f"Failed to proxy Telegram config GET to CentralAuth: {e}")
@@ -135,7 +144,7 @@ async def get_telegram_config(request: Request, db: AsyncSession = Depends(get_d
         "streak_guard_enabled": config.streak_guard_enabled,
         "weekly_summary_enabled": config.weekly_summary_enabled,
         "inactivity_alert_enabled": config.inactivity_alert_enabled,
-        "bot_username": bot_config.get("bot_username", "QuizMindBot")
+        "bot_username": bot_config.get("bot_username", "inmind_auth_bot")
     }
 
 @router.post("/telegram/config")
@@ -144,24 +153,46 @@ async def update_telegram_config(request: Request, data: dict, db: AsyncSession 
     from app.modules.auth.services.auth_service import AuthService
     
     user = await AuthService.get_current_user(request, db)
-    user_id = user.id if user else 1
-    sso_id = user.sso_id if user else None
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
+    sso_id = user.sso_id
 
     # Try CentralAuth proxy if SSO is active
     from app.modules.sso_module.service import SSOService
     sso_config = await SSOService.get_config(db)
     if sso_config and sso_config.is_enabled and sso_config.server_url and sso_id:
         from app.core.config import settings
-        queue_token = getattr(settings, "QUEUE_API_SECRET", "super-secret-token-123")
+        queue_token = getattr(settings, "CENTRALAUTH_QUEUE_TOKEN", getattr(settings, "QUEUE_API_SECRET", "super-secret-token-123"))
         try:
+            payload = {
+                "settings": {
+                    "quizmind": data
+                }
+            }
+            if data.get("unlink") is True:
+                payload["unlink"] = True
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{sso_config.server_url.rstrip('/')}/api/queue/telegram/config/{sso_id}",
-                    json=data,
+                    json=payload,
                     headers={"X-Queue-Token": queue_token},
                     timeout=8.0
                 )
                 if response.status_code == 200:
+                    # Also mirror in local DB for redundancy
+                    res = await db.execute(select(UserTelegramConfig).where(UserTelegramConfig.user_id == user_id))
+                    config = res.scalar_one_or_none()
+                    if config:
+                        if "reminder_time" in data: config.reminder_time = data["reminder_time"]
+                        if "is_active" in data: config.is_active = data["is_active"]
+                        if "streak_guard_enabled" in data: config.streak_guard_enabled = data["streak_guard_enabled"]
+                        if "weekly_summary_enabled" in data: config.weekly_summary_enabled = data["weekly_summary_enabled"]
+                        if "inactivity_alert_enabled" in data: config.inactivity_alert_enabled = data["inactivity_alert_enabled"]
+                        if data.get("unlink") is True:
+                            config.telegram_chat_id = None
+                            config.connect_token = secrets.token_hex(6).upper()
+                        await db.commit()
                     return response.json()
         except Exception as e:
             logger.error(f"Failed to proxy Telegram config POST to CentralAuth: {e}")

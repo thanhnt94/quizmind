@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # SSO / CentralAuth
     SECRET_KEY: str = os.getenv("SECRET_KEY", "quizmind_default_secret_key_change_me_123456789")
     CENTRAL_AUTH_URL: str = os.getenv("CENTRAL_AUTH_URL", "https://inmind.site")
+    CENTRALAUTH_INTERNAL_URL: str = os.getenv("CENTRALAUTH_INTERNAL_URL", "http://127.0.0.1:5050")
+    CENTRALAUTH_QUEUE_TOKEN: str = os.getenv("CENTRALAUTH_QUEUE_TOKEN", os.getenv("QUEUE_API_SECRET", "super-secret-token-123"))
+    QUEUE_API_SECRET: str = os.getenv("QUEUE_API_SECRET", os.getenv("CENTRALAUTH_QUEUE_TOKEN", "super-secret-token-123"))
     CLIENT_ID: str = os.getenv("CLIENT_ID", "quizmind")
     CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "quizmind-secret-key-2026")
     APP_BASE_URL: str = os.getenv("APP_BASE_URL", "https://quiz.inmind.site") # Public URL of this app

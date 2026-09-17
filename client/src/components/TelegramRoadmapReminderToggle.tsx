@@ -34,7 +34,7 @@ export function TelegramRoadmapReminderToggle({ className, size = 'sm' }: Telegr
   const isLinked = config.is_linked
   const isActive = config.is_active
   const reminderTime = config.reminder_time || '20:00'
-  const botUsername = config.bot_username || 'VocaburnBot'
+  const botUsername = (config.bot_username || 'inmind_auth_bot').replace(/^@/, '')
   const connectToken = config.connect_token
 
   const handleToggle = async () => {

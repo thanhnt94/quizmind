@@ -33,7 +33,7 @@ export function TelegramAlertsTab({
     }
   }
 
-  const botName = (telegramConfig?.bot_username || 'QuizMindBot').replace(/^@/, '')
+  const botName = (telegramConfig?.bot_username || 'inmind_auth_bot').replace(/^@/, '')
 
   return (
     <div className="space-y-4 md:space-y-6">

@@ -24,6 +24,10 @@ async def lifespan(app: FastAPI):
     # Initialize DB on startup
     await init_db()
     
+    # Start background reminder scheduler
+    from app.modules.notification.services.reminder_scheduler import start_scheduler
+    scheduler_task = start_scheduler()
+    
     # Initialize Telegram Bot if enabled
     from app.core.db import SessionLocal
     from app.modules.admin.interface import AdminInterface
@@ -36,7 +40,13 @@ async def lifespan(app: FastAPI):
 
     yield
     
-    # Shutdown Telegram Bot
+    # Shutdown Telegram Bot & Scheduler
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
+        
     await stop_bot_app()
 
 app = FastAPI(
@@ -780,20 +790,20 @@ async def broadcast_telegram_message(request: Request, data: dict, db: AsyncSess
     if not message or not message.strip():
         return {"status": "error", "message": "Message cannot be empty"}
         
-    from app.modules.notification.models import UserTelegramConfig
     from app.modules.notification.services.telegram_service import TelegramService
+    from app.modules.notification.services.reminder_scheduler import _get_active_configs
     
-    res = await db.execute(select(UserTelegramConfig).where(
-        UserTelegramConfig.telegram_chat_id.isnot(None),
-        UserTelegramConfig.is_active == True
-    ))
-    configs = res.scalars().all()
+    configs = await _get_active_configs(db)
     
     success_count = 0
+    seen_chats = set()
     for config in configs:
-        if await TelegramService.send_message(db, config.telegram_chat_id, message):
-            success_count += 1
-            
+        chat_id = config.get("telegram_chat_id")
+        if chat_id and chat_id not in seen_chats and config.get("is_active"):
+            seen_chats.add(chat_id)
+            if await TelegramService.send_message(db, chat_id, message.strip(), message_type="broadcast"):
+                success_count += 1
+                
     return {"status": "success", "message": f"Broadcast sent successfully to {success_count} user(s)."}
 
 @app.get("/api/v1/admin/users")
