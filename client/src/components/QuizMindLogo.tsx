@@ -75,7 +75,7 @@ export function QuizMindLogo({
         style={size ? { height: size } : undefined}
       >
         <img
-          src="/mascot/quizmind_logo_transparent.png?v=20260917_v2"
+          src="/mascot/quizmind_logo_transparent.png?v=20260917_v3"
           alt="QuizMind"
           className="h-full w-auto max-w-none object-contain drop-shadow-xs"
           onError={(e) => {

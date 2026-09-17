@@ -522,10 +522,18 @@ export default function Dashboard() {
                 <span>{gamify.streak || 0}d</span>
               </button>
 
-              {/* User Level */}
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
-                {gamify.level || 1}
-              </div>
+              {/* Profile Avatar / Link */}
+              <Link 
+                to="/profile" 
+                className="w-7.5 h-7.5 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 flex items-center justify-center text-slate-700 active:scale-95 transition-all shadow-2xs overflow-hidden cursor-pointer"
+                title="Profile & Settings"
+              >
+                {authUser?.avatar_url ? (
+                  <img src={authUser.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-4 h-4 text-slate-600" />
+                )}
+              </Link>
             </div>
           </div>
 
