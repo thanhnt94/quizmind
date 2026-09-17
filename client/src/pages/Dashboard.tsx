@@ -1055,11 +1055,11 @@ export default function Dashboard() {
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Link
-                      to="/library"
-                      className="flex-1 sm:flex-none px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-200 transition-all cursor-pointer"
+                      to="/quizzes"
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Library</span>
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>All Quizzes</span>
                     </Link>
                     <Link
                       to="/manage/import"

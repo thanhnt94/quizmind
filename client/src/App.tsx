@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAppStore } from './store/useAppStore'
 import Dashboard from './pages/Dashboard'
-import Library from './pages/Library'
+import QuizzesPage from './pages/QuizzesPage'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Admin from './pages/Admin'
@@ -41,10 +41,10 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0b0f19] text-white flex items-center justify-center font-sans">
+      <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex items-center justify-center font-sans">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-spin" />
-          <span className="text-gray-400 font-medium font-sans">Initializing QuizMind Engine...</span>
+          <div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-600 animate-spin" />
+          <span className="text-slate-500 font-semibold text-xs tracking-wider uppercase font-sans">Initializing QuizMind Engine...</span>
         </div>
       </div>
     )
@@ -67,7 +67,8 @@ function AppContent() {
             <Route path="/profile" element={isLoggedIn ? <Profile /> : <Navigate to="/login" replace />} />
             <Route path="/stats" element={isLoggedIn ? <Stats /> : <Navigate to="/login" replace />} />
             <Route path="/settings" element={isLoggedIn ? <Settings /> : <Navigate to="/login" replace />} />
-            <Route path="/library" element={isLoggedIn ? <Library /> : <Navigate to="/login" replace />} />
+            <Route path="/quizzes" element={isLoggedIn ? <QuizzesPage /> : <Navigate to="/login" replace />} />
+            <Route path="/library" element={<Navigate to="/quizzes" replace />} />
             <Route path="/manage" element={isLoggedIn ? <ManageQuizzes /> : <Navigate to="/login" replace />} />
             <Route path="/manage/import" element={isLoggedIn ? <ImportQuiz /> : <Navigate to="/login" replace />} />
             <Route path="/manage/edit/:id" element={isLoggedIn ? <EditQuiz /> : <Navigate to="/login" replace />} />
