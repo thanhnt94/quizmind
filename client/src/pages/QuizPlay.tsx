@@ -411,33 +411,99 @@ export default function QuizPlay() {
 
       const searchParams = new URLSearchParams(window.location.search)
       const urlMode = searchParams.get('mode')
+      const urlScope = searchParams.get('scope')
+      const urlCount = searchParams.get('count')
 
-      if (urlMode === 'missed' || urlMode === 'review') {
-        const missedList = questions.filter((q: any) => ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && !q.is_ignored)
-        if (missedList.length > 0) {
-          questions = missedList
+      // 1. Group map for preserving passage/audio group integrity
+      const groupsMap: Record<string, any[]> = {}
+      questions.forEach((q: any) => {
+        if (q.group_id) {
+          if (!groupsMap[q.group_id]) groupsMap[q.group_id] = []
+          groupsMap[q.group_id].push(q)
         }
-      } else if (urlMode === 'new' || urlMode === 'unseen') {
-        const newList = questions.filter((q: any) => (q.stats?.total || 0) === 0 && !q.is_ignored)
-        if (newList.length > 0) {
-          questions = newList
+      })
+      Object.values(groupsMap).forEach(arr => arr.sort((a, b) => (a.order_in_group || 0) - (b.order_in_group || 0)))
+
+      // 2. Classify questions: New vs Review
+      const newQuestions = questions.filter((q: any) => (!q.stats || (q.stats.total || 0) === 0) && !q.is_ignored)
+      const reviewQuestions = questions.filter((q: any) => (q.stats && (q.stats.total || 0) > 0) && !q.is_ignored)
+      // Sort review questions by weakness (lowest accuracy / highest wrong count first)
+      reviewQuestions.sort((a: any, b: any) => {
+        const aTotal = a.stats?.total || 1
+        const bTotal = b.stats?.total || 1
+        const aAcc = (a.stats?.correct || 0) / aTotal
+        const bAcc = (b.stats?.correct || 0) / bTotal
+        if (aAcc !== bAcc) return aAcc - bAcc
+        return (b.stats?.wrong || 0) - (a.stats?.wrong || 0)
+      })
+
+      let selectedQuestions: any[] = questions
+
+      if (urlScope === 'new' || urlMode === 'new' || urlMode === 'unseen') {
+        if (newQuestions.length > 0) {
+          selectedQuestions = newQuestions
+        }
+      } else if (urlScope === 'review' || urlMode === 'missed' || urlMode === 'review') {
+        if (reviewQuestions.length > 0) {
+          selectedQuestions = reviewQuestions
+        }
+      } else if (urlScope === 'mix' || (!urlScope && (urlMode === 'practice' || !urlMode))) {
+        // Smart Mix: Interleave 1 new and 1 review, preserving group clusters
+        const interleaved: any[] = []
+        const maxLen = Math.max(newQuestions.length, reviewQuestions.length)
+        for (let i = 0; i < maxLen; i++) {
+          if (i < newQuestions.length) interleaved.push(newQuestions[i])
+          if (i < reviewQuestions.length) interleaved.push(reviewQuestions[i])
+        }
+        if (interleaved.length > 0) {
+          // Re-cluster groups so questions with the same group_id stay together in sequence
+          const seenGroups = new Set<string>()
+          const clustered: any[] = []
+          interleaved.forEach((q: any) => {
+            if (q.group_id) {
+              if (!seenGroups.has(q.group_id)) {
+                seenGroups.add(q.group_id)
+                if (groupsMap[q.group_id]) {
+                  clustered.push(...groupsMap[q.group_id])
+                }
+              }
+            } else {
+              clustered.push(q)
+            }
+          })
+          selectedQuestions = clustered
         }
       } else if (urlMode === 'random') {
-        // Group-aware random shuffle: cluster questions by group_id so passages stay contiguous and ordered
-        const groupsMap: Record<string, any[]> = {}
-        const standalones: any[] = []
-        questions.forEach((q: any) => {
-          if (q.group_id) {
-            if (!groupsMap[q.group_id]) groupsMap[q.group_id] = []
-            groupsMap[q.group_id].push(q)
-          } else {
-            standalones.push(q)
-          }
-        })
-        Object.values(groupsMap).forEach(arr => arr.sort((a, b) => (a.order_in_group || 0) - (b.order_in_group || 0)))
-        const units: any[][] = [...Object.values(groupsMap), ...standalones.map(q => [q])]
+        // Group-aware random shuffle
+        const standalones = questions.filter((q: any) => !q.group_id)
+        const units: any[][] = [...Object.values(groupsMap), ...standalones.map((q: any) => [q])]
         const shuffledUnits = units.sort(() => Math.random() - 0.5)
-        questions = shuffledUnits.flat()
+        selectedQuestions = shuffledUnits.flat()
+      }
+
+      // 3. Apply question count quota
+      if (urlCount && urlCount !== 'all') {
+        const targetCount = parseInt(urlCount, 10)
+        if (targetCount > 0 && targetCount < selectedQuestions.length) {
+          let sliced = selectedQuestions.slice(0, targetCount)
+          // If the last question belongs to a group, ensure all questions of that group are included
+          const lastQ = sliced[sliced.length - 1]
+          if (lastQ && lastQ.group_id && groupsMap[lastQ.group_id]) {
+            const fullGroup = groupsMap[lastQ.group_id]
+            const existingIds = new Set(sliced.map((x: any) => x.id))
+            fullGroup.forEach((gq: any) => {
+              if (!existingIds.has(gq.id)) {
+                sliced.push(gq)
+                existingIds.add(gq.id)
+              }
+            })
+          }
+          questions = sliced
+        } else {
+          questions = selectedQuestions
+        }
+      } else {
+        questions = selectedQuestions
       }
 
       if (urlMode === 'exam' || urlMode === 'mock') {

@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
+import { QuizStartModal } from '@/components/QuizStartModal'
 
 interface Question {
   id: number
@@ -31,57 +32,6 @@ interface AttemptHistoryItem {
   completed_at: string | null
 }
 
-const PRACTICE_MODES = [
-  {
-    id: 'mcq',
-    label: 'Standard 4-Choice Quiz',
-    desc: 'Classic multiple choice questions with instant explanations and score tracking.',
-    icon: Target,
-    color: 'from-indigo-500 to-indigo-600',
-    badge: 'Standard'
-  },
-  {
-    id: 'missed',
-    label: 'Practice Missed Questions',
-    desc: 'Laser-focus on questions answered incorrectly in previous attempts (Box 1 priority).',
-    icon: RotateCcw,
-    color: 'from-amber-500 to-orange-600',
-    badge: 'Target Weakness'
-  },
-  {
-    id: 'new',
-    label: 'Practice New Questions',
-    desc: 'Learn untouched questions that you have not encountered yet.',
-    icon: Sparkles,
-    color: 'from-purple-500 to-pink-600',
-    badge: 'Fresh Material'
-  },
-  {
-    id: 'typing',
-    label: 'Spelling & Recall Mode',
-    desc: 'Type the exact answer or keyword without seeing multiple-choice hints.',
-    icon: Keyboard,
-    color: 'from-violet-500 to-purple-700',
-    badge: 'Active Recall'
-  },
-  {
-    id: 'exam',
-    label: 'Timed Mock Exam',
-    desc: 'Test yourself under simulated exam conditions with strict countdown and final review.',
-    icon: Clock,
-    color: 'from-emerald-500 to-teal-600',
-    badge: 'Challenge'
-  },
-  {
-    id: 'random',
-    label: 'Random Shuffle Mode',
-    desc: 'Shuffle all questions randomly to prevent memorizing question positions.',
-    icon: Shuffle,
-    color: 'from-rose-500 to-red-600',
-    badge: 'Unbiased'
-  }
-]
-
 export default function QuizDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -91,7 +41,17 @@ export default function QuizDetail() {
   // 4 Primary Tabs: 'overview' | 'questions' | 'roadmap' | 'settings'
   const [activeTab, setActiveTab] = useState<'overview' | 'questions' | 'roadmap' | 'settings'>('overview')
   const [searchQuery, setSearchQuery] = useState('')
-  const [isModeLauncherOpen, setIsModeLauncherOpen] = useState(false)
+  const [startModalConfig, setStartModalConfig] = useState<{
+    isOpen: boolean
+    format: 'practice' | 'exam'
+    scope: 'mix' | 'new' | 'review'
+    count: number | 'all'
+  }>({
+    isOpen: false,
+    format: 'practice',
+    scope: 'mix',
+    count: 10
+  })
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editFormData, setEditFormData] = useState<any>(null)
   const [userSearch, setUserSearch] = useState('')
@@ -277,12 +237,6 @@ export default function QuizDetail() {
 
   const isCreatorOrAdmin = quiz?.creator_id === user?.id || user?.id === 1 || quiz?.is_collaborator
 
-  const launchPracticeMode = (mode: string) => {
-    setIsModeLauncherOpen(false)
-    if (navigator.vibrate) navigator.vibrate(8)
-    navigate(`/quiz/${id}/play?mode=${mode}`)
-  }
-
   return (
     <div className="fixed inset-0 top-0 bottom-0 md:relative md:inset-auto md:top-auto md:bottom-auto md:h-full md:min-h-0 md:w-full flex flex-col bg-[#F8FAFC] overflow-hidden text-left select-none font-sans">
       
@@ -307,12 +261,17 @@ export default function QuizDetail() {
           <button
             onClick={() => {
               if (navigator.vibrate) navigator.vibrate(8)
-              setIsModeLauncherOpen(true)
+              setStartModalConfig({
+                isOpen: true,
+                format: 'practice',
+                scope: 'mix',
+                count: 10
+              })
             }}
             className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 rounded-xl text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 fill-indigo-600" />
-            <span className="hidden sm:inline">Practice Modes</span>
+            <span className="hidden sm:inline">Làm bài</span>
           </button>
 
           {isCreatorOrAdmin && (
@@ -521,7 +480,7 @@ export default function QuizDetail() {
                   <p className="text-[10px] font-bold text-slate-400">Your latest practice performance</p>
                 </div>
                 <button
-                  onClick={() => setIsModeLauncherOpen(true)}
+                  onClick={() => setStartModalConfig(prev => ({ ...prev, isOpen: true }))}
                   className="text-xs font-black text-indigo-600 hover:underline cursor-pointer"
                 >
                   New Attempt +
@@ -787,125 +746,79 @@ export default function QuizDetail() {
       {/* ─── DOCKED BOTTOM ACTION BAR (THUMB REACHABLE) ──────────────────────── */}
       <div className="shrink-0 fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-3.5 pt-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] z-40 shadow-lg">
         <div className="max-w-5xl mx-auto flex items-center gap-2">
-          {/* Mode Launcher Trigger */}
+          {/* Quick Review Missed Questions */}
           <button
             onClick={() => {
               if (navigator.vibrate) navigator.vibrate(8)
-              setIsModeLauncherOpen(true)
+              setStartModalConfig({
+                isOpen: true,
+                format: 'practice',
+                scope: 'review',
+                count: 10
+              })
             }}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shrink-0"
-            title="Choose Practice Mode"
-          >
-            <Settings className="w-4 h-4 text-indigo-600" />
-            <span className="hidden sm:inline">Modes</span>
-          </button>
-
-          {/* Quick Practice Missed Questions */}
-          <button
-            onClick={() => launchPracticeMode('missed')}
             className="px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200/90 text-amber-800 text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shrink-0"
-            title="Practice Missed Questions"
+            title="Ôn tập câu làm sai"
           >
             <RotateCcw className="w-4 h-4 text-amber-600" />
-            <span className="hidden sm:inline">Missed</span>
+            <span className="hidden sm:inline">Ôn tập</span>
+          </button>
+
+          {/* Quick Timed Mock Exam */}
+          <button
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(8)
+              setStartModalConfig({
+                isOpen: true,
+                format: 'exam',
+                scope: 'mix',
+                count: 20
+              })
+            }}
+            className="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 text-emerald-800 text-xs font-black flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shrink-0"
+            title="Thi thử tính giờ"
+          >
+            <Clock className="w-4 h-4 text-emerald-600" />
+            <span className="hidden sm:inline">Thi thử</span>
           </button>
 
           {/* Primary Quick Start Button */}
           <button
-            onClick={() => launchPracticeMode('mcq')}
-            className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-md shadow-indigo-500/20 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(8)
+              setStartModalConfig({
+                isOpen: true,
+                format: 'practice',
+                scope: 'mix',
+                count: 10
+              })
+            }}
+            className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-md shadow-indigo-500/20 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <Play className="w-4 h-4 fill-white" />
-            <span>Start Practice</span>
+            <span>Bắt đầu</span>
           </button>
         </div>
       </div>
 
-      {/* ─── PRACTICE MODES LAUNCHER MODAL SHEET (PORTAL TO BODY) ────────────── */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {isModeLauncherOpen && (
-            <div className="fixed inset-0 z-[250] flex flex-col justify-end">
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsModeLauncherOpen(false)}
-                className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
-              />
+      {/* ─── QUIZ START MODAL (VOCABURN BOTTOM SHEET STYLE) ────────────── */}
+      <QuizStartModal
+        isOpen={startModalConfig.isOpen}
+        onClose={() => setStartModalConfig(prev => ({ ...prev, isOpen: false }))}
+        quizId={id || ''}
+        quizTitle={quiz?.title || 'Quiz'}
+        totalQuestions={allQuestions.length || quiz?.questions_count || 0}
+        timeLimitMinutes={quiz?.time_limit}
+        initialFormat={startModalConfig.format}
+        initialScope={startModalConfig.scope}
+        initialCount={startModalConfig.count}
+        countsSummary={{
+          totalCount: allQuestions.length || quiz?.questions_count || 0,
+          newCount: allQuestions.filter((q: any) => (!q.stats || q.stats.total === 0)).length,
+          reviewCount: allQuestions.filter((q: any) => (q.stats && q.stats.total > 0)).length
+        }}
+      />
 
-              {/* Bottom Sheet Card */}
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-                className="relative bg-white rounded-t-[2.5rem] border-t border-slate-200 shadow-2xl p-5 sm:p-7 max-h-[85vh] overflow-y-auto z-10 space-y-4 max-w-2xl mx-auto w-full"
-              >
-                {/* Pull Handle */}
-                <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto -mt-1 mb-2" />
-
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                      <Target className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-black text-slate-900">Choose Practice Mode</h3>
-                      <p className="text-[10px] font-bold text-slate-400">Select a study mode tailored for this session</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setIsModeLauncherOpen(false)}
-                    className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Modes Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  {PRACTICE_MODES.map((mode) => {
-                    const Icon = mode.icon
-                    return (
-                      <div
-                        key={mode.id}
-                        onClick={() => launchPracticeMode(mode.id)}
-                        className="p-4 rounded-2xl border border-slate-200/90 hover:border-indigo-300 bg-slate-50/50 hover:bg-indigo-50/20 shadow-2xs hover:shadow-sm transition-all cursor-pointer group flex flex-col justify-between gap-3 active:scale-[0.98]"
-                      >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <div className={cn("w-8 h-8 rounded-xl bg-gradient-to-tr text-white flex items-center justify-center shadow-xs", mode.color)}>
-                              <Icon className="w-4 h-4" />
-                            </div>
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-white border border-slate-200/80 text-slate-600">
-                              {mode.badge}
-                            </span>
-                          </div>
-                          <h4 className="text-xs font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
-                            {mode.label}
-                          </h4>
-                          <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                            {mode.desc}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between text-indigo-600 text-xs font-bold pt-1">
-                          <span>Start Mode</span>
-                          <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
 
     </div>
   )

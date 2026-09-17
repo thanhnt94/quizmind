@@ -16,6 +16,7 @@ import { TelegramRoadmapReminderToggle } from '@/components/TelegramRoadmapRemin
 import { DashboardDailyDrawer } from '@/components/dashboard/DashboardDailyDrawer'
 import { DashboardRoadmapSection } from '@/components/dashboard/DashboardRoadmapSection'
 import { QuizMindLogo } from '@/components/QuizMindLogo'
+import { QuizStartModal } from '@/components/QuizStartModal'
 
 interface DashboardData {
   user: { id: number; username: string; email: string; role?: string }
@@ -230,6 +231,7 @@ export default function Dashboard() {
   const [remainingTime, setRemainingTime] = useState('')
   const [activeRoadmapIdx, setActiveRoadmapIdx] = useState(0)
   const [quizSearch, setQuizSearch] = useState('')
+  const [startModalQuiz, setStartModalQuiz] = useState<any | null>(null)
 
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
@@ -425,7 +427,10 @@ export default function Dashboard() {
               <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => navigate(`/quiz/${quiz.id}/play`)}
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(8)
+                    setStartModalQuiz(quiz)
+                  }}
                   className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
@@ -880,6 +885,21 @@ export default function Dashboard() {
         navigate={navigate}
         onSwitchTab={switchHomeTab}
       />
+
+      {/* ─── QUIZ START MODAL (VOCABURN BOTTOM SHEET STYLE) ────────────── */}
+      {startModalQuiz && (
+        <QuizStartModal
+          isOpen={Boolean(startModalQuiz)}
+          onClose={() => setStartModalQuiz(null)}
+          quizId={startModalQuiz.id}
+          quizTitle={startModalQuiz.title}
+          totalQuestions={startModalQuiz.questions_count || 0}
+          timeLimitMinutes={startModalQuiz.time_limit}
+          initialFormat="practice"
+          initialScope="mix"
+          initialCount={10}
+        />
+      )}
 
     </div>
   )

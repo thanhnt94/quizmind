@@ -13,9 +13,11 @@ import {
   RotateCcw, 
   Play, 
   Compass,
-  ArrowRight
+  ArrowRight,
+  Target
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { QuizStartModal } from '@/components/QuizStartModal'
 
 interface DashboardRoadmapSectionProps {
   roadmapQuizzes: any[] | undefined
@@ -43,7 +45,8 @@ function DetailedRoadmapCard({
   navigate,
   onMascotTap,
   mascotCheer,
-  remainingTime
+  remainingTime,
+  onOpenStartModal
 }: {
   quiz: any
   idx: number
@@ -52,6 +55,7 @@ function DetailedRoadmapCard({
   onMascotTap: () => void
   mascotCheer: string | null
   remainingTime: string
+  onOpenStartModal: (cfg?: { format?: 'practice' | 'exam'; scope?: 'mix' | 'new' | 'review'; count?: number | 'all' }) => void
 }) {
   const st = quiz?.status || {}
   const isDone = Boolean(st.all_done)
@@ -175,31 +179,35 @@ function DetailedRoadmapCard({
           />
         </div>
 
-        {/* 2 Circular Action Buttons (Play / Practice) in bottom right of hero card */}
+        {/* 2 Action Buttons (Luyện tập / Thi thử) in bottom right of hero card */}
         {!isDone && (
           <div className="absolute right-3 bottom-3 z-30 flex items-center gap-1.5 pointer-events-auto">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                navigate(`/quiz/${quiz.quiz_id || quiz.id}/play?mode=roadmap`)
+                if (navigator.vibrate) navigator.vibrate(8)
+                onOpenStartModal({ format: 'practice', scope: 'mix', count: 10 })
               }}
-              className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-white/50 active:scale-90 transition-all cursor-pointer flex-shrink-0"
-              title="Study Questions"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white flex items-center gap-1.5 shadow-md shadow-indigo-500/25 border border-white/40 active:scale-95 transition-all cursor-pointer text-xs font-black"
+              title="Luyện tập từng câu (Instant Feedback)"
             >
-              <BookOpen className="w-4 h-4 text-white" />
+              <Target className="w-3.5 h-3.5" />
+              <span>Luyện tập</span>
             </button>
 
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                navigate(`/quiz/${quiz.quiz_id || quiz.id}/play?mode=practice`)
+                if (navigator.vibrate) navigator.vibrate(8)
+                onOpenStartModal({ format: 'exam', scope: 'mix', count: 20 })
               }}
-              className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 border border-white/50 active:scale-90 transition-all cursor-pointer flex-shrink-0"
-              title="Practice Mode"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white flex items-center gap-1.5 shadow-md shadow-emerald-500/25 border border-white/40 active:scale-95 transition-all cursor-pointer text-xs font-black"
+              title="Thi thử 1 lượt (Mock Exam / Batch)"
             >
-              <Trophy className="w-4 h-4 text-white" />
+              <Clock className="w-3.5 h-3.5" />
+              <span>Thi thử</span>
             </button>
           </div>
         )}
@@ -248,7 +256,11 @@ function DetailedRoadmapCard({
               <div 
                 onClick={() => {
                   if (navigator.vibrate) navigator.vibrate(8)
-                  navigate(step.url || st.next_action_url || `/quiz/${quiz.quiz_id || quiz.id}/play?mode=roadmap`)
+                  onOpenStartModal({
+                    format: 'practice',
+                    scope: step.type === 'new_cards' ? 'new' : 'review',
+                    count: step.daily_count || step.max_count || 10
+                  })
                 }}
                 className={cn(
                   "flex-1 bg-white border rounded-2xl p-2.5 sm:p-3 shadow-2xs flex items-center gap-3 relative transition-all cursor-pointer hover:shadow-sm active:scale-[0.99]",
@@ -324,7 +336,12 @@ function DetailedRoadmapCard({
         type="button"
         onClick={() => {
           if (navigator.vibrate) navigator.vibrate(10)
-          navigate(st.next_action_url || `/quiz/${quiz.quiz_id || quiz.id}/play?mode=roadmap`)
+          const isReviewStep = pipeline[currentStepIdx]?.type === 'review_cards'
+          onOpenStartModal({
+            format: 'practice',
+            scope: isReviewStep ? 'review' : 'new',
+            count: 10
+          })
         }}
         className={cn(
           "w-full h-12 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98",
@@ -353,6 +370,19 @@ export function DashboardRoadmapSection({
   const [mascotCheer, setMascotCheer] = useState<string | null>(null)
   const isScrollingRef = useRef(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [startModalConfig, setStartModalConfig] = useState<{
+    isOpen: boolean
+    quiz: any
+    format: 'practice' | 'exam'
+    scope: 'mix' | 'new' | 'review'
+    count: number | 'all'
+  }>({
+    isOpen: false,
+    quiz: null,
+    format: 'practice',
+    scope: 'mix',
+    count: 10
+  })
 
   const handleMascotTap = () => {
     if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
@@ -566,10 +596,39 @@ export function DashboardRoadmapSection({
               onMascotTap={handleMascotTap}
               mascotCheer={i === safeIdx ? mascotCheer : null}
               remainingTime={remainingTime}
+              onOpenStartModal={(cfg) => {
+                setStartModalConfig({
+                  isOpen: true,
+                  quiz: q,
+                  format: cfg?.format || 'practice',
+                  scope: cfg?.scope || 'mix',
+                  count: cfg?.count || 10
+                })
+              }}
             />
           </div>
         ))}
       </div>
+
+      {/* Quiz Start Modal (Vocaburn Bottom Sheet Style) */}
+      {startModalConfig.quiz && (
+        <QuizStartModal
+          isOpen={startModalConfig.isOpen}
+          onClose={() => setStartModalConfig(prev => ({ ...prev, isOpen: false }))}
+          quizId={startModalConfig.quiz.quiz_id || startModalConfig.quiz.id}
+          quizTitle={startModalConfig.quiz.title}
+          totalQuestions={startModalConfig.quiz.status?.total_questions || startModalConfig.quiz.questions_count || 0}
+          timeLimitMinutes={startModalConfig.quiz.time_limit}
+          initialFormat={startModalConfig.format}
+          initialScope={startModalConfig.scope}
+          initialCount={startModalConfig.count}
+          countsSummary={{
+            totalCount: startModalConfig.quiz.status?.total_questions || startModalConfig.quiz.questions_count || 0,
+            newCount: Math.max(0, (startModalConfig.quiz.status?.total_questions || startModalConfig.quiz.questions_count || 0) - (startModalConfig.quiz.status?.learned_questions || 0)),
+            reviewCount: startModalConfig.quiz.status?.learned_questions || 0
+          }}
+        />
+      )}
     </div>
   )
 }
