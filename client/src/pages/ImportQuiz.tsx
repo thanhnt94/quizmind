@@ -454,6 +454,20 @@ const ImportQuiz = () => {
                           <p className="text-[11px] font-medium text-slate-500 leading-relaxed">Sheet "Data" requires: Question, Option_A, Option_B, Option_C, Option_D, and Answer (A/B/C/D).</p>
                        </div>
                     </div>
+                    <div className="flex gap-4">
+                       <div className="w-8 h-8 bg-purple-600 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0">3</div>
+                       <div>
+                          <h4 className="text-xs font-black text-slate-900 uppercase mb-1">Grouped Questions (TOEIC / JLPT)</h4>
+                          <p className="text-[11px] font-medium text-slate-500 leading-relaxed">Fill <span className="text-purple-600 font-bold">Group_ID</span> (e.g. G1) and <span className="text-purple-600 font-bold">Passage_Content</span> / <span className="text-purple-600 font-bold">Group_Audio</span> to bind multiple questions to one passage. Leave empty for standalone questions.</p>
+                       </div>
+                    </div>
+                    <div className="flex gap-4">
+                       <div className="w-8 h-8 bg-amber-600 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0">4</div>
+                       <div>
+                          <h4 className="text-xs font-black text-slate-900 uppercase mb-1">Shuffle Control</h4>
+                          <p className="text-[11px] font-medium text-slate-500 leading-relaxed">Set <span className="text-amber-600 font-bold">Allow_Shuffle</span> to <span className="text-rose-600 font-bold">NO</span> to freeze option order (essential for listening tests). Default is YES.</p>
+                       </div>
+                    </div>
                   </div>
                   
                   <a 

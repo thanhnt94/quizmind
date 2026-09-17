@@ -59,6 +59,9 @@ class ExcelQuizService:
         # Normalize data columns
         df_data.columns = [str(c).strip().lower() for c in df_data.columns]
         print(f"DEBUG: Found {len(df_data)} rows in data sheet.")
+
+        groups_dict = {}
+        group_counters = {}
         
         for idx, row in df_data.iterrows():
             def get_val(col, default=""):
@@ -68,12 +71,30 @@ class ExcelQuizService:
                 except:
                     return default
 
+            def find_col_val(candidates, default=""):
+                for cand in candidates:
+                    v = get_val(cand)
+                    if v and v.lower() != "nan":
+                        return v
+                return default
+
             question_text = get_val("question")
             if not question_text or question_text.lower() == "nan":
                 continue
 
             # Core fields mapping
-            known_cols = ["question", "option_a", "option_b", "option_c", "option_d", "answer", "correct_answer", "correct_answer_text", "question_image_file", "question_audio_file", "guidance", "explanation"]
+            known_cols = [
+                "question", "option_a", "option_b", "option_c", "option_d", 
+                "answer", "correct_answer", "correct_answer_text", 
+                "question_image_file", "question_audio_file", "guidance", "explanation",
+                "group_id", "group_code", "group", "nhóm câu hỏi", "nhóm", "mã nhóm", "passage_id",
+                "group_title", "tiêu đề nhóm", "tên nhóm", "group_name",
+                "passage", "passage_content", "passage_text", "bài đọc", "ngữ cảnh", "context", "đoạn văn",
+                "group_audio", "audio nhóm", "audio_chung", "group_audio_file",
+                "group_image", "ảnh nhóm", "image_chung", "group_image_file",
+                "group_order", "sub_order", "thứ tự trong nhóm", "thứ tự", "câu số trong nhóm",
+                "allow_shuffle", "shuffle", "xáo trộn", "cho phép xáo trộn", "shuffle_options"
+            ]
             
             # Find AI column (any column with 'ai' in it that's not already known)
             ai_col = next((c for c in df_data.columns if "ai" in c and c not in known_cols), None)
@@ -95,6 +116,56 @@ class ExcelQuizService:
             q_type = q_type.lower().strip()
             if q_type == "nan": q_type = "normal"
 
+            # ── Group parsing ──
+            raw_group_code = find_col_val(["group_id", "group_code", "group", "nhóm câu hỏi", "nhóm", "mã nhóm", "passage_id"])
+            group_code = raw_group_code.strip() if raw_group_code and raw_group_code.lower() != "nan" else None
+
+            # ── Shuffle parsing (Default True unless explicitly disabled) ──
+            raw_shuffle = find_col_val(["allow_shuffle", "shuffle", "xáo trộn", "cho phép xáo trộn", "shuffle_options"])
+            allow_shuffle = True
+            if raw_shuffle and raw_shuffle.lower() in ("no", "false", "0", "k", "khong", "không", "off", "disable", "disabled"):
+                allow_shuffle = False
+
+            order_in_group = 0
+            if group_code:
+                # Order within group
+                raw_order = find_col_val(["group_order", "sub_order", "thứ tự trong nhóm", "thứ tự", "câu số trong nhóm"])
+                if group_code not in groups_dict:
+                    group_counters[group_code] = 0
+                    g_title = find_col_val(["group_title", "tiêu đề nhóm", "tên nhóm", "group_name"])
+                    g_passage = find_col_val(["passage", "passage_content", "passage_text", "bài đọc", "ngữ cảnh", "context", "đoạn văn"])
+                    g_audio = find_col_val(["group_audio", "audio nhóm", "audio_chung", "group_audio_file"])
+                    g_image = find_col_val(["group_image", "ảnh nhóm", "image_chung", "group_image_file"])
+
+                    groups_dict[group_code] = {
+                        "group_code": group_code,
+                        "title": g_title or f"Questions ({group_code})",
+                        "passage_text": g_passage or "",
+                        "audio_url": g_audio or "",
+                        "image_url": g_image or "",
+                        "allow_shuffle": allow_shuffle
+                    }
+                else:
+                    # Update group info if current row has passage/audio and group doesn't
+                    g_passage = find_col_val(["passage", "passage_content", "passage_text", "bài đọc", "ngữ cảnh", "context", "đoạn văn"])
+                    g_audio = find_col_val(["group_audio", "audio nhóm", "audio_chung", "group_audio_file"])
+                    g_image = find_col_val(["group_image", "ảnh nhóm", "image_chung", "group_image_file"])
+                    if g_passage and not groups_dict[group_code]["passage_text"]:
+                        groups_dict[group_code]["passage_text"] = g_passage
+                    if g_audio and not groups_dict[group_code]["audio_url"]:
+                        groups_dict[group_code]["audio_url"] = g_audio
+                    if g_image and not groups_dict[group_code]["image_url"]:
+                        groups_dict[group_code]["image_url"] = g_image
+
+                group_counters[group_code] += 1
+                if raw_order and raw_order.lower() != "nan":
+                    try:
+                        order_in_group = int(float(raw_order))
+                    except:
+                        order_in_group = group_counters[group_code]
+                else:
+                    order_in_group = group_counters[group_code]
+
             question_data = {
                 "id": q_id,
                 "content": question_text,
@@ -103,6 +174,9 @@ class ExcelQuizService:
                 "question_type": q_type,
                 "image": get_val("image") or get_val("question_image_file"),
                 "audio": get_val("audio") or get_val("question_audio_file"),
+                "group_code": group_code,
+                "order_in_group": order_in_group,
+                "allow_shuffle": allow_shuffle,
                 "options": [],
                 "others": {}
             }
@@ -140,6 +214,9 @@ class ExcelQuizService:
             
             if question_data["options"]:
                 questions.append(question_data)
+
+        # Attach parsed groups into metadata
+        metadata["groups"] = list(groups_dict.values())
                 
         return metadata, questions
 
@@ -185,6 +262,13 @@ class ExcelQuizService:
             
             row = {
                 "id": q.id,
+                "group_id": getattr(q.group, "group_code", "") if getattr(q, "group", None) else "",
+                "group_title": getattr(q.group, "title", "") if getattr(q, "group", None) else "",
+                "passage": getattr(q.group, "passage_text", "") if getattr(q, "group", None) else "",
+                "group_audio": getattr(q.group, "audio_url", "") if getattr(q, "group", None) else "",
+                "group_image": getattr(q.group, "image_url", "") if getattr(q, "group", None) else "",
+                "group_order": getattr(q, "order_in_group", "") or "",
+                "allow_shuffle": "NO" if getattr(q, "allow_shuffle", True) is False else "YES",
                 "question": q.content,
                 "option_a": opt_a,
                 "option_b": opt_b,

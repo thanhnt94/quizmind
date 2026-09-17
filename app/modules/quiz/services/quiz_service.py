@@ -50,17 +50,47 @@ class QuizService:
         return db_question
 
     @staticmethod
-    async def bulk_add_questions(db: AsyncSession, quiz_id: int, questions_data: list[QuestionSchema]):
+    async def bulk_add_questions(db: AsyncSession, quiz_id: int, questions_data: list[QuestionSchema], groups_data: Optional[list[dict]] = None):
+        from app.modules.quiz.models import QuestionGroup, Question, Option
+        # 1. Create QuestionGroups if provided
+        group_id_map = {} # group_code -> group_id
+        if groups_data:
+            for g in groups_data:
+                g_code = g.get("group_code")
+                if g_code:
+                    db_group = QuestionGroup(
+                        quiz_id=quiz_id,
+                        group_code=g_code,
+                        title=g.get("title"),
+                        passage_text=g.get("passage_text"),
+                        audio_url=g.get("audio_url"),
+                        image_url=g.get("image_url"),
+                        allow_shuffle=g.get("allow_shuffle", True)
+                    )
+                    db.add(db_group)
+                    await db.flush()
+                    group_id_map[g_code] = db_group.id
+
         db_questions = []
         for q_data in questions_data:
+            # Resolve group_id
+            target_group_id = None
+            if q_data.group_code and q_data.group_code in group_id_map:
+                target_group_id = group_id_map[q_data.group_code]
+            elif q_data.group_id:
+                target_group_id = q_data.group_id
+
             db_question = Question(
                 quiz_id=quiz_id,
+                group_id=target_group_id,
+                order_in_group=q_data.order_in_group or 0,
                 content=q_data.content,
                 image=q_data.image,
                 audio=q_data.audio,
                 question_type=q_data.question_type,
                 explanation=q_data.explanation,
                 ai_explanation=q_data.ai_explanation,
+                allow_shuffle=q_data.allow_shuffle if q_data.allow_shuffle is not None else True,
                 others=q_data.others,
                 points=q_data.points
             )
@@ -119,7 +149,12 @@ class QuizService:
     @staticmethod
     async def get_quiz_by_id(db: AsyncSession, quiz_id: int):
         result = await db.execute(
-            select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions).selectinload(Question.options), selectinload(Quiz.tags))
+            select(Quiz).where(Quiz.id == quiz_id).options(
+                selectinload(Quiz.questions).selectinload(Question.options),
+                selectinload(Quiz.questions).selectinload(Question.group),
+                selectinload(Quiz.groups),
+                selectinload(Quiz.tags)
+            )
         )
         return result.scalar_one_or_none()
 
@@ -128,7 +163,12 @@ class QuizService:
         from app.modules.quiz.models import UserAnswer, Question, QuizAttempt
         
         result = await db.execute(
-            select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions).selectinload(Question.options), selectinload(Quiz.tags))
+            select(Quiz).where(Quiz.id == quiz_id).options(
+                selectinload(Quiz.questions).selectinload(Question.options),
+                selectinload(Quiz.questions).selectinload(Question.group),
+                selectinload(Quiz.groups),
+                selectinload(Quiz.tags)
+            )
         )
         quiz = result.scalar_one_or_none()
         if not quiz:

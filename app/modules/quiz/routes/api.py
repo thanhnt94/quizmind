@@ -91,10 +91,14 @@ async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_o
                 image=q.get("image"),
                 audio=q.get("audio"),
                 question_type=q.get("question_type", "normal"),
-                explanation=q["explanation"],
+                group_code=q.get("group_code"),
+                order_in_group=q.get("order_in_group", 0),
+                allow_shuffle=q.get("allow_shuffle", True),
+                explanation=q.get("explanation"),
+                ai_explanation=q.get("ai_explanation"),
                 options=[OptionSchema(content=o["content"], is_correct=o["is_correct"]) for o in q["options"]]
             ))
-        await QuizService.bulk_add_questions(db, db_quiz.id, question_schemas)
+        await QuizService.bulk_add_questions(db, db_quiz.id, question_schemas, groups_data=metadata.get("groups", []))
             
         # Add tags if present
         if metadata.get("tags"):
@@ -578,13 +582,31 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
         "description": quiz.description,
         "ai_prompt": quiz.ai_prompt,
         "instruction": quiz.instruction,
+        "time_limit": quiz.time_limit or 0,
         "category_id": quiz.category_id,
         "creator_id": quiz.creator_id,
         "is_collaborator": is_collaborator,
         "user_total_xp": user_stats.get("xp", 0),
+        "groups": [
+            {
+                "id": g.id,
+                "group_code": g.group_code,
+                "title": g.title,
+                "passage_text": g.passage_text,
+                "audio_url": g.audio_url,
+                "image_url": g.image_url,
+                "allow_shuffle": g.allow_shuffle
+            } for g in getattr(quiz, 'groups', [])
+        ],
         "questions": [
             {
                 "id": q.id,
+                "group_id": q.group_id,
+                "order_in_group": q.order_in_group or 0,
+                "allow_shuffle": q.allow_shuffle if q.allow_shuffle is not None else True,
+                "image": q.image,
+                "audio": q.audio,
+                "question_type": q.question_type or "normal",
                 "content": q.content,
                 "explanation": q.explanation,
                 "ai_explanation": q.ai_explanation,
@@ -597,6 +619,88 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 ]
             } for q in quiz.questions
         ]
+    }
+
+@router.post("/{quiz_id}/exam/submit")
+async def submit_exam_attempt(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
+    """
+    Submits an entire exam attempt (all answers at once), calculates score,
+    records QuizAttempt and UserAnswer rows, awards XP, and returns full scorecard with solutions.
+    """
+    user_id = int(request.cookies.get("user_id", 1))
+    quiz = await QuizService.get_quiz_by_id(db, quiz_id)
+    if not quiz:
+        return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+        
+    answers_dict = payload.get("answers", {}) # question_id (str or int) -> selected_option_id (int)
+    time_spent_seconds = payload.get("time_spent_seconds", 0)
+    
+    total_questions = len(quiz.questions)
+    correct_count = 0
+    detailed_results = []
+    
+    from app.modules.quiz.models import QuizAttempt, UserAnswer
+    attempt = QuizAttempt(
+        user_id=user_id,
+        quiz_id=quiz_id,
+        mode="exam",
+        score=0,
+        total_questions=total_questions,
+        completed_at=datetime.utcnow()
+    )
+    db.add(attempt)
+    await db.flush()
+    
+    user_answers = []
+    for q in quiz.questions:
+        selected_opt_id = answers_dict.get(str(q.id)) or answers_dict.get(q.id)
+        is_correct = False
+        correct_opt = next((o for o in q.options if o.is_correct), None)
+        correct_opt_id = correct_opt.id if correct_opt else None
+        
+        if selected_opt_id is not None:
+            if correct_opt_id is not None and selected_opt_id == correct_opt_id:
+                is_correct = True
+                correct_count += 1
+            user_answers.append(UserAnswer(
+                attempt_id=attempt.id,
+                question_id=q.id,
+                selected_option_id=selected_opt_id,
+                is_correct=is_correct,
+                active_time=round(time_spent_seconds / max(1, total_questions), 1)
+            ))
+            
+        detailed_results.append({
+            "question_id": q.id,
+            "group_id": q.group_id,
+            "selected_option_id": selected_opt_id,
+            "correct_option_id": correct_opt_id,
+            "is_correct": is_correct,
+            "explanation": q.explanation,
+            "ai_explanation": q.ai_explanation
+        })
+        
+    attempt.score = correct_count
+    if user_answers:
+        db.add_all(user_answers)
+        
+    # Award gamification XP for exam completion (10 XP per correct answer + 30 XP completion bonus)
+    xp_gained = (correct_count * 10) + 30
+    from app.modules.gamification.interface import GamificationInterface
+    await GamificationInterface.award_xp(db, user_id, xp_gained, f"Completed Mock Exam for '{quiz.title}' ({correct_count}/{total_questions})")
+    
+    await db.commit()
+    
+    accuracy_pct = round((correct_count / total_questions * 100) if total_questions > 0 else 0, 1)
+    return {
+        "status": "ok",
+        "attempt_id": attempt.id,
+        "score": correct_count,
+        "total": total_questions,
+        "accuracy_pct": accuracy_pct,
+        "time_spent_seconds": time_spent_seconds,
+        "xp_gained": xp_gained,
+        "detailed_results": detailed_results
     }
 
 @router.get("/{quiz_id}/session")

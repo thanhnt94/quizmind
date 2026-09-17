@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
-import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass } from 'lucide-react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -38,6 +38,15 @@ const playIncorrectSound = () => {
   }
 };
 
+interface QuestionGroup {
+  id: number
+  group_code: string
+  title?: string
+  passage_content?: string
+  audio_url?: string
+  image_url?: string
+  order_index: number
+}
 
 interface Question {
   id: number
@@ -48,6 +57,12 @@ interface Question {
   stats?: { total: number, correct: number, avg_time: number }
   box_level?: number
   is_ignored?: boolean
+  group_id?: number
+  group_code?: string
+  order_in_group?: number
+  allow_shuffle?: boolean
+  audio_url?: string
+  image_url?: string
 }
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('')
@@ -204,8 +219,32 @@ export default function QuizPlay() {
   } | null>(null)
   const [justAnswered, setJustAnswered] = useState(false)
 
+  const [searchParams] = useSearchParams()
+  const isExamMode = searchParams.get('mode') === 'exam' || searchParams.get('mode') === 'mock'
+
+  // ── Exam Mode State ──
+  const [examAnswers, setExamAnswers] = useState<Record<number, number>>({})
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set())
+  const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false)
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false)
+  const [isExamSubmitted, setIsExamSubmitted] = useState(false)
+  const [isReviewMode, setIsReviewMode] = useState(false)
+  const [examResults, setExamResults] = useState<any>(null)
+  const [examTimeLeft, setExamTimeLeft] = useState<number | null>(null)
+  const [examTimeSpent, setExamTimeSpent] = useState<number>(0)
+  const [isPassageDrawerOpen, setIsPassageDrawerOpen] = useState(false)
+
   const timerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
+
+  // ── Grouped Question Resolution ──
+  const currentGroup = session?.groups?.find((g: any) => g.id === currentQuestion?.group_id)
+  const groupQuestions = currentQuestion?.group_id
+    ? (session?.questions?.filter((q: any) => q.group_id === currentQuestion.group_id) || [])
+    : []
+  const questionIndexInGroup = currentQuestion?.group_id
+    ? groupQuestions.findIndex((q: any) => q.id === currentQuestion.id) + 1
+    : 0
 
   const getMasteryPill = (boxLevel: number) => {
     switch (boxLevel) {
@@ -384,7 +423,29 @@ export default function QuizPlay() {
           questions = newList
         }
       } else if (urlMode === 'random') {
-        questions = [...questions].sort(() => Math.random() - 0.5)
+        // Group-aware random shuffle: cluster questions by group_id so passages stay contiguous and ordered
+        const groupsMap: Record<string, any[]> = {}
+        const standalones: any[] = []
+        questions.forEach((q: any) => {
+          if (q.group_id) {
+            if (!groupsMap[q.group_id]) groupsMap[q.group_id] = []
+            groupsMap[q.group_id].push(q)
+          } else {
+            standalones.push(q)
+          }
+        })
+        Object.values(groupsMap).forEach(arr => arr.sort((a, b) => (a.order_in_group || 0) - (b.order_in_group || 0)))
+        const units: any[][] = [...Object.values(groupsMap), ...standalones.map(q => [q])]
+        const shuffledUnits = units.sort(() => Math.random() - 0.5)
+        questions = shuffledUnits.flat()
+      }
+
+      if (urlMode === 'exam' || urlMode === 'mock') {
+        if (quizRes.data.time_limit && quizRes.data.time_limit > 0) {
+          setExamTimeLeft(quizRes.data.time_limit * 60)
+        } else {
+          setExamTimeLeft(null)
+        }
       }
 
       setSession({ ...quizRes.data, questions })
@@ -744,6 +805,18 @@ export default function QuizPlay() {
     setActiveMasteryUpgrade(null)
     setLearningModeAlert(null)
 
+    if (isExamMode) {
+      if (isReviewMode && examResults?.detailed_results) {
+        const detail = examResults.detailed_results.find((d: any) => d.question_id === session?.questions?.[idx]?.id)
+        if (detail) {
+          const optIdx = session?.questions?.[idx]?.options?.findIndex((o: any) => o.id === detail.selected_option_id)
+          setSelectedOption(optIdx !== -1 && optIdx !== undefined ? optIdx : null)
+          setShowFeedback(true)
+        }
+      }
+      return
+    }
+
     const prevOpt = sessionAnswers[idx]
     if (typeof prevOpt === 'number') {
       setSelectedOption(prevOpt)
@@ -756,6 +829,77 @@ export default function QuizPlay() {
     setIsEditingNote(false)
     setIsEditingAI(false)
     saveSession(sessionAnswers, idx)
+  }
+
+  const handleExamSelectOption = (optIdx: number) => {
+    if (isExamSubmitted && !isReviewMode) return
+    if (isReviewMode) return
+    setExamAnswers(prev => ({
+      ...prev,
+      [currentIndex]: optIdx
+    }))
+  }
+
+  const toggleFlagQuestion = (idx: number = currentIndex) => {
+    setFlaggedQuestions(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  const handleSubmitExam = async (isAuto: boolean = false) => {
+    if (!session || isSubmittingExam) return
+    setIsSubmittingExam(true)
+    try {
+      const formattedAnswers = Object.entries(examAnswers).map(([qIdx, optIdx]) => {
+        const q = session.questions[Number(qIdx)]
+        const opt = q?.options?.[optIdx]
+        return {
+          question_id: q?.id,
+          option_id: opt?.id
+        }
+      })
+
+      const res = await axios.post(`/api/v1/quiz/${id}/exam/submit`, {
+        answers: formattedAnswers,
+        time_spent: examTimeSpent
+      })
+
+      setExamResults(res.data)
+      setIsExamSubmitted(true)
+      setIsSubmitConfirmOpen(false)
+
+      if (res.data.accuracy_pct >= 50) {
+        confetti({
+          particleCount: 200,
+          spread: 100,
+          origin: { y: 0.6 },
+          colors: ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6']
+        })
+      }
+    } catch (err) {
+      console.error("Failed to submit exam:", err)
+      alert("Error submitting exam. Please check your connection and try again.")
+    } finally {
+      setIsSubmittingExam(false)
+    }
+  }
+
+  const handleRetakeExam = () => {
+    setExamAnswers({})
+    setFlaggedQuestions(new Set())
+    setIsExamSubmitted(false)
+    setIsReviewMode(false)
+    setExamResults(null)
+    setExamTimeSpent(0)
+    if (session?.time_limit && session?.time_limit > 0) {
+      setExamTimeLeft(session.time_limit * 60)
+    } else {
+      setExamTimeLeft(null)
+    }
+    setCurrentIndex(0)
   }
 
   const handleNext = () => {
@@ -1524,6 +1668,43 @@ export default function QuizPlay() {
   }
 
   const renderSessionStats = () => {
+    if (isExamMode) {
+      const answeredCount = Object.keys(examAnswers).length
+      const totalCount = session.questions?.length || 0
+      const remainingCount = Math.max(0, totalCount - answeredCount)
+      const flaggedCount = flaggedQuestions.size
+
+      return (
+        <div className="bg-slate-50/80 rounded-[1.5rem] p-4 mb-4 border border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              {isReviewMode ? "EXAM SCORE" : "EXAM PROGRESS"}
+            </span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-600 rounded-full text-white">
+              <Target className="w-2.5 h-2.5" />
+              <span className="text-[9px] font-black">
+                {isReviewMode ? `${examResults?.accuracy_pct || 0}%` : `${Math.round((answeredCount / Math.max(1, totalCount)) * 100)}%`}
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col items-center p-2 bg-white rounded-xl shadow-sm border border-slate-100/50">
+              <span className="text-[14px] font-black text-slate-700">{answeredCount}</span>
+              <span className="text-[8px] font-bold text-slate-400 uppercase">DONE</span>
+            </div>
+            <div className="flex flex-col items-center p-2 bg-slate-100 rounded-xl shadow-sm border border-slate-200/50">
+              <span className="text-[14px] font-black text-slate-600">{remainingCount}</span>
+              <span className="text-[8px] font-bold text-slate-400 uppercase">REMAIN</span>
+            </div>
+            <div className="flex flex-col items-center p-2 bg-amber-50 rounded-xl shadow-sm border border-amber-100/50">
+              <span className="text-[14px] font-black text-amber-600">{flaggedCount}</span>
+              <span className="text-[8px] font-bold text-amber-500 uppercase">FLAGGED</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     const answeredCount = Object.keys(sessionAnswers).length
     const correctCount = Object.entries(sessionAnswers).filter(([idx, optIdx]) => {
       const q = session.questions[Number(idx)]
@@ -1562,6 +1743,47 @@ export default function QuizPlay() {
   const renderQuestionMapGrid = () => (
     <div className="grid grid-cols-8 md:grid-cols-10 lg:grid-cols-5 gap-3 p-1 pb-4">
       {session.questions?.map((q: any, i: number) => {
+        if (isExamMode) {
+          const isAnswered = examAnswers[i] !== undefined
+          const isFlagged = flaggedQuestions.has(i)
+          const isActive = currentIndex === i
+          const detail = isReviewMode && examResults?.detailed_results?.find((d: any) => d.question_id === q.id)
+          const isReviewCorrect = detail?.is_correct
+
+          return (
+            <button
+              key={i}
+              onClick={() => {
+                navigateToQuestion(i)
+                setIsMapOpen(false)
+              }}
+              className={cn(
+                "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
+                isReviewMode
+                  ? (isReviewCorrect ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs" : "bg-rose-500 text-white border-rose-600 shadow-2xs")
+                  : isAnswered
+                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                  : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300",
+                isActive ? "ring-2 ring-indigo-500 ring-offset-2 scale-105 z-10" : ""
+              )}
+            >
+              <span className="relative z-10">{i + 1}</span>
+              {isFlagged && !isReviewMode && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border border-white" />
+              )}
+              {isReviewMode && (
+                <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                  {isReviewCorrect ? (
+                    <Check className="w-5 h-5 text-white stroke-[3]" />
+                  ) : (
+                    <X className="w-5 h-5 text-white stroke-[3]" />
+                  )}
+                </div>
+              )}
+            </button>
+          )
+        }
+
         const hasAttemptedThisSession = sessionAnswers[i] !== undefined
         const selectedOptIdx = sessionAnswers[i]
         const sessionCorrect = selectedOptIdx !== undefined ? q.options[selectedOptIdx]?.is_correct : false
@@ -1610,6 +1832,153 @@ export default function QuizPlay() {
       })}
     </div>
   )
+
+  const renderOptionsList = () => {
+    return (
+      <div className="grid grid-cols-1 gap-3">
+        {currentQuestion?.options.map((opt, idx) => {
+          if (isExamMode) {
+            const isSelected = examAnswers[currentIndex] === idx
+            const examDetail = isReviewMode ? examResults?.detailed_results?.find((d: any) => d.question_id === currentQuestion?.id) : null
+            const isCorrectOpt = isReviewMode && (opt.id === examDetail?.correct_option_id || opt.is_correct)
+            const isUserChoice = isReviewMode && opt.id === examDetail?.selected_option_id
+
+            if (isReviewMode) {
+              return (
+                <div
+                  key={opt.id}
+                  className={cn(
+                    "p-4 md:p-5 rounded-2xl border-2 text-left transition-all duration-200 relative overflow-hidden flex items-center justify-between gap-4",
+                    isCorrectOpt
+                      ? "border-emerald-500 bg-emerald-50/70 shadow-sm"
+                      : isUserChoice
+                      ? "border-rose-500 bg-rose-50/70 shadow-sm"
+                      : "border-slate-100 bg-white opacity-60"
+                  )}
+                >
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <div className={cn(
+                      "w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs",
+                      isCorrectOpt
+                        ? "bg-emerald-500 text-white"
+                        : isUserChoice
+                        ? "bg-rose-500 text-white"
+                        : "bg-slate-100 text-slate-400"
+                    )}>
+                      {String.fromCharCode(65 + idx)}
+                    </div>
+                    <span className={cn(
+                      "font-semibold text-sm md:text-base leading-snug",
+                      isCorrectOpt ? "text-emerald-950 font-bold" : isUserChoice ? "text-rose-950 font-bold" : "text-slate-700"
+                    )}>
+                      {opt.content}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isCorrectOpt && (
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Correct</span>
+                      </span>
+                    )}
+                    {isUserChoice && !isCorrectOpt && (
+                      <span className="px-2.5 py-1 rounded-xl bg-rose-100 text-rose-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                        <X className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Your Choice</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            }
+
+            // Taking Exam (Interactive selection without feedback)
+            return (
+              <button
+                key={opt.id}
+                onClick={() => handleExamSelectOption(idx)}
+                className={cn(
+                  "group p-4 md:p-5 rounded-2xl border-2 text-left transition-all duration-200 relative overflow-hidden active:scale-[0.99] cursor-pointer",
+                  isSelected
+                    ? "border-indigo-600 bg-indigo-50/70 shadow-md shadow-indigo-100/50 text-indigo-950 font-bold"
+                    : "border-slate-100 bg-white hover:border-indigo-300 hover:bg-indigo-50/20 text-slate-700"
+                )}
+              >
+                <div className="flex items-center gap-4 relative z-10">
+                  <div className={cn(
+                    "w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm flex-shrink-0 transition-all duration-200 shadow-xs",
+                    isSelected
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                      : "bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-700"
+                  )}>
+                    {String.fromCharCode(65 + idx)}
+                  </div>
+                  <span className="flex-1 font-semibold text-sm md:text-base leading-snug">
+                    {opt.content}
+                  </span>
+                  {isSelected && (
+                    <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-200 text-white">
+                      <Check className="w-4 h-4 stroke-[3]" />
+                    </div>
+                  )}
+                </div>
+              </button>
+            )
+          }
+
+          // Standard Practice Mode
+          return (
+            <button 
+              key={opt.id}
+              onClick={() => handleAnswer(idx)}
+              disabled={showFeedback}
+              className={cn(
+                "group md:p-5 p-4 rounded-2xl border-2 text-left transition-all duration-200 relative overflow-hidden active:scale-[0.99]",
+                selectedOption === idx 
+                  ? (opt.is_correct 
+                      ? "border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-lg shadow-emerald-100/50" 
+                      : "border-rose-400 bg-gradient-to-r from-rose-50 to-pink-50 shadow-lg shadow-rose-100/50")
+                  : (showFeedback && opt.is_correct 
+                      ? "border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-lg shadow-emerald-100/50" 
+                      : "border-slate-100 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-md hover:shadow-indigo-100/30")
+              )}
+            >
+              <div className="flex items-center gap-4 relative z-10">
+                 <div className={cn(
+                   "w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm flex-shrink-0 transition-all duration-200",
+                   selectedOption === idx 
+                     ? (opt.is_correct 
+                         ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-md shadow-emerald-200" 
+                         : "bg-gradient-to-br from-rose-400 to-pink-500 text-white shadow-md shadow-rose-200")
+                     : (showFeedback && opt.is_correct 
+                         ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-md shadow-emerald-200" 
+                         : "bg-slate-100 text-slate-500 group-hover:bg-gradient-to-br group-hover:from-indigo-500 group-hover:to-purple-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-indigo-200")
+                 )}>
+                   {String.fromCharCode(65 + idx)}
+                 </div>
+                 <span className={cn(
+                   "flex-1 font-semibold text-sm md:text-base leading-snug",
+                   selectedOption === idx
+                     ? (opt.is_correct ? "text-emerald-800" : "text-rose-800")
+                     : (showFeedback && opt.is_correct ? "text-emerald-800" : "text-slate-700 group-hover:text-slate-900")
+                 )}>{opt.content}</span>
+                 {showFeedback && opt.is_correct && (
+                   <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-200">
+                     <Check className="w-4 h-4 text-white stroke-[3]" />
+                   </div>
+                 )}
+                 {showFeedback && selectedOption === idx && !opt.is_correct && (
+                   <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-rose-500 flex items-center justify-center shadow-md shadow-rose-200">
+                     <X className="w-4 h-4 text-white stroke-[3]" />
+                   </div>
+                 )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
 
   if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
 
@@ -1798,7 +2167,95 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
-      {roadmapStatus && roadmapStatus.pipeline && roadmapStatus.pipeline.length > 0 ? (
+      {isExamMode ? (
+        <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/95 backdrop-blur-2xl border-b border-slate-100/80 px-4 py-2.5 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (isReviewMode) {
+                  setIsReviewMode(false)
+                } else {
+                  setIsQuitModalOpen(true)
+                }
+              }}
+              className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-100 active:scale-90 transition-all"
+              title={isReviewMode ? "Back to Scorecard" : "Exit Exam"}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md",
+                  isReviewMode
+                    ? "bg-purple-100 text-purple-700"
+                    : "bg-indigo-600 text-white shadow-xs"
+                )}>
+                  {isReviewMode ? "EXAM REVIEW" : "MOCK EXAM"}
+                </span>
+                <h1 className="text-xs font-black text-slate-800 truncate max-w-[160px] sm:max-w-xs">{session.title}</h1>
+              </div>
+              <div className="text-[10px] font-bold text-slate-400 mt-0.5">
+                {isReviewMode
+                  ? `Score: ${examResults?.score || 0}/${examResults?.total || 0} (${examResults?.accuracy_pct || 0}%)`
+                  : `Question ${currentIndex + 1} of ${session.questions?.length || 0}`
+                }
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!isReviewMode && (
+              <div className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl shadow-xs text-xs font-black transition-all",
+                examTimeLeft !== null && examTimeLeft < 60
+                  ? "bg-rose-500 text-white animate-pulse shadow-rose-200"
+                  : "bg-slate-900 text-white"
+              )}>
+                <Timer className="w-3.5 h-3.5" />
+                <span>
+                  {examTimeLeft !== null
+                    ? `${Math.floor(examTimeLeft / 60)}:${(examTimeLeft % 60).toString().padStart(2, '0')}`
+                    : `${Math.floor(examTimeSpent / 60)}:${(examTimeSpent % 60).toString().padStart(2, '0')}`
+                  }
+                </span>
+              </div>
+            )}
+
+            {!isReviewMode && (
+              <button
+                onClick={() => toggleFlagQuestion(currentIndex)}
+                className={cn(
+                  "w-9 h-9 flex items-center justify-center rounded-xl border transition-all active:scale-90",
+                  flaggedQuestions.has(currentIndex)
+                    ? "bg-amber-50 border-amber-300 text-amber-600"
+                    : "bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-500"
+                )}
+                title="Flag question"
+              >
+                <Flag className={cn("w-4 h-4", flaggedQuestions.has(currentIndex) && "fill-amber-500")} />
+              </button>
+            )}
+
+            {isReviewMode ? (
+              <button
+                onClick={() => setIsReviewMode(false)}
+                className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl text-xs font-black hover:bg-indigo-100 active:scale-95 transition-all"
+              >
+                Scorecard
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsSubmitConfirmOpen(true)}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-xs rounded-xl shadow-xs hover:from-emerald-600 hover:to-teal-700 active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Submit</span>
+              </button>
+            )}
+          </div>
+        </header>
+      ) : roadmapStatus && roadmapStatus.pipeline && roadmapStatus.pipeline.length > 0 ? (
         <header className="sticky top-0 flex-shrink-0 z-[120] bg-white/95 backdrop-blur-2xl border-b border-slate-100/80 px-2 sm:px-4 py-2 flex items-center shadow-xs">
           <div className="w-full">
             <RoadmapHeaderTracker
@@ -1921,364 +2378,507 @@ export default function QuizPlay() {
       </header>
       )}
 
-      <main className="flex-1 flex w-full max-w-none justify-center gap-4 lg:gap-8 px-2 lg:px-6 xl:px-10 md:py-6 py-2 overflow-hidden">
-        <aside className="hidden xl:flex w-[340px] 2xl:w-[440px] flex-shrink-0 flex-col overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
-          {showFeedback ? renderFeedbackArea(false) : (
-            <div className="flex flex-col h-full">
-              {/* Header */}
-              <div className="p-6 border-b border-slate-50 flex items-center justify-center bg-white sticky top-0 z-10">
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Answer to view analysis</span>
+      {isExamMode && isExamSubmitted && !isReviewMode ? (
+        <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto custom-scrollbar">
+          <div className="w-full max-w-2xl bg-white rounded-[2.5rem] border border-slate-200/90 shadow-2xl p-6 md:p-8 text-center space-y-6 animate-in zoom-in-95 duration-300">
+            {/* Grade banner */}
+            {(() => {
+              const acc = examResults?.accuracy_pct || 0
+              const grade = acc >= 90 ? { label: 'S', color: 'from-amber-400 to-yellow-500', text: 'OUTSTANDING!' } :
+                            acc >= 80 ? { label: 'A', color: 'from-emerald-500 to-teal-600', text: 'EXCELLENT!' } :
+                            acc >= 65 ? { label: 'B', color: 'from-indigo-500 to-blue-600', text: 'GOOD JOB!' } :
+                            acc >= 50 ? { label: 'C', color: 'from-amber-500 to-orange-600', text: 'PASSED!' } :
+                                        { label: 'F', color: 'from-rose-500 to-pink-600', text: 'KEEP PRACTICING!' }
+              return (
+                <div className={cn("p-6 rounded-[2rem] bg-gradient-to-tr text-white shadow-lg", grade.color)}>
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80 mb-2">EXAM SCORECARD</div>
+                  <div className="w-20 h-20 mx-auto rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-4xl font-black mb-2 border-2 border-white/30 shadow-inner">
+                    {grade.label}
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black">{grade.text}</h2>
+                  <p className="text-sm font-bold opacity-90 mt-0.5">{acc}% Accuracy</p>
+                </div>
+              )
+            })()}
+
+            {/* 4 Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
+              <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Score</span>
+                <span className="text-lg font-black text-slate-800">{examResults?.score || 0}/{examResults?.total || 0}</span>
               </div>
-              
-              <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center">
-                {/* Animated waiting indicator */}
-                <div className="relative w-20 h-20 flex items-center justify-center mb-2">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 animate-pulse" />
-                  <div className="absolute inset-2 rounded-full bg-white" />
-                  <Lightbulb className="w-8 h-8 text-indigo-400 relative z-10" />
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-black text-slate-700 mb-1">Choose your answer</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">After answering, you will see detailed analysis and AI explanation here.</p>
-                </div>
-
-                {/* Divider */}
-                <div className="w-full h-px bg-slate-100" />
-
-                {/* Session Quick Stats */}
-                <div className="w-full space-y-2">
-                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Study Session Progress</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="flex flex-col items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-lg font-black text-slate-700">{Object.keys(sessionAnswers).length}</span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase">Done</span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
-                      <span className="text-lg font-black text-emerald-600">
-                        {Object.entries(sessionAnswers).filter(([idx, optIdx]) => session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
-                      </span>
-                      <span className="text-[8px] font-bold text-emerald-400 uppercase">Correct</span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 bg-rose-50 rounded-2xl border border-rose-100">
-                      <span className="text-lg font-black text-rose-600">
-                        {Object.entries(sessionAnswers).filter(([idx, optIdx]) => !session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
-                      </span>
-                      <span className="text-[8px] font-bold text-rose-400 uppercase">Wrong</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar with milestone markers */}
-                  <div className="mt-1">
-                    <div className="flex justify-between text-[9px] font-bold text-slate-400 mb-1.5">
-                      <span>Q {currentIndex + 1} / {session.questions?.length}</span>
-                      <span>{Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
-                      <div 
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%` }}
-                      />
-                    </div>
-                    {/* Milestone markers */}
-                    <div className="flex justify-between mt-1">
-                      {[25, 50, 75, 100].map(m => (
-                        <span key={m} className={cn(
-                          "text-[8px] font-black transition-all",
-                          milestonesHit.has(m) ? "text-indigo-500" : "text-slate-300"
-                        )}>{milestonesHit.has(m) ? (m === 25 ? '🎖' : m === 50 ? '🏆' : m === 75 ? '🌟' : '🎊') : `${m}%`}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="w-full h-px bg-slate-100" />
-
-                {/* Tip */}
-                <div className="w-full p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100/60 text-left">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Learning Tip</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    {currentIndex % 3 === 0 
-                      ? "Read the entire question carefully before selecting an answer. Subtle phrasing can make a big difference! 🎯"
-                      : currentIndex % 3 === 1
-                      ? "Eliminate obviously incorrect answers first to increase your chances. The POE method is highly effective! 💡"
-                      : "Consecutive streaks help with long-term retention. Try to maintain your correct answers to activate long-term memory! 🔥"
-                    }
-                  </p>
-                </div>
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200/70 rounded-2xl">
+                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-wider block">Accuracy</span>
+                <span className="text-lg font-black text-emerald-700">{examResults?.accuracy_pct || 0}%</span>
+              </div>
+              <div className="p-3.5 bg-indigo-50 border border-indigo-200/70 rounded-2xl">
+                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-wider block">XP Awarded</span>
+                <span className="text-lg font-black text-indigo-700">+{examResults?.xp_gained || 0} XP</span>
+              </div>
+              <div className="p-3.5 bg-amber-50 border border-amber-200/70 rounded-2xl">
+                <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Time Taken</span>
+                <span className="text-lg font-black text-amber-700">
+                  {Math.floor(examTimeSpent / 60)}m {examTimeSpent % 60}s
+                </span>
               </div>
             </div>
-          )}
-        </aside>
 
-        <div className="w-full max-w-4xl min-w-0 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-24 xl:pb-10">
-            
-
-          <AnimatePresence mode="wait">
-            <motion.div 
-              key={currentIndex}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
-            >
-              {/* Question Content */}
-              <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-200/90 shadow-xs relative overflow-hidden">
-                 {/* Top Question Row */}
-                 <div className="flex items-center justify-between gap-4 md:mb-6 mb-4">
-                   <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
-                      {currentIndex + 1}
-                   </div>
-                   {activeGoal && (
-                     <div className="flex items-center gap-2">
-                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10.5px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
-                         🎯 Goal: {activeGoal.done_today}/{activeGoal.daily_target}
-                       </span>
-                     </div>
-                   )}
-                 </div>
-                 {/* Community Difficulty Pill (before answering) + Post-answer Engagement Row */}
-                 {!showFeedback && (currentQuestion?.stats?.total || 0) >= 5 && (() => {
-                   const total = currentQuestion!.stats!.total
-                   const correct = currentQuestion!.stats!.correct
-                   const ratio = correct / total
-                   const isHard = ratio < 0.45
-                   const isEasy = ratio > 0.80
-                   return (
-                     <div className={cn(
-                       "mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border",
-                       isHard ? "bg-rose-50 border-rose-200 text-rose-600" :
-                       isEasy ? "bg-emerald-50 border-emerald-200 text-emerald-600" :
-                       "bg-amber-50 border-amber-200 text-amber-600"
-                     )}>
-                       {isHard ? "⚠️ HARD" : isEasy ? "✅ EASY" : "📊 MODERATE"}
-                       <span className="opacity-70 font-semibold normal-case tracking-normal">
-                         — {Math.round(ratio * 100)}% answer correctly
-                       </span>
-                     </div>
-                   )
-                 })()}
-
-                 {/* Post-answer engagement badges */}
-                 {showFeedback && answerContext && (
-                   <div className="mb-5 flex flex-wrap gap-2">
-                     {/* Mastery Badge */}
-                     {(() => {
-                       const total = answerContext.prevTotal
-                       const correct = answerContext.prevCorrect
-                       if (total === 0) return (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-200">🆕 FIRST ATTEMPT</span>
-                       )
-                       const ratio = correct / total
-                       if (ratio >= 0.8) return (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-200">⭐ MASTERED ({Math.round(ratio*100)}%)</span>
-                       )
-                       if (ratio >= 0.5) return (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-teal-100 text-teal-700 border border-teal-200">📈 GETTING STRONGER ({Math.round(ratio*100)}%)</span>
-                       )
-                       return (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-200">🔄 KEEP PRACTICING ({Math.round(ratio*100)}%)</span>
-                       )
-                     })()}
-
-                     {/* Speed badge */}
-                     {answerContext.avgTime > 0 && answerContext.timeTaken > 0 && (
-                       answerContext.timeTaken < answerContext.avgTime * 0.8 ? (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
-                           ⚡ FAST! {answerContext.timeTaken}s vs avg {answerContext.avgTime}s
-                         </span>
-                       ) : answerContext.timeTaken > answerContext.avgTime * 1.5 ? (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">
-                           🐢 Careful thinker — {answerContext.timeTaken}s
-                         </span>
-                       ) : null
-                     )}
-
-                     {/* Streak badge */}
-                     {answerContext.wasCorrect && answerContext.newStreak >= 3 && (
-                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-orange-100 text-orange-700 border border-orange-200">
-                         🔥 {answerContext.newStreak} STREAK
-                       </span>
-                     )}
-
-                     {/* Daily Goal Badge */}
-                      {activeGoal && (
-                        activeGoal.done_today > activeGoal.daily_target ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-gradient-to-r from-amber-500 to-red-500 text-white border border-transparent shadow-md shadow-amber-200/50 animate-pulse">
-                            ⚡ OVERDRIVE ({activeGoal.done_today}/{activeGoal.daily_target})
-                          </span>
-                        ) : activeGoal.is_target_met ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-emerald-500 text-white border border-emerald-400 shadow-md shadow-emerald-100/50 animate-pulse">
-                            🎯 GOAL MET ({activeGoal.done_today}/{activeGoal.daily_target})
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            🎯 GOAL: {activeGoal.done_today}/{activeGoal.daily_target}
-                          </span>
-                        )
+            {/* Question Breakdown Palette */}
+            <div className="text-left space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Question Breakdown</span>
+                <span className="text-xs font-bold text-slate-500">Tap a number to review</span>
+              </div>
+              <div className="grid grid-cols-6 sm:grid-cols-10 gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200/60 max-h-48 overflow-y-auto custom-scrollbar">
+                {session.questions?.map((q: any, i: number) => {
+                  const detail = examResults?.detailed_results?.find((d: any) => d.question_id === q.id)
+                  const isCorrect = detail?.is_correct
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setIsReviewMode(true)
+                        navigateToQuestion(i)
+                      }}
+                      className={cn(
+                        "aspect-square rounded-xl border flex items-center justify-center font-black text-xs transition-all active:scale-90 shadow-2xs cursor-pointer",
+                        isCorrect
+                          ? "bg-emerald-500 border-emerald-600 text-white shadow-emerald-200/50"
+                          : "bg-rose-500 border-rose-600 text-white shadow-rose-200/50"
                       )}
+                    >
+                      {i + 1}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
-                     {/* Deck Completion Speed Badge */}
-                     {activeGoal && (
-                       activeGoal.days_remaining_est > 0 ? (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-100">
-                           🚀 COMPLETE IN {activeGoal.days_remaining_est} DAYS
-                         </span>
-                       ) : (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-100">
-                           🎉 DECK MASTERED
-                         </span>
-                       )
-                     )}
-                   </div>
-                 )}
-
-                 {session.instruction && (
-                    <div className="md:mb-6 mb-4 md:p-5 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 shadow-sm animate-in fade-in slide-in-from-top-2">
-                       <div className="flex items-center gap-2 mb-2">
-                          <Brain className="w-3.5 h-3.5 text-indigo-500" />
-                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Global Instruction</span>
-                       </div>
-                       <p className="text-[13px] font-bold text-slate-600 italic leading-relaxed">{session.instruction}</p>
+            {/* Action Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setIsReviewMode(true)
+                  navigateToQuestion(0)
+                }}
+                className="py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Review Solutions</span>
+              </button>
+              <button
+                onClick={handleRetakeExam}
+                className="py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Retake Exam</span>
+              </button>
+              <button
+                onClick={() => navigate(`/quiz/${id}`)}
+                className="py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Exit to Quiz</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      ) : (
+        <main className="flex-1 flex w-full max-w-none justify-center gap-4 lg:gap-8 px-2 lg:px-6 xl:px-10 md:py-6 py-2 overflow-hidden">
+          {(!isExamMode || isReviewMode) && (
+            <aside className="hidden xl:flex w-[340px] 2xl:w-[440px] flex-shrink-0 flex-col overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+              {showFeedback ? renderFeedbackArea(false) : (
+                <div className="flex flex-col h-full">
+                  {/* Header */}
+                  <div className="p-6 border-b border-slate-50 flex items-center justify-center bg-white sticky top-0 z-10">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Answer to view analysis</span>
+                  </div>
+                  
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center">
+                    {/* Animated waiting indicator */}
+                    <div className="relative w-20 h-20 flex items-center justify-center mb-2">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 animate-pulse" />
+                      <div className="absolute inset-2 rounded-full bg-white" />
+                      <Lightbulb className="w-8 h-8 text-indigo-400 relative z-10" />
                     </div>
-                 )}
-                 {currentQuestion && (
-                    <div className="mb-3 flex items-center gap-2 flex-wrap">
-                      {getMasteryPill(currentQuestion.box_level || 1)}
-                      {currentQuestion.stats && currentQuestion.stats.total > 0 && (
-                        <span className="text-[10px] font-black tracking-widest text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 uppercase">
-                          ({currentQuestion.stats.correct}/{currentQuestion.stats.total} correct)
-                        </span>
+
+                    <div>
+                      <h3 className="text-sm font-black text-slate-700 mb-1">Choose your answer</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed max-w-[200px]">After answering, you will see detailed analysis and AI explanation here.</p>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-full h-px bg-slate-100" />
+
+                    {/* Session Quick Stats */}
+                    <div className="w-full space-y-2">
+                      <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Study Session Progress</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="flex flex-col items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                          <span className="text-lg font-black text-slate-700">{Object.keys(sessionAnswers).length}</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">Done</span>
+                        </div>
+                        <div className="flex flex-col items-center p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                          <span className="text-lg font-black text-emerald-600">
+                            {Object.entries(sessionAnswers).filter(([idx, optIdx]) => session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
+                          </span>
+                          <span className="text-[8px] font-bold text-emerald-400 uppercase">Correct</span>
+                        </div>
+                        <div className="flex flex-col items-center p-3 bg-rose-50 rounded-2xl border border-rose-100">
+                          <span className="text-lg font-black text-rose-600">
+                            {Object.entries(sessionAnswers).filter(([idx, optIdx]) => !session.questions[Number(idx)]?.options[optIdx as number]?.is_correct).length}
+                          </span>
+                          <span className="text-[8px] font-bold text-rose-400 uppercase">Wrong</span>
+                        </div>
+                      </div>
+
+                      {/* Progress bar with milestone markers */}
+                      <div className="mt-1">
+                        <div className="flex justify-between text-[9px] font-bold text-slate-400 mb-1.5">
+                          <span>Q {currentIndex + 1} / {session.questions?.length}</span>
+                          <span>{Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
+                          <div 
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                            style={{ width: `${Math.round((Object.keys(sessionAnswers).length / (session.questions?.length || 1)) * 100)}%` }}
+                          />
+                        </div>
+                        {/* Milestone markers */}
+                        <div className="flex justify-between mt-1">
+                          {[25, 50, 75, 100].map(m => (
+                            <span key={m} className={cn(
+                              "text-[8px] font-black transition-all",
+                              milestonesHit.has(m) ? "text-indigo-500" : "text-slate-300"
+                            )}>{milestonesHit.has(m) ? (m === 25 ? '🎖' : m === 50 ? '🏆' : m === 75 ? '🌟' : '🎊') : `${m}%`}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-full h-px bg-slate-100" />
+
+                    {/* Tip */}
+                    <div className="w-full p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100/60 text-left">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Learning Tip</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                        {currentIndex % 3 === 0 
+                          ? "Read the entire question carefully before selecting an answer. Subtle phrasing can make a big difference! 🎯"
+                          : currentIndex % 3 === 1
+                          ? "Eliminate obviously incorrect answers first to increase your chances. The POE method is highly effective! 💡"
+                          : "Consecutive streaks help with long-term retention. Try to maintain your correct answers to activate long-term memory! 🔥"
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </aside>
+          )}
+
+          <div className={cn("w-full min-w-0 flex flex-col overflow-hidden", currentGroup ? "max-w-6xl" : "max-w-4xl")}>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-24 xl:pb-10">
+              <AnimatePresence mode="wait">
+                <motion.div 
+                  key={currentIndex}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="space-y-6"
+                >
+                  {/* Grouped Question Split-View or Standalone */}
+                  {currentGroup && (currentGroup.passage_content || currentGroup.audio_url || currentGroup.image_url) ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                      {/* Left: Passage / Audio / Media Pane (Desktop visible, mobile view-button) */}
+                      <div className="bg-slate-50/90 border border-slate-200/90 rounded-[2.5rem] p-5 md:p-7 shadow-xs flex flex-col space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-wider shadow-xs">
+                              {currentGroup.audio_url ? "🎧 Audio Section" : "📖 Reading Passage"}
+                            </span>
+                            <span className="text-xs font-black text-slate-700">
+                              Group {currentGroup.group_code}
+                            </span>
+                          </div>
+                          {currentQuestion?.order_in_group && (
+                            <span className="text-[11px] font-bold text-slate-400">
+                              Question {questionIndexInGroup} of {groupQuestions.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {currentGroup.title && (
+                          <h3 className="text-sm md:text-base font-black text-slate-800">
+                            {currentGroup.title}
+                          </h3>
+                        )}
+
+                        {currentGroup.audio_url && (
+                          <div className="p-3.5 bg-white rounded-2xl border border-indigo-100 shadow-xs space-y-2">
+                            <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
+                              <Headphones className="w-4 h-4 text-indigo-600 animate-pulse" />
+                              <span>Section Audio Track</span>
+                            </div>
+                            <audio controls src={currentGroup.audio_url} className="w-full h-10 rounded-xl" />
+                          </div>
+                        )}
+
+                        {currentGroup.image_url && (
+                          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+                            <img src={currentGroup.image_url} alt="Passage illustration" className="w-full max-h-72 object-contain mx-auto" />
+                          </div>
+                        )}
+
+                        {currentGroup.passage_content && (
+                          <div className="p-4 bg-white rounded-2xl border border-slate-200/70 overflow-y-auto max-h-[55vh] custom-scrollbar text-slate-800 text-sm md:text-base leading-relaxed whitespace-pre-wrap font-serif">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                              {currentGroup.passage_content}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right: Question and Options */}
+                      <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-200/90 shadow-xs relative overflow-hidden">
+                        {/* Mobile quick view passage button */}
+                        {currentGroup.passage_content && (
+                          <button
+                            onClick={() => setIsPassageDrawerOpen(true)}
+                            className="lg:hidden w-full py-2.5 px-4 mb-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs flex items-center justify-between shadow-xs active:scale-[0.99] transition-all cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2">
+                              <BookOpen className="w-4 h-4 text-indigo-600" />
+                              <span>Passage ({currentGroup.group_code}): Tap to Read</span>
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-indigo-500" />
+                          </button>
+                        )}
+
+                        {/* Top Question Row */}
+                        <div className="flex items-center justify-between gap-4 md:mb-6 mb-4">
+                          <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
+                            {currentIndex + 1}
+                          </div>
+                          {activeGoal && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10.5px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                                🎯 Goal: {activeGoal.done_today}/{activeGoal.daily_target}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Question Text */}
+                        <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
+
+                        {/* Options List */}
+                        {renderOptionsList()}
+
+                        {/* Review Mode Explanation */}
+                        {isReviewMode && currentQuestion?.explanation && (
+                          <div className="mt-6 p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100/80 text-left space-y-2">
+                            <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
+                              <Lightbulb className="w-4 h-4 text-amber-500" />
+                              <span className="uppercase tracking-wider">Solution & Explanation</span>
+                            </div>
+                            <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                                {currentQuestion.explanation}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Standalone Question (Single Column) */
+                    <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-200/90 shadow-xs relative overflow-hidden">
+                      {/* Top Question Row */}
+                      <div className="flex items-center justify-between gap-4 md:mb-6 mb-4">
+                        <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
+                          {currentIndex + 1}
+                        </div>
+                        {activeGoal && (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10.5px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                              🎯 Goal: {activeGoal.done_today}/{activeGoal.daily_target}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Question Text */}
+                      <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
+
+                      {/* Options List */}
+                      {renderOptionsList()}
+
+                      {/* Review Mode Explanation */}
+                      {isReviewMode && currentQuestion?.explanation && (
+                        <div className="mt-6 p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100/80 text-left space-y-2">
+                          <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
+                            <Lightbulb className="w-4 h-4 text-amber-500" />
+                            <span className="uppercase tracking-wider">Solution & Explanation</span>
+                          </div>
+                          <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                              {currentQuestion.explanation}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
-                  <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
-                 
-                 <div className="grid grid-cols-1 gap-3">
-                    {currentQuestion?.options.map((opt, idx) => (
-                      <button 
-                        key={opt.id}
-                        onClick={() => handleAnswer(idx)}
-                        disabled={showFeedback}
-                        className={cn(
-                          "group md:p-5 p-4 rounded-2xl border-2 text-left transition-all duration-200 relative overflow-hidden active:scale-[0.99]",
-                          selectedOption === idx 
-                            ? (opt.is_correct 
-                                ? "border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-lg shadow-emerald-100/50" 
-                                : "border-rose-400 bg-gradient-to-r from-rose-50 to-pink-50 shadow-lg shadow-rose-100/50")
-                            : (showFeedback && opt.is_correct 
-                                ? "border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-lg shadow-emerald-100/50" 
-                                : "border-slate-100 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-md hover:shadow-indigo-100/30")
-                        )}
-                      >
-                        <div className="flex items-center gap-4 relative z-10">
-                           <div className={cn(
-                             "w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm flex-shrink-0 transition-all duration-200",
-                             selectedOption === idx 
-                               ? (opt.is_correct 
-                                   ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-md shadow-emerald-200" 
-                                   : "bg-gradient-to-br from-rose-400 to-pink-500 text-white shadow-md shadow-rose-200")
-                               : (showFeedback && opt.is_correct 
-                                   ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-md shadow-emerald-200" 
-                                   : "bg-slate-100 text-slate-500 group-hover:bg-gradient-to-br group-hover:from-indigo-500 group-hover:to-purple-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-indigo-200")
-                           )}>
-                             {String.fromCharCode(65 + idx)}
-                           </div>
-                           <span className={cn(
-                             "flex-1 font-semibold text-sm md:text-base leading-snug",
-                             selectedOption === idx
-                               ? (opt.is_correct ? "text-emerald-800" : "text-rose-800")
-                               : (showFeedback && opt.is_correct ? "text-emerald-800" : "text-slate-700 group-hover:text-slate-900")
-                           )}>{opt.content}</span>
-                           {showFeedback && opt.is_correct && (
-                             <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-200">
-                               <Check className="w-4 h-4 text-white stroke-[3]" />
-                             </div>
-                           )}
-                           {showFeedback && selectedOption === idx && !opt.is_correct && (
-                             <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-rose-500 flex items-center justify-center shadow-md shadow-rose-200">
-                               <X className="w-4 h-4 text-white stroke-[3]" />
-                             </div>
-                           )}
-                        </div>
-                      </button>
-                    ))}
-                 </div>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <aside className="hidden lg:flex w-[340px] 2xl:w-[420px] flex-shrink-0 flex-col overflow-hidden">
-          <div className="flex-1 bg-white border border-slate-100 rounded-[2.5rem] p-6 shadow-sm flex flex-col overflow-hidden">
-            <h4 className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em] mb-4 flex-shrink-0">QUESTION MAP</h4>
-            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-4">
-               {renderSessionStats()}
-               {renderQuestionMapGrid()}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
-        </aside>
-      </main>
+
+          {/* Sidebar */}
+          <aside className="hidden lg:flex w-[340px] 2xl:w-[420px] flex-shrink-0 flex-col overflow-hidden">
+            <div className="flex-1 bg-white border border-slate-100 rounded-[2.5rem] p-6 shadow-sm flex flex-col overflow-hidden">
+              <h4 className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em] mb-4 flex-shrink-0">
+                {isExamMode ? (isReviewMode ? "EXAM REVIEW PALETTE" : "EXAM PALETTE") : "QUESTION MAP"}
+              </h4>
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-4">
+                {renderSessionStats()}
+                {renderQuestionMapGrid()}
+              </div>
+            </div>
+          </aside>
+        </main>
+      )}
 
       {/* Bottom Controls - Fixed to bottom (same pattern as Layout bottom nav) */}
-      <footer className="fixed bottom-0 left-0 right-0 xl:relative flex-shrink-0 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 px-4 py-3 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
-        <div className="max-w-2xl mx-auto w-full flex items-center gap-3 h-13">
-          <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all">
-            <LayoutGrid className="w-5 h-5" />
-          </button>
-
-          <button 
-            onClick={() => setIsModeMenuOpen(true)} 
-            className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all"
-            title="Change Smart Learning Mode"
-          >
-            {(activeMode === 'roadmap' || activeMode?.startsWith('roadmap')) && <Compass className="w-5 h-5 text-indigo-600" />}
-            {activeMode === 'sequential' && <ListOrdered className="w-5 h-5" />}
-            {activeMode === 'random' && <Shuffle className="w-5 h-5" />}
-            {activeMode === 'unseen' && <EyeOff className="w-5 h-5" />}
-            {activeMode === 'review' && <AlertCircle className="w-5 h-5" />}
-            {activeMode === 'hardest' && <TrendingUp className="w-5 h-5" />}
-            {!['roadmap', 'sequential', 'random', 'unseen', 'review', 'hardest'].includes(activeMode) && !activeMode?.startsWith('roadmap') && <Sliders className="w-5 h-5" />}
-          </button>
-          
-          {showFeedback && (
-            <button 
-              onClick={() => setIsFeedbackOpen(true)} 
-              className={`xl:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl shadow-sm active:scale-95 transition-all relative ${
-                justAnswered 
-                  ? 'bg-indigo-600 border border-indigo-600 text-white animate-[pulse_1.5s_infinite] ring-4 ring-indigo-300 ring-offset-1 drop-shadow-[0_0_12px_rgba(99,102,241,0.6)]' 
-                  : 'bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100'
-              }`}
-              title="View explanation and tutorial"
+      {isExamMode ? (
+        <footer className="fixed bottom-0 left-0 right-0 xl:relative flex-shrink-0 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 px-4 py-3 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
+          <div className="max-w-4xl mx-auto w-full flex items-center justify-between gap-3 h-13">
+            <button
+              onClick={() => navigateToQuestion(Math.max(0, currentIndex - 1))}
+              disabled={currentIndex === 0}
+              className="px-4 h-12 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:pointer-events-none text-slate-700 font-black text-xs rounded-2xl flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
             >
-              <BookOpen className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
+              <ChevronLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">PREV</span>
             </button>
-          )}
 
-          {!showFeedback ? (
-            <div 
-              className="flex-1 h-12 bg-slate-50 border border-slate-200/80 text-slate-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 uppercase tracking-wider select-none shadow-xs"
-            >
-              <span>Select an option above</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsMapOpen(true)}
+                className="lg:hidden px-3.5 h-12 bg-slate-50 border border-slate-200 rounded-2xl text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                title="Question Palette"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="text-xs font-black">{Object.keys(examAnswers).length}/{session.questions?.length || 0}</span>
+              </button>
+
+              <button
+                onClick={() => toggleFlagQuestion(currentIndex)}
+                className={cn(
+                  "px-3.5 h-12 rounded-2xl border flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer",
+                  flaggedQuestions.has(currentIndex)
+                    ? "bg-amber-50 border-amber-300 text-amber-600 shadow-sm"
+                    : "bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                )}
+                title="Flag Question for Review"
+              >
+                <Flag className={cn("w-4 h-4", flaggedQuestions.has(currentIndex) && "fill-amber-500")} />
+                <span className="hidden sm:inline text-xs font-black">
+                  {flaggedQuestions.has(currentIndex) ? "Flagged" : "Flag"}
+                </span>
+              </button>
+
+              {isReviewMode && (
+                <button
+                  onClick={() => setIsFeedbackOpen(true)}
+                  className="px-3.5 h-12 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-2xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Lightbulb className="w-4 h-4" />
+                  <span className="text-xs font-black">Explanation</span>
+                </button>
+              )}
             </div>
-          ) : (
-            <button 
-              onClick={handleNext}
-              className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/40 flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all"
-            >
-              NEXT QUESTION <ChevronRight className="w-4 h-4" />
+
+            <div className="flex items-center gap-2">
+              {currentIndex < (session.questions?.length || 1) - 1 ? (
+                <button
+                  onClick={() => navigateToQuestion(currentIndex + 1)}
+                  className="px-4 h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs rounded-2xl flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span className="hidden sm:inline">NEXT</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : null}
+
+              {!isReviewMode && (
+                <button
+                  onClick={() => setIsSubmitConfirmOpen(true)}
+                  className="px-5 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-emerald-200/50 flex items-center gap-2 uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>SUBMIT</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </footer>
+      ) : (
+        <footer className="fixed bottom-0 left-0 right-0 xl:relative flex-shrink-0 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 px-4 py-3 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
+          <div className="max-w-2xl mx-auto w-full flex items-center gap-3 h-13">
+            <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all">
+              <LayoutGrid className="w-5 h-5" />
             </button>
-          )}
-        </div>
-      </footer>
+
+            <button 
+              onClick={() => setIsModeMenuOpen(true)} 
+              className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all"
+              title="Change Smart Learning Mode"
+            >
+              {(activeMode === 'roadmap' || activeMode?.startsWith('roadmap')) && <Compass className="w-5 h-5 text-indigo-600" />}
+              {activeMode === 'sequential' && <ListOrdered className="w-5 h-5" />}
+              {activeMode === 'random' && <Shuffle className="w-5 h-5" />}
+              {activeMode === 'unseen' && <EyeOff className="w-5 h-5" />}
+              {activeMode === 'review' && <AlertCircle className="w-5 h-5" />}
+              {activeMode === 'hardest' && <TrendingUp className="w-5 h-5" />}
+              {!['roadmap', 'sequential', 'random', 'unseen', 'review', 'hardest'].includes(activeMode) && !activeMode?.startsWith('roadmap') && <Sliders className="w-5 h-5" />}
+            </button>
+            
+            {showFeedback && (
+              <button 
+                onClick={() => setIsFeedbackOpen(true)} 
+                className={`xl:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl shadow-sm active:scale-95 transition-all relative ${
+                  justAnswered 
+                    ? 'bg-indigo-600 border border-indigo-600 text-white animate-[pulse_1.5s_infinite] ring-4 ring-indigo-300 ring-offset-1 drop-shadow-[0_0_12px_rgba(99,102,241,0.6)]' 
+                    : 'bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100'
+                }`}
+                title="View explanation and tutorial"
+              >
+                <BookOpen className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
+              </button>
+            )}
+
+            {!showFeedback ? (
+              <div 
+                className="flex-1 h-12 bg-slate-50 border border-slate-200/80 text-slate-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 uppercase tracking-wider select-none shadow-xs"
+              >
+                <span>Select an option above</span>
+              </div>
+            ) : (
+              <button 
+                onClick={handleNext}
+                className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/40 flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all"
+              >
+                NEXT QUESTION <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </footer>
+      )}
 
       {/* 💡 Quick Explanation & AI Tutor Float Handle */}
       {justAnswered && !isFeedbackOpen && (
@@ -2902,6 +3502,146 @@ export default function QuizPlay() {
             </motion.div>
           )
         })()}
+      </AnimatePresence>
+      {/* Exam Submit Confirmation Modal */}
+      <AnimatePresence>
+        {isSubmitConfirmOpen && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/70 backdrop-blur-md"
+              onClick={() => setIsSubmitConfirmOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-6 md:p-8 text-center space-y-5 z-10"
+            >
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+                <Send className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-black text-slate-800">Ready to Submit Exam?</h3>
+                <p className="text-xs text-slate-400 mt-1 font-bold">Please review your progress before finalizing</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                <div className="p-2 bg-white rounded-xl shadow-2xs">
+                  <span className="text-base font-black text-slate-800">{Object.keys(examAnswers).length}</span>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Answered</span>
+                </div>
+                <div className="p-2 bg-white rounded-xl shadow-2xs">
+                  <span className="text-base font-black text-rose-600">
+                    {Math.max(0, (session?.questions?.length || 0) - Object.keys(examAnswers).length)}
+                  </span>
+                  <span className="text-[9px] font-bold text-rose-400 block uppercase">Unanswered</span>
+                </div>
+                <div className="p-2 bg-white rounded-xl shadow-2xs">
+                  <span className="text-base font-black text-amber-600">{flaggedQuestions.size}</span>
+                  <span className="text-[9px] font-bold text-amber-400 block uppercase">Flagged</span>
+                </div>
+              </div>
+
+              {((session?.questions?.length || 0) - Object.keys(examAnswers).length) > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-left flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-amber-800 leading-snug">
+                    You still have {Math.max(0, (session?.questions?.length || 0) - Object.keys(examAnswers).length)} unanswered question(s). Unanswered questions will receive 0 points.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => setIsSubmitConfirmOpen(false)}
+                  className="py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-2xl active:scale-95 transition-all cursor-pointer"
+                >
+                  Keep Working
+                </button>
+                <button
+                  onClick={() => handleSubmitExam(false)}
+                  disabled={isSubmittingExam}
+                  className="py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-200/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSubmittingExam ? "Submitting..." : "Confirm & Submit"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Reading Passage Drawer/Modal */}
+      <AnimatePresence>
+        {isPassageDrawerOpen && currentGroup && (
+          <div className="fixed inset-0 z-[500] flex flex-col justify-end lg:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+              onClick={() => setIsPassageDrawerOpen(false)}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="relative bg-white rounded-t-[2.5rem] border-t border-slate-200 shadow-2xl p-5 sm:p-7 max-h-[85vh] overflow-y-auto z-10 space-y-4 w-full"
+            >
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto -mt-1 mb-2" />
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-wider">
+                    Group {currentGroup.group_code}
+                  </span>
+                  <span className="text-sm font-black text-slate-800">{currentGroup.title || "Reading Passage"}</span>
+                </div>
+                <button
+                  onClick={() => setIsPassageDrawerOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {currentGroup.audio_url && (
+                <div className="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-100 space-y-2">
+                  <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
+                    <Headphones className="w-4 h-4 text-indigo-600 animate-pulse" />
+                    <span>Audio Track</span>
+                  </div>
+                  <audio controls src={currentGroup.audio_url} className="w-full h-10 rounded-xl" />
+                </div>
+              )}
+
+              {currentGroup.image_url && (
+                <div className="rounded-2xl overflow-hidden border border-slate-200">
+                  <img src={currentGroup.image_url} alt="Passage illustration" className="w-full max-h-64 object-contain mx-auto" />
+                </div>
+              )}
+
+              {currentGroup.passage_content && (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/70 text-slate-800 text-sm leading-relaxed whitespace-pre-wrap font-serif max-h-[50vh] overflow-y-auto custom-scrollbar">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                    {currentGroup.passage_content}
+                  </ReactMarkdown>
+                </div>
+              )}
+
+              <button
+                onClick={() => setIsPassageDrawerOpen(false)}
+                className="w-full py-3 bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-indigo-200 active:scale-95 transition-all cursor-pointer"
+              >
+                Close & Return to Question
+              </button>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   )

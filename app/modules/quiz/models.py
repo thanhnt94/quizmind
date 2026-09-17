@@ -29,23 +29,43 @@ class Quiz(Base):
     
     category = relationship("Category", back_populates="quizzes")
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
+    groups = relationship("QuestionGroup", back_populates="quiz", cascade="all, delete-orphan")
     tags = relationship("Tag", secondary="quiz_tags", back_populates="quizzes")
     collaborators = relationship("QuizCollaborator", back_populates="quiz", cascade="all, delete-orphan")
+
+class QuestionGroup(Base):
+    __tablename__ = "question_groups"
+    id = Column(Integer, primary_key=True, index=True)
+    quiz_id = Column(Integer, ForeignKey("quizzes.id", ondelete="CASCADE"), index=True)
+    group_code = Column(String(50), nullable=True) # e.g. "G1", "PART7_1"
+    title = Column(String(255), nullable=True) # e.g. "Questions 71-73 refer to the following conversation"
+    passage_text = Column(Text, nullable=True) # Reading passage or dialogue script
+    audio_url = Column(String(512), nullable=True) # Audio file for listening
+    image_url = Column(String(512), nullable=True) # Chart, diagram or image
+    allow_shuffle = Column(Boolean, default=True) # Whether questions in group can be shuffled
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    quiz = relationship("Quiz", back_populates="groups")
+    questions = relationship("Question", back_populates="group", order_by="Question.order_in_group")
 
 class Question(Base):
     __tablename__ = "questions"
     id = Column(Integer, primary_key=True, index=True)
     quiz_id = Column(Integer, ForeignKey("quizzes.id"), index=True)
+    group_id = Column(Integer, ForeignKey("question_groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    order_in_group = Column(Integer, default=0, nullable=True)
     content = Column(Text, nullable=False)
     image = Column(String(512), nullable=True)
     audio = Column(String(512), nullable=True)
     question_type = Column(String(50), default="single_choice")
     explanation = Column(Text, nullable=True)
     ai_explanation = Column(Text, nullable=True)
+    allow_shuffle = Column(Boolean, default=True, nullable=True)
     others = Column(JSON, nullable=True)
     points = Column(Integer, default=1)
     
     quiz = relationship("Quiz", back_populates="questions")
+    group = relationship("QuestionGroup", back_populates="questions")
     options = relationship("Option", back_populates="question", cascade="all, delete-orphan")
 
 class Option(Base):

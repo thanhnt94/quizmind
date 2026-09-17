@@ -10,14 +10,30 @@ class OptionSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class QuestionGroupSchema(BaseModel):
+    id: Optional[int] = None
+    group_code: Optional[str] = None
+    title: Optional[str] = None
+    passage_text: Optional[str] = None
+    audio_url: Optional[str] = None
+    image_url: Optional[str] = None
+    allow_shuffle: bool = True
+
+    class Config:
+        from_attributes = True
+
 class QuestionSchema(BaseModel):
     id: Optional[int] = None
+    group_id: Optional[int] = None
+    group_code: Optional[str] = None
+    order_in_group: Optional[int] = 0
     content: str
     image: Optional[str] = None
     audio: Optional[str] = None
     question_type: str = "normal"
     explanation: Optional[str] = None
     ai_explanation: Optional[str] = None
+    allow_shuffle: Optional[bool] = True
     others: Optional[Dict[str, Any]] = None
     points: int = 1
     options: List[OptionSchema]
