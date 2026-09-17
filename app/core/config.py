@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     
     # SSO / CentralAuth
     SECRET_KEY: str = os.getenv("SECRET_KEY", "quizmind_default_secret_key_change_me_123456789")
-    CENTRAL_AUTH_URL: str = os.getenv("CENTRAL_AUTH_URL", "http://localhost:5000")
-    CLIENT_ID: str = os.getenv("CLIENT_ID", "quizmind-v1")
-    CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "quizmind_secret_123")
-    APP_BASE_URL: str = os.getenv("APP_BASE_URL", "") # Public URL of this app
+    CENTRAL_AUTH_URL: str = os.getenv("CENTRAL_AUTH_URL", "https://auth.inmind.site")
+    CLIENT_ID: str = os.getenv("CLIENT_ID", "quizmind")
+    CLIENT_SECRET: str = os.getenv("CLIENT_SECRET", "quizmind-secret-key-2026")
+    APP_BASE_URL: str = os.getenv("APP_BASE_URL", "https://quiz.inmind.site") # Public URL of this app
     
     # AI
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

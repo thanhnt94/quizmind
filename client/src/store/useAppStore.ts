@@ -179,12 +179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   logout: async () => {
-    try {
-      await axios.get('/logout').catch(() => {})
-    } finally {
-      set({ user: null, isLoggedIn: false, userSettings: DEFAULT_USER_SETTINGS })
-      // For SSO or simple redirect, we force state reload at root
-      window.location.href = '/'
-    }
+    set({ user: null, isLoggedIn: false, userSettings: DEFAULT_USER_SETTINGS })
+    window.location.href = '/logout'
   }
 }))

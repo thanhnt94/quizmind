@@ -10,7 +10,14 @@ class SSOService:
         result = await db.execute(select(SSOConfig))
         config = result.scalar_one_or_none()
         if not config:
-            config = SSOConfig(is_enabled=False)
+            from app.core.config import settings
+            config = SSOConfig(
+                is_enabled=True,
+                server_url=settings.CENTRAL_AUTH_URL,
+                client_id=settings.CLIENT_ID,
+                client_secret=settings.CLIENT_SECRET,
+                redirect_uri=f"{settings.APP_BASE_URL.rstrip('/')}/auth-center/callback" if settings.APP_BASE_URL else "https://quiz.inmind.site/auth-center/callback"
+            )
             db.add(config)
             await db.commit()
             await db.refresh(config)
@@ -22,7 +29,7 @@ class SSOService:
         if not config.is_enabled:
             raise HTTPException(status_code=400, detail="SSO is disabled locally")
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=8.0) as client:
             # Exchange code for token at CentralAuth
             res = await client.post(
                 f"{config.server_url.rstrip('/')}/api/auth/token",
