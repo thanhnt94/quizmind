@@ -17,14 +17,14 @@ export function QuizMindLogo({
 }: QuizMindLogoProps) {
   const isHorizontal = mode === 'horizontal' && !iconOnly
 
-  // Balanced heights for modern navigation bars
+  // Bold, prominent heights matching Vocaburn
   const heightClasses = {
-    xs: 'h-6 sm:h-7',             // 24px - 28px
-    sm: 'h-7 sm:h-8',             // 28px - 32px
-    md: 'h-[36px] sm:h-[38px]',    // 36px - 38px
-    lg: 'h-10 sm:h-11',           // 40px - 44px
-    xl: 'h-14 sm:h-16 md:h-20'    // 56px - 80px
-  }[height] || 'h-[36px] sm:h-[38px]'
+    xs: 'h-7 sm:h-8',             // 28px - 32px
+    sm: 'h-8 sm:h-9',             // 32px - 36px
+    md: 'h-[40px] sm:h-[44px]',    // 40px - 44px (large, bold, prominent text)
+    lg: 'h-12 sm:h-14',           // 48px - 56px
+    xl: 'h-16 sm:h-20'            // 64px - 80px
+  }[height] || 'h-[40px] sm:h-[44px]'
 
   if (!isHorizontal) {
     return (
