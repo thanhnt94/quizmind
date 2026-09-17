@@ -1189,6 +1189,7 @@ async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
     return {"status": "ok"}
 
 @router.patch("/{quiz_id}")
+@router.put("/{quiz_id}")
 async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     user_id = int(request.cookies.get("user_id", 1))
     from app.modules.quiz.models import Quiz, QuizCollaborator
@@ -1210,6 +1211,7 @@ async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSessi
     
     if "title" in data: quiz.title = data["title"]
     if "description" in data: quiz.description = data["description"]
+    if "cover_image" in data: quiz.cover_image = data["cover_image"]
     if "category_id" in data: quiz.category_id = data["category_id"]
     if "ai_prompt" in data: quiz.ai_prompt = data["ai_prompt"]
     if "instruction" in data: quiz.instruction = data["instruction"]

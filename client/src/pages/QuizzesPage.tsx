@@ -978,7 +978,11 @@ export default function QuizzesPage() {
                           transition={{ delay: idx * 0.02 }}
                           onClick={() => {
                             if (navigator.vibrate) navigator.vibrate(6)
-                            setSelectedQuizId(prev => prev === quiz.id ? prev : quiz.id)
+                            if (selectedQuizId === quiz.id) {
+                              navigate(`/quiz/${quiz.id}`)
+                            } else {
+                              setSelectedQuizId(quiz.id)
+                            }
                           }}
                           onDoubleClick={() => navigate(`/quiz/${quiz.id}`)}
                           className={cn(
@@ -989,7 +993,7 @@ export default function QuizzesPage() {
                           )}
                         >
                           <div>
-                            {/* Card Top Row: Avatar & Title & Right Checkmark/Chevron */}
+                            {/* Card Top Row: Avatar & Title & Right Actions (Settings & Checkmark/Chevron) */}
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className={cn(
@@ -1035,21 +1039,43 @@ export default function QuizzesPage() {
                                 </div>
                               </div>
 
-                              {/* Indicator: Checkmark if selected, Chevron if not */}
-                              {isSelected ? (
-                                <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                </div>
-                              ) : (
-                                <ChevronRight className="w-4.5 h-4.5 text-slate-300 dark:text-slate-600 stroke-[2.5] shrink-0" />
-                              )}
+                              {/* Right Action Icons: Direct Settings Button + Checkmark / Chevron */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    navigate(`/quiz/${quiz.id}?tab=settings`)
+                                  }}
+                                  className="w-7 h-7 rounded-xl bg-slate-100/90 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-2xs"
+                                  title="Quiz Settings & Edit"
+                                >
+                                  <Settings className="w-3.5 h-3.5" />
+                                </button>
+
+                                {isSelected ? (
+                                  <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                ) : (
+                                  <ChevronRight className="w-4.5 h-4.5 text-slate-300 dark:text-slate-600 stroke-[2.5] shrink-0" />
+                                )}
+                              </div>
                             </div>
 
-                            {/* Meta Badges: Questions count, creator, date */}
+                            {/* Meta Badges: Questions count (clickable), creator, date */}
                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-2.5 flex-wrap">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10.5px] font-bold">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  navigate(`/quiz/${quiz.id}?tab=questions`)
+                                }}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/60 border border-slate-200/60 hover:border-indigo-200 dark:border-slate-700 text-slate-700 hover:text-indigo-600 dark:text-slate-300 text-[10.5px] font-bold cursor-pointer transition-colors"
+                                title="View and edit questions"
+                              >
                                 📝 {quiz.questions_count} questions
-                              </span>
+                              </button>
                               <span className="text-slate-300 dark:text-slate-700">•</span>
                               <span className="text-slate-600 dark:text-slate-300 font-bold truncate max-w-[110px]">
                                 @{quiz.creator_name || (quiz.is_creator ? 'You' : 'QuizMind')}
@@ -1167,6 +1193,15 @@ export default function QuizzesPage() {
                       <Trophy className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     </button>
 
+                    {/* Settings Button */}
+                    <button
+                      onClick={() => navigate(`/quiz/${selectedQuiz.id}?tab=settings`)}
+                      className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 hover:bg-indigo-50/50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-200 flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0 shadow-2xs border-b-[3px] border-slate-300"
+                      title="Quiz Settings & Questions"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+
                     {/* Details Button */}
                     <button
                       onClick={() => navigate(`/quiz/${selectedQuiz.id}`)}
@@ -1197,10 +1232,20 @@ export default function QuizzesPage() {
                       <span className="truncate">Practice</span>
                     </button>
 
+                    {/* Settings Button */}
+                    <button
+                      onClick={() => navigate(`/quiz/${selectedQuiz.id}?tab=settings`)}
+                      className="h-11 px-3 sm:px-3.5 rounded-2xl bg-white dark:bg-slate-800 hover:bg-indigo-50/50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-200 font-bold text-xs active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer border-b-[3px] border-slate-300 select-none shrink-0"
+                      title="Settings & Edit Quiz"
+                    >
+                      <Settings className="w-4 h-4 text-slate-500" />
+                      <span className="hidden sm:inline">Settings</span>
+                    </button>
+
                     {/* Details Button */}
                     <button
                       onClick={() => navigate(`/quiz/${selectedQuiz.id}`)}
-                      className="h-11 px-3 sm:px-4 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-300 border-2 border-slate-200 dark:border-slate-700 font-bold text-xs active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer border-b-[3px] border-slate-300 select-none shrink-0"
+                      className="h-11 px-3 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-300 border-2 border-slate-200 dark:border-slate-700 font-bold text-xs active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer border-b-[3px] border-slate-300 select-none shrink-0"
                     >
                       <Eye className="w-4 h-4 text-slate-500" />
                       <span className="hidden sm:inline">Details</span>
