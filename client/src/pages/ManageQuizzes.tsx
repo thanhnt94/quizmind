@@ -75,7 +75,7 @@ export default function ManageQuizzes() {
           </button>
           <Link 
             to="/manage/import"
-            className="w-9 h-9 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg shadow-slate-100 active:scale-90 transition-all"
+            className="w-9 h-9 bg-indigo-50 text-indigo-600 border border-indigo-200/60 rounded-xl flex items-center justify-center shadow-xs active:scale-90 transition-all hover:bg-indigo-100"
             title="Import Excel"
           >
              <Archive className="w-4 h-4" />
@@ -86,7 +86,7 @@ export default function ManageQuizzes() {
       <div className="bg-white border-b border-slate-100 px-6 py-10 mb-8 hidden md:block">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-indigo-100">
+            <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-indigo-100">
                <LayoutGrid className="w-8 h-8" />
             </div>
             <div>
@@ -105,7 +105,7 @@ export default function ManageQuizzes() {
             </button>
             <Link 
               to="/manage/import"
-              className="flex items-center gap-2 px-6 py-3.5 bg-slate-900 text-white text-[10px] font-black rounded-2xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-100 uppercase tracking-widest whitespace-nowrap"
+              className="flex items-center gap-2 px-6 py-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200/80 text-[10px] font-black rounded-2xl transition-all shadow-xs uppercase tracking-widest whitespace-nowrap"
             >
                <Archive className="w-4 h-4" />
                Import Excel

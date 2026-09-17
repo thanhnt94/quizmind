@@ -451,7 +451,7 @@ export default function Dashboard() {
             </button>
 
             {/* User Level */}
-            <div className="w-7 h-7 rounded-xl bg-slate-900 text-amber-400 font-black text-xs flex items-center justify-center shadow-xs">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
               {gamify.level || 1}
             </div>
           </div>
@@ -861,9 +861,9 @@ export default function Dashboard() {
 
                                   {/* ROW 2: Quiz Title */}
                                   <div className="flex items-center max-w-full">
-                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900/95 text-white rounded-xl text-xs font-bold shadow-xs max-w-full">
-                                      <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                      <span className="truncate max-w-[280px] sm:max-w-[400px] font-extrabold text-white">
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/80 border border-indigo-100/90 text-indigo-950 rounded-xl text-xs font-bold shadow-2xs max-w-full">
+                                      <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                      <span className="truncate max-w-[280px] sm:max-w-[400px] font-extrabold text-indigo-950">
                                         {item.title}
                                       </span>
                                     </div>

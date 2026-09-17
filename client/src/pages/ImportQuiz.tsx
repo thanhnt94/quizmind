@@ -109,7 +109,7 @@ const ImportQuiz = () => {
           </div>
           <a 
             href="/api/v1/quiz/template/download"
-            className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white text-[10px] font-black rounded-2xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 uppercase tracking-widest"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10px] font-black rounded-2xl hover:from-indigo-700 hover:to-violet-700 transition-all shadow-md shadow-indigo-100 uppercase tracking-widest"
           >
             <Download className="w-4 h-4" />
             Download Excel Template
@@ -353,7 +353,7 @@ const ImportQuiz = () => {
                      {previewData.questions.map((q: any, idx: number) => (
                        <div key={idx} className="p-6 space-y-4">
                           <div className="flex items-start gap-3">
-                             <div className="w-6 h-6 bg-slate-900 rounded-lg flex items-center justify-center text-white text-[10px] font-black shrink-0">
+                             <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black shrink-0">
                                 {idx + 1}
                              </div>
                              <p className="text-[11px] font-bold text-slate-900 leading-relaxed">{q.content}</p>
@@ -395,7 +395,7 @@ const ImportQuiz = () => {
               </div>
               <a 
                 href="/api/v1/quiz/template/download"
-                className="md:hidden flex items-center justify-center gap-2 py-4 bg-slate-900 text-white text-[10px] font-black rounded-xl uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-slate-100"
+                className="md:hidden flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10px] font-black rounded-xl uppercase tracking-widest active:scale-95 transition-all shadow-md shadow-indigo-100"
               >
                  <Download className="w-4 h-4" />
                  Download Template
@@ -458,7 +458,7 @@ const ImportQuiz = () => {
                   
                   <a 
                     href="/api/v1/quiz/template/download"
-                    className="flex items-center justify-center gap-3 w-full py-5 bg-slate-900 text-white text-[11px] font-black rounded-2xl uppercase tracking-[0.2em] shadow-xl shadow-slate-200"
+                    className="flex items-center justify-center gap-3 w-full py-5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[11px] font-black rounded-2xl uppercase tracking-[0.2em] shadow-lg shadow-indigo-100 active:scale-95 transition-all"
                   >
                      <Download className="w-5 h-5" />
                      Get Template (.xlsx)

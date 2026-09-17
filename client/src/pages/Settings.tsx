@@ -153,7 +153,7 @@ const Settings = () => {
       {/* Header */}
       <div className="bg-white border-b border-slate-100 px-6 py-12 mb-8">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl">
+          <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
             <SettingsIcon className="w-6 h-6" />
           </div>
           <div>

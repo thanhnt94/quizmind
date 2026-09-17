@@ -165,16 +165,16 @@ const EditQuestions = () => {
              
              <a 
                 href={`/api/v1/quiz/${id}/export`}
-                className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shadow-lg hover:bg-indigo-700 active:scale-90 transition-all"
-                title="Xuất Excel"
+                className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shadow-md shadow-indigo-100 hover:bg-indigo-700 active:scale-90 transition-all"
+                title="Export to Excel"
              >
                 <Download className="w-3.5 h-3.5" />
              </a>
              
              <button 
                 onClick={() => document.getElementById('excel-update-upload')?.click()}
-                className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shadow-lg hover:bg-slate-800 active:scale-90 transition-all"
-                title="Sửa nhanh từ Excel"
+                className="w-8 h-8 bg-indigo-50 text-indigo-600 border border-indigo-200/60 rounded-lg flex items-center justify-center shadow-xs hover:bg-indigo-100 active:scale-90 transition-all"
+                title="Quick Update from Excel"
              >
                 <Upload className="w-3.5 h-3.5" />
              </button>
@@ -359,7 +359,7 @@ const EditQuestions = () => {
                         </div>
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Explanation</label>
-                           <textarea rows={3} value={editingQuestion.explanation} onChange={(e) => setEditingQuestion({ ...editingQuestion, explanation: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 text-xs font-medium text-indigo-100 outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all resize-none shadow-2xl leading-relaxed" />
+                           <textarea rows={3} value={editingQuestion.explanation} onChange={(e) => setEditingQuestion({ ...editingQuestion, explanation: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-medium text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-300 transition-all resize-none shadow-sm leading-relaxed" placeholder="Add explanation for correct answer..." />
                         </div>
                      </div>
                   </div>

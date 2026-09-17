@@ -290,17 +290,17 @@ const EditQuiz = () => {
 
                  {activeTab === 'ai' && (
                     <motion.div key="ai" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                       <div className="bg-slate-900 rounded-[2.5rem] p-6 md:p-10 border border-slate-800 shadow-2xl space-y-6">
+                       <div className="bg-white rounded-[2rem] p-6 md:p-10 border border-slate-100 shadow-sm space-y-6">
                          <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-4">
-                               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-indigo-400">
+                               <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
                                   <Brain className="w-5 h-5" />
                                </div>
-                               <h2 className="text-lg font-black text-white uppercase italic">AI Intelligence</h2>
+                               <h2 className="text-lg font-black text-slate-800 uppercase italic">AI Intelligence</h2>
                             </div>
                             <button 
                                onClick={() => setShowHelpModal(true)}
-                               className="w-9 h-9 bg-white/5 rounded-xl flex items-center justify-center text-white/40 hover:text-white transition-all"
+                               className="w-9 h-9 bg-slate-50 hover:bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all border border-slate-100"
                             >
                                <HelpCircle className="w-4 h-4" />
                             </button>
@@ -309,19 +309,19 @@ const EditQuiz = () => {
                          <div className="space-y-4">
                             <div className="space-y-2">
                                <div className="flex items-center justify-between ml-1">
-                                  <label className="text-[9px] font-black text-white/40 uppercase tracking-widest">Master System Prompt</label>
-                                  <span className="text-[8px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase">Gemini 2.0 Ready</span>
+                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Master System Prompt</label>
+                                  <span className="text-[8px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase border border-indigo-100">Gemini 2.0 Ready</span>
                                </div>
                                <textarea 
                                   rows={12}
                                   placeholder="Define how AI should analyze and explain questions in this collection..."
                                   value={formData.ai_prompt}
                                   onChange={(e) => setFormData({ ...formData, ai_prompt: e.target.value })}
-                                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-[13px] font-medium text-white placeholder:text-white/20 outline-none focus:ring-4 focus:ring-indigo-500/20 transition-all resize-none leading-relaxed custom-scrollbar"
+                                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-6 text-[13px] font-medium text-slate-800 placeholder:text-slate-300 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all resize-none leading-relaxed custom-scrollbar"
                                />
                             </div>
 
-                             <div className="p-5 bg-white/5 border border-white/5 rounded-2xl border-dashed text-[10px] font-medium text-white/50 italic leading-relaxed">
+                             <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl border-dashed text-[10px] font-medium text-indigo-700/80 italic leading-relaxed">
                                * This prompt will guide the AI on how to explain the answer when the learner clicks the AI Analysis button. Use tags like {"{{question}}"} to personalize the result.
                              </div>
                          </div>
