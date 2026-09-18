@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime, Float
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime, Float, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.db import Base
@@ -99,7 +99,7 @@ class UserAnswer(Base):
     selected_option_id = Column(Integer, ForeignKey("options.id"), nullable=True)
     is_correct = Column(Boolean, default=False)
     active_time = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     
     attempt = relationship("QuizAttempt", back_populates="answers")
 
@@ -221,6 +221,10 @@ class UserQuestionMastery(Base):
     consecutive_correct = Column(Integer, default=0)
     is_ignored = Column(Boolean, default=False)
     last_answered = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        Index("ix_user_question_mastery_user_question", "user_id", "question_id"),
+    )
     
     question = relationship("Question")
 

@@ -9,7 +9,11 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 @router.post("/read-all")
 async def mark_notifications_read(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.notification.models import Notification
-    user_id = int(request.cookies.get("user_id", 1))
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
     await db.execute(
         Notification.__table__.update().where(Notification.user_id == user_id).values(is_read=True)
     )
@@ -27,7 +31,11 @@ async def get_vapid_public_key():
 @router.post("/push/subscribe")
 async def subscribe_push(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.notification.models import PushSubscription
-    user_id = int(request.cookies.get("user_id", 1))
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
     
     endpoint = data.get("endpoint")
     keys = data.get("keys", {})
@@ -62,7 +70,11 @@ async def subscribe_push(request: Request, data: dict, db: AsyncSession = Depend
 @router.post("/push/unsubscribe")
 async def unsubscribe_push(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.notification.models import PushSubscription
-    user_id = int(request.cookies.get("user_id", 1))
+    from app.modules.auth.services.auth_service import AuthService
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user.id
     endpoint = data.get("endpoint")
     
     if endpoint:

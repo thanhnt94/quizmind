@@ -17,6 +17,10 @@ class User(Base):
     # SSO related
     sso_id = Column(String(255), unique=True, index=True, nullable=True)
 
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
+
 
 class UserGlobalSettings(Base):
     __tablename__ = "user_global_settings"

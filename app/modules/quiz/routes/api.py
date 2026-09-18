@@ -1,10 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Depends, Request, BackgroundTasks, HTTPException
 from typing import Optional
 from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, Integer, or_
 from sqlalchemy.orm import selectinload
 from app.core.db import get_db
+from app.modules.auth.services.auth_service import AuthService
 from app.modules.quiz.services.excel_service import ExcelQuizService
 from app.modules.quiz.services.quiz_service import QuizService
 from app.modules.quiz.services.ai_service import ai_service
@@ -13,6 +14,12 @@ import json
 import re
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
+
+async def get_request_user_id(request: Request, db: AsyncSession) -> int:
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user.id
 
 @router.get("/template/download")
 async def download_template():
@@ -72,7 +79,7 @@ async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_o
             await db.refresh(db_cat)
 
         # Create quiz using Info sheet metadata
-        user_id = int(request.cookies.get("user_id", 1))
+        user_id = await get_request_user_id(request, db)
         quiz_data = QuizSchema(
             title=metadata.get("title", f"Import: {file.filename.split('.')[0]}"),
             description=metadata.get("description", f"Batch import with {len(questions)} questions."),
@@ -130,7 +137,6 @@ async def upload_quiz(request: Request, file: UploadFile = File(...), metadata_o
 
         # Auto-enroll the creator so it shows in "My Collection" and "Creator Studio"
         from app.modules.quiz.models import QuizAttempt
-        user_id = int(request.cookies.get("user_id", 1))
         attempt = QuizAttempt(
             user_id=user_id,
             quiz_id=db_quiz.id,
@@ -197,7 +203,7 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
     from app.modules.notification.interface import NotificationInterface
     from sqlalchemy import and_, case
 
-    user_id = int(request.cookies.get("user_id", 1)) # Default to 1 for demo
+    user_id = await get_request_user_id(request, db)
     is_correct = data.get("is_correct", False)
     time_spent = int(data.get("time_spent", 0))
     question_id = int(data.get("question_id"))
@@ -550,7 +556,8 @@ async def get_quiz_stats(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{quiz_id}/data")
 async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else None
     from app.modules.quiz.models import QuizCollaborator
     
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
@@ -561,11 +568,13 @@ async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depen
     q_count = q_count_res.scalar()
     
     # Check if user is collaborator
-    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
-    is_collaborator = collab_res.scalar() is not None
+    is_collaborator = False
+    if user_id:
+        collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+        is_collaborator = collab_res.scalar() is not None
     
     category_name = quiz.category.name if quiz.category else "General"
-    is_owner = (quiz.creator_id == user_id or user_id == 1)
+    is_owner = bool(user_id and (quiz.creator_id == user_id or user.is_admin))
 
     return {
         "id": quiz.id,
@@ -589,27 +598,30 @@ async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depen
 
 @router.get("/{quiz_id}/play-data")
 async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
-    if mode in ("mcq", "typing", "listening"):
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else None
+    if mode in ("mcq", "typing", "listening") or not user_id:
         quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     else:
         quiz = await QuizService.get_quiz_with_stats(db, quiz_id, user_id=user_id)
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
-    from app.modules.gamification.interface import GamificationInterface
-    user_stats = await GamificationInterface.get_user_stats(db, user_id)
-    
-    from app.modules.quiz.models import QuizCollaborator
-    collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
-    is_collaborator = collab_res.scalar() is not None
-    
-    from app.modules.quiz.models import UserQuestionMastery
-    mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.box_level, UserQuestionMastery.is_ignored).where(
-        UserQuestionMastery.user_id == user_id,
-        UserQuestionMastery.question_id.in_([q.id for q in quiz.questions])
-    )
-    mastery_res = await db.execute(mastery_stmt)
-    mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
+    user_stats = {}
+    is_collaborator = False
+    mastery_map = {}
+    if user_id:
+        from app.modules.gamification.interface import GamificationInterface
+        user_stats = await GamificationInterface.get_user_stats(db, user_id)
+        from app.modules.quiz.models import QuizCollaborator, UserQuestionMastery
+        collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+        is_collaborator = collab_res.scalar() is not None
+        
+        mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.box_level, UserQuestionMastery.is_ignored).where(
+            UserQuestionMastery.user_id == user_id,
+            UserQuestionMastery.question_id.in_([q.id for q in quiz.questions])
+        )
+        mastery_res = await db.execute(mastery_stmt)
+        mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
     
     return {
         "id": quiz.id,
@@ -664,7 +676,7 @@ async def submit_exam_attempt(request: Request, quiz_id: int, payload: dict, db:
     Submits an entire exam attempt (all answers at once), calculates score,
     records QuizAttempt and UserAnswer rows, awards XP, and returns full scorecard with solutions.
     """
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     if not quiz:
         return JSONResponse(status_code=404, content={"error": "Quiz not found"})
@@ -918,9 +930,11 @@ async def ask_ai(quiz_id: int, payload: dict, background_tasks: BackgroundTasks,
 @router.get("/question/{question_id}/note")
 async def get_question_note(request: Request, question_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuestionNote
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return {"content": ""}
     result = await db.execute(
-        select(UserQuestionNote).where(UserQuestionNote.user_id == user_id, UserQuestionNote.question_id == question_id)
+        select(UserQuestionNote).where(UserQuestionNote.user_id == user.id, UserQuestionNote.question_id == question_id)
     )
     note = result.scalar_one_or_none()
     return {"content": note.content if note else ""}
@@ -928,7 +942,7 @@ async def get_question_note(request: Request, question_id: int, db: AsyncSession
 @router.post("/question/{question_id}/note")
 async def save_question_note(request: Request, question_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuestionNote
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     content = data.get("content", "")
     
     result = await db.execute(
@@ -948,7 +962,7 @@ async def save_question_note(request: Request, question_id: int, data: dict, db:
 @router.post("/question/{question_id}/ignore")
 async def toggle_question_ignore(request: Request, question_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuestionMastery
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     is_ignored = data.get("is_ignored", True)
     
     result = await db.execute(
@@ -968,9 +982,11 @@ async def toggle_question_ignore(request: Request, question_id: int, data: dict,
 @router.get("/{quiz_id}/notes")
 async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuestionNote, Question
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return {}
     result = await db.execute(
-        select(UserQuestionNote).join(Question).where(UserQuestionNote.user_id == user_id, Question.quiz_id == quiz_id)
+        select(UserQuestionNote).join(Question).where(UserQuestionNote.user_id == user.id, Question.quiz_id == quiz_id)
     )
     notes = result.scalars().all()
     return {n.question_id: n.content for n in notes}
@@ -1057,7 +1073,10 @@ async def export_quiz(quiz_id: int, request: Request, db: AsyncSession = Depends
 @router.post("/{quiz_id}/import-update")
 async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     try:
-        user_id = int(request.cookies.get("user_id", 1))
+        user = await AuthService.get_current_user(request, db)
+        if not user:
+            return JSONResponse(status_code=401, content={"error": "Authentication required"})
+        user_id = user.id
         quiz = await QuizService.get_quiz_by_id(db, quiz_id)
         if not quiz:
             return JSONResponse(status_code=404, content={"error": "Quiz not found"})
@@ -1067,7 +1086,7 @@ async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = 
         collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
         is_collaborator = collab_res.scalar() is not None
         
-        if not (is_owner or is_collaborator or user_id == 1):
+        if not (is_owner or is_collaborator or user.is_admin):
             return JSONResponse(status_code=403, content={"error": "No permission to update this quiz"})
             
         content = await file.read()
@@ -1175,7 +1194,8 @@ async def import_update_quiz(request: Request, quiz_id: int, file: UploadFile = 
 
 @router.get("/{quiz_id}/questions")
 async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size: int = 50, search: str = "", db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else None
     from app.modules.quiz.models import Question, Option
     
     query = select(Question).where(Question.quiz_id == quiz_id).options(selectinload(Question.options))
@@ -1202,12 +1222,14 @@ async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size
     stats_res = await db.execute(stats_query)
     stats_map = {r.question_id: {"total": r.total, "correct": r.correct, "wrong": r.total - r.correct} for r in stats_res}
     
-    mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.is_ignored).where(
-        UserQuestionMastery.user_id == user_id,
-        UserQuestionMastery.question_id.in_(q_ids)
-    )
-    mastery_res = await db.execute(mastery_stmt)
-    ignored_map = {row[0]: row[1] for row in mastery_res.all()}
+    ignored_map = {}
+    if user_id:
+        mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.is_ignored).where(
+            UserQuestionMastery.user_id == user_id,
+            UserQuestionMastery.question_id.in_(q_ids)
+        )
+        mastery_res = await db.execute(mastery_stmt)
+        ignored_map = {row[0]: row[1] for row in mastery_res.all()}
     
     return {
         "questions": [
@@ -1240,7 +1262,7 @@ async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size
 @router.post("/{quiz_id}/enroll")
 async def enroll_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import QuizAttempt
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     
     # Check if already enrolled
     result = await db.execute(
@@ -1267,7 +1289,7 @@ async def enroll_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends
 @router.post("/{quiz_id}/archive")
 async def archive_quiz(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import QuizAttempt
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     result = await db.execute(select(QuizAttempt).where(QuizAttempt.user_id == user_id, QuizAttempt.quiz_id == quiz_id))
     attempt = result.scalar_one_or_none()
     if attempt:
@@ -1285,7 +1307,10 @@ async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
 @router.patch("/{quiz_id}")
 @router.put("/{quiz_id}")
 async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     from app.modules.quiz.models import Quiz, QuizCollaborator
     
     result = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
@@ -1293,12 +1318,7 @@ async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSessi
     if not quiz: return JSONResponse(status_code=404, content={"error": "Quiz not found"})
     
     # Permission Check: Creator, Admin, or Collaborator
-    from app.modules.auth.models import User as UserDB
-    user_res = await db.execute(select(UserDB).where(UserDB.id == user_id))
-    user_obj = user_res.scalar_one_or_none()
-    is_admin = user_obj and user_obj.role == "admin"
-    
-    if quiz.creator_id != user_id and user_id != 1 and not is_admin:
+    if quiz.creator_id != user_id and not user.is_admin:
         collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
         if not collab_res.scalar():
             return JSONResponse(status_code=403, content={"error": "Permission denied"})
@@ -1333,7 +1353,7 @@ async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSessi
 
 @router.post("/{quiz_id}/reset-progress")
 async def reset_quiz_progress(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     from app.modules.quiz.models import QuizAttempt, UserAnswer, UserQuestionMastery, Question
     
     # 1. Delete user attempts and their answers
@@ -1375,14 +1395,17 @@ async def get_collaborators(quiz_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{quiz_id}/collaborators")
 async def add_collaborator(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     target_user_id = data.get("user_id")
     
     from app.modules.quiz.models import Quiz, QuizCollaborator
     quiz_res = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
     quiz = quiz_res.scalar_one_or_none()
     
-    if not quiz or (quiz.creator_id != user_id and user_id != 1):
+    if not quiz or (quiz.creator_id != user_id and not user.is_admin):
         return JSONResponse(status_code=403, content={"error": "Only creator can add collaborators"})
         
     existing = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == target_user_id))
@@ -1396,13 +1419,16 @@ async def add_collaborator(request: Request, quiz_id: int, data: dict, db: Async
 
 @router.delete("/{quiz_id}/collaborators/{collab_user_id}")
 async def remove_collaborator(request: Request, quiz_id: int, collab_user_id: int, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     
     from app.modules.quiz.models import Quiz, QuizCollaborator
     quiz_res = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
     quiz = quiz_res.scalar_one_or_none()
     
-    if not quiz or (quiz.creator_id != user_id and user_id != 1):
+    if not quiz or (quiz.creator_id != user_id and not user.is_admin):
         return JSONResponse(status_code=403, content={"error": "Only creator can remove collaborators"})
         
     await db.execute(delete(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == collab_user_id))
@@ -1411,14 +1437,17 @@ async def remove_collaborator(request: Request, quiz_id: int, collab_user_id: in
 
 @router.post("/{quiz_id}/transfer-ownership")
 async def transfer_ownership(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     target_user_id = data.get("user_id")
     
     from app.modules.quiz.models import Quiz
     quiz_res = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
     quiz = quiz_res.scalar_one_or_none()
     
-    if not quiz or (quiz.creator_id != user_id and user_id != 1):
+    if not quiz or (quiz.creator_id != user_id and not user.is_admin):
         return JSONResponse(status_code=403, content={"error": "Only current creator can transfer ownership"})
         
     quiz.creator_id = target_user_id
@@ -1467,7 +1496,7 @@ async def delete_question(question_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/goals")
 async def create_or_update_goal(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuizGoal
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     quiz_id = int(data.get("quiz_id"))
     daily_target = int(data.get("daily_target", 5))
 
@@ -1498,7 +1527,10 @@ async def get_active_goals(request: Request, local_date: Optional[str] = None, d
     import math
     from datetime import datetime
     
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return []
+    user_id = user.id
     if not local_date:
         local_date = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -1578,7 +1610,7 @@ async def get_active_goals(request: Request, local_date: Optional[str] = None, d
 @router.post("/goals/remove")
 async def remove_goal(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import UserQuizGoal
-    user_id = int(request.cookies.get("user_id", 1))
+    user_id = await get_request_user_id(request, db)
     quiz_id = int(data.get("quiz_id"))
     
     await db.execute(
@@ -1594,7 +1626,9 @@ async def get_user_badges(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.auth.services.auth_service import AuthService
     
     user = await AuthService.get_current_user(request, db)
-    user_id = user.id if user else 1
+    if not user:
+        return []
+    user_id = user.id
     
     # Get user gamification model
     user_gamify_res = await db.execute(select(UserGamification).where(UserGamification.user_id == user_id))
@@ -1763,9 +1797,11 @@ async def update_global_goals(request: Request, data: dict, db: AsyncSession = D
 async def get_today_review_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.services.quiz_service import QuizService
     from fastapi import HTTPException
-    user_id = int(request.cookies.get("user_id", 1))
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return {"total_due": 0, "total_reviewed_today": 0, "active_quizzes_count": 0, "quizzes": []}
     try:
-        return await QuizService.get_today_review(db, user_id)
+        return await QuizService.get_today_review(db, user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1777,7 +1813,9 @@ async def get_heatmap_stats(request: Request, db: AsyncSession = Depends(get_db)
     from datetime import datetime, timedelta
     
     user = await AuthService.get_current_user(request, db)
-    user_id = user.id if user else 1
+    if not user:
+        return []
+    user_id = user.id
     
     today = datetime.utcnow().date()
     start_date = today - timedelta(days=365)
@@ -2126,23 +2164,7 @@ async def get_speed_accuracy_stats(request: Request, db: AsyncSession = Depends(
 from datetime import date, datetime, timedelta
 import math
 
-async def get_request_user_id(request: Request, db: AsyncSession) -> int:
-    from app.modules.auth.services.auth_service import AuthService
-    user = await AuthService.get_current_user(request, db)
-    if user:
-        return user.id
-    raw_uid = request.cookies.get("user_id")
-    if raw_uid:
-        try:
-            from app.modules.sso_module.cookie_signer import unsign_cookie
-            from app.core.config import settings
-            unsigned = unsign_cookie(raw_uid, settings.SECRET_KEY)
-            if unsigned:
-                return int(unsigned)
-            return int(raw_uid)
-        except Exception:
-            pass
-    return 1
+
 
 
 async def get_quiz_roadmap_status_helper(
@@ -2427,25 +2449,7 @@ async def get_quiz_roadmap_status_helper(
     }
 
 
-async def get_request_user_id(request: Request, db: AsyncSession) -> int:
-    from app.modules.auth.services.auth_service import AuthService
-    user = await AuthService.get_current_user(request, db)
-    if user:
-        return user.id
-    try:
-        raw_cookie = request.cookies.get("user_id")
-        if raw_cookie:
-            if "." in str(raw_cookie):
-                from app.modules.sso_module.cookie_signer import unsign_cookie
-                from app.core.config import settings
-                unsigned = unsign_cookie(str(raw_cookie), settings.SECRET_KEY)
-                if unsigned and unsigned.isdigit():
-                    return int(unsigned)
-            elif str(raw_cookie).isdigit():
-                return int(raw_cookie)
-    except Exception:
-        pass
-    return 1
+
 
 
 @router.get("/{quiz_id}/roadmap-status")
@@ -2699,7 +2703,10 @@ async def save_quiz_practice_settings(
 ):
     from app.modules.quiz.models import Quiz, UserQuizSettings, QuizCollaborator
     from sqlalchemy.orm.attributes import flag_modified
-    user_id = await get_request_user_id(request, db)
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
 
     settings_data = payload.get("settings", {})
     is_creator = payload.get("is_creator", False)
@@ -2709,7 +2716,7 @@ async def save_quiz_practice_settings(
         if quiz:
             collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
             is_collab = collab_res.scalar() is not None
-            if quiz.creator_id == user_id or user_id == 1 or is_collab:
+            if quiz.creator_id == user_id or user.is_admin or is_collab:
                 current = dict(quiz.practice_settings or {})
                 current.update(settings_data)
                 quiz.practice_settings = current
@@ -2796,14 +2803,17 @@ async def get_quiz_columns_overview(quiz_id: int, db: AsyncSession = Depends(get
 async def add_quiz_column(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Quiz, QuizCollaborator
     from sqlalchemy.orm.attributes import flag_modified
-    user_id = await get_request_user_id(request, db)
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     if not quiz:
         return JSONResponse(status_code=404, content={"error": "Quiz not found"})
 
     collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
     is_collab = collab_res.scalar() is not None
-    if not (quiz.creator_id == user_id or user_id == 1 or is_collab):
+    if not (quiz.creator_id == user_id or user.is_admin or is_collab):
         return JSONResponse(status_code=403, content={"error": "Permission denied"})
 
     col_name = payload.get("column_name", "").strip().lower().replace(" ", "_")
@@ -2835,14 +2845,17 @@ async def add_quiz_column(request: Request, quiz_id: int, payload: dict, db: Asy
 async def rename_quiz_column(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Quiz, Question, QuizCollaborator
     from sqlalchemy.orm.attributes import flag_modified
-    user_id = await get_request_user_id(request, db)
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     if not quiz:
         return JSONResponse(status_code=404, content={"error": "Quiz not found"})
 
     collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
     is_collab = collab_res.scalar() is not None
-    if not (quiz.creator_id == user_id or user_id == 1 or is_collab):
+    if not (quiz.creator_id == user_id or user.is_admin or is_collab):
         return JSONResponse(status_code=403, content={"error": "Permission denied"})
 
     old_name = payload.get("old_name", "").strip()
@@ -2882,14 +2895,17 @@ async def rename_quiz_column(request: Request, quiz_id: int, payload: dict, db: 
 async def delete_quiz_column(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Quiz, Question, QuizCollaborator
     from sqlalchemy.orm.attributes import flag_modified
-    user_id = await get_request_user_id(request, db)
+    user = await AuthService.get_current_user(request, db)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    user_id = user.id
     quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     if not quiz:
         return JSONResponse(status_code=404, content={"error": "Quiz not found"})
 
     collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
     is_collab = collab_res.scalar() is not None
-    if not (quiz.creator_id == user_id or user_id == 1 or is_collab):
+    if not (quiz.creator_id == user_id or user.is_admin or is_collab):
         return JSONResponse(status_code=403, content={"error": "Permission denied"})
 
     col_name = payload.get("column_name", "").strip()

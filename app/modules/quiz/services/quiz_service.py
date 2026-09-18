@@ -262,54 +262,63 @@ class QuizService:
             )
             progress_map = {p.goal_id: p for p in prog_res.scalars().all()}
             
-        decks_summary = []
-        total_due_review = 0
-        total_due_new = 0
-        
-        for quiz_id in all_quiz_ids:
-            # Get quiz title
-            quiz_stmt = select(Quiz.title).where(Quiz.id == quiz_id)
-            quiz_title_res = await db.execute(quiz_stmt)
-            quiz_title = quiz_title_res.scalar() or f"Quiz {quiz_id}"
-            
-            # Count total questions in quiz
-            total_questions_stmt = select(func.count(Question.id)).where(Question.quiz_id == quiz_id)
-            total_questions_res = await db.execute(total_questions_stmt)
-            total_questions = total_questions_res.scalar() or 0
-            
-            # Leitner due reviews: cards in box_level < 5
-            due_reviews_stmt = select(func.count(UserQuestionMastery.id)).join(
-                Question, UserQuestionMastery.question_id == Question.id
-            ).where(
-                Question.quiz_id == quiz_id,
+        # Bulk fetch quiz titles
+        quizzes_res = await db.execute(select(Quiz.id, Quiz.title).where(Quiz.id.in_(all_quiz_ids)))
+        quiz_title_map = {row[0]: row[1] for row in quizzes_res.all()}
+
+        # Bulk fetch total questions per quiz
+        total_q_res = await db.execute(
+            select(Question.quiz_id, func.count(Question.id))
+            .where(Question.quiz_id.in_(all_quiz_ids))
+            .group_by(Question.quiz_id)
+        )
+        total_q_map = {row[0]: row[1] for row in total_q_res.all()}
+
+        # Bulk fetch Leitner due reviews (box_level < 5, not ignored)
+        due_rev_res = await db.execute(
+            select(Question.quiz_id, func.count(UserQuestionMastery.id))
+            .join(Question, UserQuestionMastery.question_id == Question.id)
+            .where(
+                Question.quiz_id.in_(all_quiz_ids),
                 UserQuestionMastery.user_id == user_id,
                 UserQuestionMastery.box_level < 5,
                 UserQuestionMastery.is_ignored == False
             )
-            due_reviews_res = await db.execute(due_reviews_stmt)
-            due_reviews_count = due_reviews_res.scalar() or 0
-            
-            # Count total attempted/learned questions to determine unattempted (new) questions
-            learned_stmt = select(func.count(UserQuestionMastery.id)).join(
-                Question, UserQuestionMastery.question_id == Question.id
-            ).where(
-                Question.quiz_id == quiz_id,
+            .group_by(Question.quiz_id)
+        )
+        due_rev_map = {row[0]: row[1] for row in due_rev_res.all()}
+
+        # Bulk fetch learned questions count
+        learned_res = await db.execute(
+            select(Question.quiz_id, func.count(UserQuestionMastery.id))
+            .join(Question, UserQuestionMastery.question_id == Question.id)
+            .where(
+                Question.quiz_id.in_(all_quiz_ids),
                 UserQuestionMastery.user_id == user_id
             )
-            learned_res = await db.execute(learned_stmt)
-            learned_count = learned_res.scalar() or 0
+            .group_by(Question.quiz_id)
+        )
+        learned_map = {row[0]: row[1] for row in learned_res.all()}
+
+        decks_summary = []
+        total_due_review = 0
+        total_due_new = 0
+
+        for quiz_id in all_quiz_ids:
+            quiz_title = quiz_title_map.get(quiz_id, f"Quiz {quiz_id}")
+            total_questions = total_q_map.get(quiz_id, 0)
+            due_reviews_count = due_rev_map.get(quiz_id, 0)
+            learned_count = learned_map.get(quiz_id, 0)
             unattempted_count = max(0, total_questions - learned_count)
-            
-            # Determine due new count under active goal
+
             due_new_count = 0
             goal = goals_map.get(quiz_id)
             if goal:
                 progress = progress_map.get(goal.id)
                 done_today = progress.count_done if progress else 0
                 due_new_count = max(0, goal.daily_target - done_today)
-                # Cap at the actual number of unattempted questions in the deck
                 due_new_count = min(due_new_count, unattempted_count)
-                
+
             if due_reviews_count > 0 or due_new_count > 0:
                 decks_summary.append({
                     "quiz_id": quiz_id,

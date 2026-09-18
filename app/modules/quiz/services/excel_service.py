@@ -196,16 +196,19 @@ class ExcelQuizService:
             
             answer_map = {
                 "a": "option_a", "b": "option_b", "c": "option_c", "d": "option_d",
-                "1": "option_a", "2": "option_b", "3": "option_c", "4": "option_d"
+                "1": "option_a", "2": "option_b", "3": "option_c", "4": "option_d",
+                "option_a": "option_a", "option_b": "option_b", "option_c": "option_c", "option_d": "option_d"
             }
             target_opt_key_by_index = answer_map.get(clean_raw_answer)
 
             for opt_key in ["option_a", "option_b", "option_c", "option_d"]:
                 opt_content = get_val(opt_key)
                 if opt_content and opt_content.lower() != "nan":
-                    # Check match by index OR by full text content
                     clean_opt_content = opt_content.lower().strip()
-                    is_correct = (clean_opt_content == clean_raw_answer or opt_key == target_opt_key_by_index)
+                    if target_opt_key_by_index:
+                        is_correct = (opt_key == target_opt_key_by_index)
+                    else:
+                        is_correct = (clean_opt_content == clean_raw_answer)
                     
                     question_data["options"].append({
                         "content": opt_content,
