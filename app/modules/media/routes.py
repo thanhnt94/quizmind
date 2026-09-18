@@ -76,8 +76,7 @@ async def upload_media_file(
                 res_data = response.json()
                 filename = res_data.get("filename")
                 is_audio = ext in ALLOWED_AUDIO_EXTS
-                canonical_prefix = "central-tts://" if is_audio else "central-media://"
-                canonical_url = f"{canonical_prefix}{filename}" if filename else None
+                canonical_url = f"central://{filename}" if filename else None
                 full_url = res_data.get("full_url")
                 if not full_url:
                     rel_url = res_data.get("url", "")
@@ -109,8 +108,7 @@ async def upload_media_file(
             f.write(content)
 
         is_audio = ext in ALLOWED_AUDIO_EXTS
-        canonical_prefix = "central-tts://" if is_audio else "central-media://"
-        canonical_url = f"{canonical_prefix}{unique_name}"
+        canonical_url = f"central://{unique_name}"
 
         return {
             "status": "success",

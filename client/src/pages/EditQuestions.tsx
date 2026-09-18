@@ -366,14 +366,14 @@ const EditQuestions = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-100">
                            <MediaUrlInput
                               label="Question Image"
-                              sublabel="central-media://, central:// or upload"
+                              sublabel="central:// or upload"
                               mediaType="image"
                               value={editingQuestion.image || editingQuestion.image_url || ''}
                               onChange={(val) => setEditingQuestion({ ...editingQuestion, image: val, image_url: val })}
                            />
                            <MediaUrlInput
                               label="Question Audio"
-                              sublabel="central-tts://, central:// or upload"
+                              sublabel="central:// or upload"
                               mediaType="audio"
                               value={editingQuestion.audio || editingQuestion.audio_url || ''}
                               onChange={(val) => setEditingQuestion({ ...editingQuestion, audio: val, audio_url: val })}

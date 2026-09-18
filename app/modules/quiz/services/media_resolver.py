@@ -27,12 +27,21 @@ async def get_sso_server_url(db) -> str:
 
 def resolve_central_url(url: Optional[str], sso_url: str = "https://auth.inmind.site") -> str:
     """
-    Resolves canonical pseudo-protocol URLs (central-media://, central-tts://, central://)
+    Resolves canonical pseudo-protocol URLs (central://, and legacy central-media://, central-tts://)
     to fully accessible public HTTP URLs.
+    
+    Supports:
+    - central://filename.ext -> auto-detects audio (tts) vs general media (media) under /static/uploads/
+    - central://folder/filename.ext -> resolves to /static/folder/filename.ext (or /static/uploads/ if folder is tts/media)
+    - legacy central-media://filename -> /static/uploads/media/filename
+    - legacy central-tts://filename -> /static/uploads/tts/filename
+    - /static/... -> prepends sso_url
     """
     if not url or not isinstance(url, str):
         return ""
     trimmed = url.strip()
+    if not trimmed:
+        return ""
     base_sso = (sso_url or "https://auth.inmind.site").rstrip("/")
 
     # Normalize old subdomains
@@ -40,54 +49,87 @@ def resolve_central_url(url: Optional[str], sso_url: str = "https://auth.inmind.
         trimmed = re.sub(r"https?://(?:auth|centralauth)\.inmind\.site", base_sso, trimmed)
         trimmed = trimmed.replace("http://centralauth.mindstack.local", base_sso)
 
-    # 1. central-media://
-    if trimmed.startswith("central-media://"):
-        filename = trimmed[len("central-media://"):]
-        return f"{base_sso}/static/uploads/media/{filename}" if base_sso else f"/static/uploads/media/{filename}"
-
-    # 2. central-tts://
-    if trimmed.startswith("central-tts://"):
-        filename = trimmed[len("central-tts://"):]
-        return f"{base_sso}/static/uploads/tts/{filename}" if base_sso else f"/static/uploads/tts/{filename}"
-
-    # 3. central:// (Shorthand alias: auto-detect media vs tts by file extension)
+    # 1. central:// (Unified canonical protocol)
     if trimmed.startswith("central://"):
-        filename = trimmed[len("central://"):]
-        ext = filename.split(".")[-1].lower() if "." in filename else ""
-        subfolder = "tts" if ext in AUDIO_EXTENSIONS else "media"
-        return f"{base_sso}/static/uploads/{subfolder}/{filename}" if base_sso else f"/static/uploads/{subfolder}/{filename}"
+        path = trimmed[len("central://"):].lstrip("/")
+        if "/" in path:
+            # Custom folder/filename
+            if path.startswith("static/"):
+                return f"{base_sso}/{path}"
+            elif path.startswith("uploads/"):
+                return f"{base_sso}/static/{path}"
+            elif path.startswith("tts/") or path.startswith("media/"):
+                return f"{base_sso}/static/uploads/{path}"
+            else:
+                # Direct subfolder under static (e.g. static/<folder>/<filename>)
+                return f"{base_sso}/static/{path}"
+        else:
+            # Bare filename: check audio extension
+            ext = path.split(".")[-1].lower() if "." in path else ""
+            subfolder = "tts" if ext in AUDIO_EXTENSIONS else "media"
+            return f"{base_sso}/static/uploads/{subfolder}/{path}"
 
-    # 4. Relative paths /static/uploads/
-    if trimmed.startswith("/static/uploads/"):
-        return f"{base_sso}{trimmed}" if base_sso else trimmed
+    # 2. legacy central-media://
+    if trimmed.startswith("central-media://"):
+        filename = trimmed[len("central-media://"):].lstrip("/")
+        return f"{base_sso}/static/uploads/media/{filename}"
+
+    # 3. legacy central-tts://
+    if trimmed.startswith("central-tts://"):
+        filename = trimmed[len("central-tts://"):].lstrip("/")
+        return f"{base_sso}/static/uploads/tts/{filename}"
+
+    # 4. Relative paths /static/
+    if trimmed.startswith("/static/"):
+        return f"{base_sso}{trimmed}"
 
     return trimmed
 
 
 def unresolve_central_url(url: Optional[str], sso_url: str = "") -> str:
     """
-    Converts full or relative CentralAuth URLs into canonical pseudo-protocols
-    for database storage portability.
+    Converts full or relative CentralAuth URLs into the unified canonical pseudo-protocol
+    `central://<filename>` or `central://<folder>/<filename>`.
     """
     if not url or not isinstance(url, str):
         return ""
     trimmed = url.strip()
-    if (
-        trimmed.startswith("central-media://") or
-        trimmed.startswith("central-tts://") or
-        trimmed.startswith("central://")
-    ):
+    if not trimmed:
+        return ""
+
+    # Already central://
+    if trimmed.startswith("central://"):
         return trimmed
 
-    # Match audio TTS e.g. /static/uploads/tts/<filename>
+    # Convert legacy central-media:// -> central://
+    if trimmed.startswith("central-media://"):
+        filename = trimmed[len("central-media://"):].lstrip("/")
+        return f"central://{filename}"
+
+    # Convert legacy central-tts:// -> central://
+    if trimmed.startswith("central-tts://"):
+        filename = trimmed[len("central-tts://"):].lstrip("/")
+        return f"central://{filename}"
+
+    # Match audio TTS: /static/uploads/tts/<filename> -> central://<filename>
     tts_match = re.search(r"(?:https?://[^/]+)?/static/uploads/tts/([^\s?#]+)", trimmed)
     if tts_match:
-        return f"central-tts://{tts_match.group(1)}"
+        return f"central://{tts_match.group(1)}"
 
-    # Match general Media e.g. /static/uploads/media/<filename>
+    # Match general Media: /static/uploads/media/<filename> -> central://<filename>
     media_match = re.search(r"(?:https?://[^/]+)?/static/uploads/media/([^\s?#]+)", trimmed)
     if media_match:
-        return f"central-media://{media_match.group(1)}"
+        return f"central://{media_match.group(1)}"
+
+    # Match general static/uploads/<folder>/<filename>
+    uploads_match = re.search(r"(?:https?://[^/]+)?/static/uploads/([^\s?#]+)", trimmed)
+    if uploads_match:
+        return f"central://uploads/{uploads_match.group(1)}"
+
+    # Match general static/<folder>/<filename>
+    static_match = re.search(r"(?:https?://[^/]+)?/static/([^\s?#]+)", trimmed)
+    if static_match:
+        return f"central://{static_match.group(1)}"
 
     return trimmed
 

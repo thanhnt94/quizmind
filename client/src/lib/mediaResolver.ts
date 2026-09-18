@@ -48,13 +48,16 @@ export const getCentralAuthUrl = (): string => {
   return 'https://auth.inmind.site'
 }
 
+const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm', 'flac'])
+
 /**
  * Resolves pseudo-protocols and relative CentralAuth URLs to full absolute URLs.
  * Supports:
- * - central-media://filename
- * - central-tts://filename
- * - central://filename (auto detects audio vs image/file by extension)
- * - /static/uploads/...
+ * - central://filename.ext -> auto-detects audio (tts) vs general media (media) under /static/uploads/
+ * - central://folder/filename.ext -> resolves to /static/folder/filename.ext (or /static/uploads/ if folder is tts/media)
+ * - legacy central-media://filename -> /static/uploads/media/filename
+ * - legacy central-tts://filename -> /static/uploads/tts/filename
+ * - /static/... -> prepends ssoUrl
  */
 export const resolveMediaUrl = (url: string | null | undefined, customBaseUrl?: string): string => {
   if (!url) return ''
@@ -69,24 +72,41 @@ export const resolveMediaUrl = (url: string | null | undefined, customBaseUrl?: 
     trimmed = trimmed.replace(/http:\/\/centralauth\.mindstack\.local/g, ssoUrl)
   }
 
+  // 1. Unified central:// protocol
+  if (trimmed.startsWith('central://')) {
+    const path = trimmed.slice('central://'.length).replace(/^\/+/, '')
+    if (path.includes('/')) {
+      if (path.startsWith('static/')) {
+        return ssoUrl ? `${ssoUrl}/${path}` : `/${path}`
+      } else if (path.startsWith('uploads/')) {
+        return ssoUrl ? `${ssoUrl}/static/${path}` : `/static/${path}`
+      } else if (path.startsWith('tts/') || path.startsWith('media/')) {
+        return ssoUrl ? `${ssoUrl}/static/uploads/${path}` : `/static/uploads/${path}`
+      } else {
+        // Direct subfolder under static (e.g. static/<folder>/<filename>)
+        return ssoUrl ? `${ssoUrl}/static/${path}` : `/static/${path}`
+      }
+    } else {
+      const ext = path.split('.').pop()?.toLowerCase() || ''
+      const subfolder = AUDIO_EXTENSIONS.has(ext) ? 'tts' : 'media'
+      return ssoUrl ? `${ssoUrl}/static/uploads/${subfolder}/${path}` : `/static/uploads/${subfolder}/${path}`
+    }
+  }
+
+  // 2. Legacy central-media://
   if (trimmed.startsWith('central-media://')) {
-    const filename = trimmed.slice('central-media://'.length)
+    const filename = trimmed.slice('central-media://'.length).replace(/^\/+/, '')
     return ssoUrl ? `${ssoUrl}/static/uploads/media/${filename}` : `/static/uploads/media/${filename}`
   }
 
+  // 3. Legacy central-tts://
   if (trimmed.startsWith('central-tts://')) {
-    const filename = trimmed.slice('central-tts://'.length)
+    const filename = trimmed.slice('central-tts://'.length).replace(/^\/+/, '')
     return ssoUrl ? `${ssoUrl}/static/uploads/tts/${filename}` : `/static/uploads/tts/${filename}`
   }
 
-  if (trimmed.startsWith('central://')) {
-    const filename = trimmed.slice('central://'.length)
-    const isAudio = /\.(mp3|wav|m4a|ogg|aac|flac)$/i.test(filename)
-    const folder = isAudio ? 'tts' : 'media'
-    return ssoUrl ? `${ssoUrl}/static/uploads/${folder}/${filename}` : `/static/uploads/${folder}/${filename}`
-  }
-
-  if (trimmed.startsWith('/static/uploads/')) {
+  // 4. Relative paths /static/
+  if (trimmed.startsWith('/static/')) {
     return ssoUrl ? `${ssoUrl}${trimmed}` : trimmed
   }
 
@@ -94,31 +114,53 @@ export const resolveMediaUrl = (url: string | null | undefined, customBaseUrl?: 
 }
 
 /**
- * Helper to convert full or relative CentralAuth URLs to canonical pseudo-protocols:
- * - /static/uploads/tts/file.mp3 -> central-tts://file.mp3
- * - /static/uploads/media/file.png -> central-media://file.png
+ * Helper to convert full or relative CentralAuth URLs to the unified canonical pseudo-protocol:
+ * `central://<filename>` or `central://<folder>/<filename>`
  */
 export const unresolveMediaUrl = (url: string | null | undefined): string => {
   if (!url) return ''
   const trimmed = url.trim()
-  if (
-    trimmed.startsWith('central-media://') ||
-    trimmed.startsWith('central-tts://') ||
-    trimmed.startsWith('central://')
-  ) {
+  if (!trimmed) return ''
+
+  // Already central://
+  if (trimmed.startsWith('central://')) {
     return trimmed
   }
 
-  // Audio TTS regex: e.g. (domain)/static/uploads/tts/<filename>
-  const ttsMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?\/static\/uploads\/tts\/([^\s?#]+)/)
-  if (ttsMatch && ttsMatch[1]) {
-    return `central-tts://${ttsMatch[1]}`
+  // Convert legacy central-media:// -> central://
+  if (trimmed.startsWith('central-media://')) {
+    const filename = trimmed.slice('central-media://'.length).replace(/^\/+/, '')
+    return `central://${filename}`
   }
 
-  // General Media regex: e.g. (domain)/static/uploads/media/<filename>
+  // Convert legacy central-tts:// -> central://
+  if (trimmed.startsWith('central-tts://')) {
+    const filename = trimmed.slice('central-tts://'.length).replace(/^\/+/, '')
+    return `central://${filename}`
+  }
+
+  // Audio TTS regex: /static/uploads/tts/<filename> -> central://<filename>
+  const ttsMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?\/static\/uploads\/tts\/([^\s?#]+)/)
+  if (ttsMatch && ttsMatch[1]) {
+    return `central://${ttsMatch[1]}`
+  }
+
+  // General Media regex: /static/uploads/media/<filename> -> central://<filename>
   const mediaMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?\/static\/uploads\/media\/([^\s?#]+)/)
   if (mediaMatch && mediaMatch[1]) {
-    return `central-media://${mediaMatch[1]}`
+    return `central://${mediaMatch[1]}`
+  }
+
+  // General static/uploads/<folder>/<filename>
+  const uploadsMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?\/static\/uploads\/([^\s?#]+)/)
+  if (uploadsMatch && uploadsMatch[1]) {
+    return `central://uploads/${uploadsMatch[1]}`
+  }
+
+  // General static/<folder>/<filename>
+  const staticMatch = trimmed.match(/(?:https?:\/\/[^\/]+)?\/static\/([^\s?#]+)/)
+  if (staticMatch && staticMatch[1]) {
+    return `central://${staticMatch[1]}`
   }
 
   return trimmed

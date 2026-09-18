@@ -3813,14 +3813,14 @@ export default function QuizPlay() {
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-100">
                       <MediaUrlInput
                         label="QUESTION IMAGE"
-                        sublabel="central-media://, central:// or upload"
+                        sublabel="central:// or upload"
                         mediaType="image"
                         value={editFormData.image || ''}
                         onChange={(val) => setEditFormData({ ...editFormData, image: val })}
                       />
                       <MediaUrlInput
                         label="QUESTION AUDIO"
-                        sublabel="central-tts://, central:// or upload"
+                        sublabel="central:// or upload"
                         mediaType="audio"
                         value={editFormData.audio || ''}
                         onChange={(val) => setEditFormData({ ...editFormData, audio: val })}
