@@ -321,7 +321,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
   const difficultyInfo = useMemo(() => {
     if (totalReviews === 0) return { label: 'Unranked', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' }
     if (accuracyPercent >= 80) return { label: 'Easy', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' }
-    if (accuracyPercent >= 50) return { label: 'Medium', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' }
+    if (accuracyPercent >= 50) return { label: 'Medium', color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' }
     return { label: 'Hard', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' }
   }, [totalReviews, accuracyPercent])
 
@@ -355,7 +355,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
           {/* ════════════ TOP HEADER ════════════ */}
           <header className="flex-shrink-0 z-[120] bg-white/95 backdrop-blur-2xl border-b border-slate-100/90 px-4 py-2.5 flex items-center justify-between shadow-[0_1px_15px_rgba(0,0,0,0.03)]">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 border border-orange-100">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
                 {currentTab === 'stats' ? <BarChart3 className="w-4 h-4" /> :
                  currentTab === 'insight' ? <Sparkles className="w-4 h-4" /> :
                  currentTab === 'note' ? <StickyNote className="w-4 h-4" /> :
@@ -378,7 +378,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
               <button
                 type="button"
                 onClick={() => speakQuestion()}
-                className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 border border-slate-200/60 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-2xs"
+                className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200/60 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-2xs"
                 title="Pronunciation"
               >
                 <Volume2 className="w-3.5 h-3.5" />
@@ -404,23 +404,23 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
               <div className="space-y-4 animate-in fade-in duration-200">
                 {/* 1. Overview Card */}
                 <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden space-y-2.5">
-                  <div className="h-1.5 absolute top-0 inset-x-0 bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500" />
+                  <div className="h-1.5 absolute top-0 inset-x-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-500" />
                   <div className="flex items-start justify-between gap-3 pt-1">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                        <span className="px-2 py-0.5 rounded-md bg-orange-50 border border-orange-100 text-orange-600 text-[9px] font-black uppercase tracking-wider">
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-600 text-[9px] font-black uppercase tracking-wider">
                           CARD #{currentIndex + 1}
                         </span>
                         <span className={cn(
                           "px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider",
                           effectiveCard.box_level === 5 ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
                           effectiveCard.box_level >= 3 ? "bg-blue-50 text-blue-600 border-blue-100" :
-                          "bg-amber-50 text-amber-600 border-amber-100"
+                          "bg-indigo-50 text-indigo-600 border-indigo-100"
                         )}>
                           LEITNER BOX {effectiveCard.box_level || 1} / 5
                         </span>
                         {effectiveCard.consecutive_correct > 0 && (
-                          <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-black">
+                          <span className="px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 border border-violet-100 text-[9px] font-black">
                             🔥 {effectiveCard.consecutive_correct} streak
                           </span>
                         )}
@@ -437,7 +437,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     <button
                       type="button"
                       onClick={() => speakQuestion()}
-                      className="w-9 h-9 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100/60 flex items-center justify-center transition-all active:scale-90 shrink-0 cursor-pointer"
+                      className="w-9 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100/60 flex items-center justify-center transition-all active:scale-90 shrink-0 cursor-pointer"
                       title="Play Pronunciation"
                     >
                       <Volume2 className="w-4 h-4" />
@@ -454,7 +454,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     <span className={cn(
                       "text-[8.5px] font-bold",
                       accuracyPercent >= 80 ? "text-emerald-600" :
-                      accuracyPercent >= 50 ? "text-amber-600" :
+                      accuracyPercent >= 50 ? "text-indigo-600" :
                       totalReviews > 0 ? "text-rose-600" : "text-slate-400"
                     )}>
                       Accuracy: {accuracyPercent}%
@@ -464,8 +464,8 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                   {/* Response Time */}
                   <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col items-center justify-center text-center">
                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">RESPONSE TIME</span>
-                    <span className="text-lg font-black text-orange-600">
-                      {formatSeconds(effectiveCard.reviews_summary?.total_time_seconds || 0)}
+                    <span className="text-lg font-black text-slate-800">
+                      {effectiveCard.reviews_summary?.avg_time_seconds ? `${effectiveCard.reviews_summary.avg_time_seconds}s` : '0s'}
                     </span>
                     <span className="text-[8.5px] font-bold text-slate-400">
                       Avg {effectiveCard.reviews_summary?.avg_time_seconds ?? 0}s / attempt
@@ -478,7 +478,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     <span className={cn(
                       "text-lg font-black",
                       currentBoxLevel === 5 ? "text-emerald-600" :
-                      currentBoxLevel >= 3 ? "text-blue-600" : "text-amber-600"
+                      currentBoxLevel >= 3 ? "text-blue-600" : "text-violet-600"
                     )}>
                       Box {currentBoxLevel} / 5
                     </span>
@@ -506,7 +506,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                 <div className="bg-white p-4 sm:p-4.5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <Target className="w-3.5 h-3.5 text-orange-500" />
+                      <Target className="w-3.5 h-3.5 text-indigo-600" />
                       Answer Breakdown
                     </h4>
                     <span className="text-[9px] font-bold text-slate-400">
@@ -536,13 +536,13 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     </div>
 
                     {/* STREAK */}
-                    <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-100/90 flex flex-col items-center justify-center text-center">
+                    <div className="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-100/90 flex flex-col items-center justify-center text-center">
                       <div className="flex items-center gap-1 mb-0.5">
-                        <Flame className="w-3 h-3 text-amber-600" />
-                        <span className="text-[8.5px] font-black text-amber-600 uppercase tracking-wider">STREAK</span>
+                        <Flame className="w-3 h-3 text-indigo-600" />
+                        <span className="text-[8.5px] font-black text-indigo-600 uppercase tracking-wider">STREAK</span>
                       </div>
-                      <span className="text-lg sm:text-xl font-black text-amber-700">{consecutiveStreak}</span>
-                      <span className="text-[8px] font-bold text-amber-600 truncate max-w-full">
+                      <span className="text-lg sm:text-xl font-black text-indigo-700">{consecutiveStreak}</span>
+                      <span className="text-[8px] font-bold text-indigo-600 truncate max-w-full">
                         {currentBoxLevel >= 5 ? 'Max Level 🏆' : `${Math.max(1, currentBoxLevel + 1 - consecutiveStreak)} to Box ${currentBoxLevel + 1}`}
                       </span>
                     </div>
@@ -553,12 +553,12 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                 <div className="bg-white p-4 sm:p-4.5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                      <Trophy className="w-3.5 h-3.5 text-indigo-600" />
                       Leitner Mastery Ladder
                     </h4>
                     <span className={cn(
                       "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border",
-                      currentBoxLevel === 5 ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-orange-50 text-orange-600 border-orange-200"
+                      currentBoxLevel === 5 ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-indigo-50 text-indigo-600 border-indigo-200"
                     )}>
                       {currentBoxLevel === 5 ? '🏆 Goal Completed' : `Box ${currentBoxLevel} of 5`}
                     </span>
@@ -595,7 +595,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
 
                           <span className={cn(
                             "text-[9px] sm:text-[10px] font-black leading-tight truncate w-full",
-                            isCurrent ? "text-orange-700" : isCompleted ? "text-slate-700" : "text-slate-400"
+                            isCurrent ? "text-indigo-700" : isCompleted ? "text-slate-700" : "text-slate-400"
                           )}>
                             {st.label}
                           </span>
@@ -605,7 +605,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                           </span>
 
                           {isCurrent && (
-                            <span className="mt-1 px-1.5 py-0.2 rounded-md bg-orange-500 text-white text-[7px] font-black tracking-widest uppercase">
+                            <span className="mt-1 px-1.5 py-0.2 rounded-md bg-indigo-600 text-white text-[7px] font-black tracking-widest uppercase">
                               NOW
                             </span>
                           )}
@@ -616,7 +616,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
 
                   {/* Micro Rule Pill */}
                   <div className="p-2.5 rounded-2xl bg-slate-50/90 border border-slate-200/60 flex items-center gap-2 text-left">
-                    <Info className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                    <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                     <p className="text-[9.5px] font-semibold text-slate-500 leading-snug">
                       <strong className="text-slate-700 font-bold">Leitner Rule:</strong> Correct answers advance question to next box (+1 streak). An incorrect answer immediately resets to <strong className="text-rose-600 font-bold">Box 1</strong> for relearning.
                     </p>
@@ -638,11 +638,11 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     className="w-full px-4 py-3 flex items-center justify-between text-left bg-slate-50/70 hover:bg-slate-100/60 transition-all cursor-pointer border-b border-slate-100"
                   >
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-orange-500" />
+                      <Sparkles className="w-4 h-4 text-violet-600" />
                       <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
                         GIẢI THÍCH CHI TIẾT (MẶT SAU)
                       </span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-600" />
                     </div>
                     <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", openAccordionIds.includes('explanation') && "rotate-90")} />
                   </button>
@@ -671,7 +671,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                                 setIsEditingInsight(true)
                               }
                             }}
-                            className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 cursor-pointer transition-all"
+                            className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md text-violet-600 bg-violet-50 hover:bg-violet-100 border border-violet-200 cursor-pointer transition-all"
                           >
                             {isEditingInsight ? 'SAVE' : 'EDIT'}
                           </button>
@@ -682,7 +682,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                         <textarea
                           value={insightEditContent}
                           onChange={(e) => setInsightEditContent(e.target.value)}
-                          className="w-full h-48 p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 outline-none resize-none"
+                          className="w-full h-48 p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-violet-500 outline-none resize-none"
                           placeholder="Nhập giải thích cho câu hỏi..."
                         />
                       ) : (
@@ -724,19 +724,19 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
 
                 {/* 3. Ask AI Prompt CTA */}
                 {!currentQuestion?.ai_explanation && onAskAIExplanation && (
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/70 flex items-center justify-between gap-3">
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200/70 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <Sparkles className="w-5 h-5 text-orange-500 shrink-0 animate-pulse" />
+                      <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 animate-pulse" />
                       <div className="text-left">
-                        <p className="text-xs font-black text-orange-950">Muốn phân tích sâu hơn?</p>
-                        <p className="text-[10px] font-semibold text-orange-700/80">Nhờ AI giải thích chi tiết ngữ pháp, cấu trúc và từ vựng.</p>
+                        <p className="text-xs font-black text-indigo-950">Muốn phân tích sâu hơn?</p>
+                        <p className="text-[10px] font-semibold text-indigo-700/80">Nhờ AI giải thích chi tiết ngữ pháp, cấu trúc và từ vựng.</p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => onAskAIExplanation()}
                       disabled={isAskingAI}
-                      className="px-3 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-wider shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 disabled:opacity-60"
+                      className="px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black text-[10px] uppercase tracking-wider shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 disabled:opacity-60"
                     >
                       {isAskingAI ? "ĐANG TẠO..." : "HỎI AI"}
                     </button>
@@ -752,7 +752,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
               <div className="space-y-3 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs animate-in fade-in duration-200">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <div className="flex items-center gap-2">
-                    <StickyNote className="w-4 h-4 text-amber-500" />
+                    <StickyNote className="w-4 h-4 text-violet-600" />
                     <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">Ghi chú học tập</span>
                   </div>
                   <button
@@ -761,7 +761,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                       if (isEditingNote) handleSaveNote()
                       else setIsEditingNote(true)
                     }}
-                    className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 cursor-pointer transition-all"
+                    className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md text-violet-600 bg-violet-50 hover:bg-violet-100 border border-violet-200 cursor-pointer transition-all"
                   >
                     {isEditingNote ? (isSavingNote ? 'SAVING...' : 'SAVE NOTE') : 'EDIT NOTE'}
                   </button>
@@ -771,7 +771,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                   <textarea
                     value={personalNote}
                     onChange={(e) => setPersonalNote(e.target.value)}
-                    className="w-full h-56 p-3.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-amber-500 outline-none resize-none transition-all"
+                    className="w-full h-56 p-3.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-violet-500 outline-none resize-none transition-all"
                     placeholder="Viết ghi chú riêng cho câu hỏi này (Hỗ trợ Markdown)..."
                     autoFocus
                   />
@@ -951,7 +951,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     type="button"
                     onClick={fetchDetailedStats}
                     disabled={isStatsLoading}
-                    className="h-8 px-2.5 flex items-center justify-center gap-1 rounded-lg border bg-slate-50 border-slate-200 text-slate-700 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shrink-0"
+                    className="h-8 px-2.5 flex items-center justify-center gap-1 rounded-lg border bg-slate-50 border-slate-200 text-slate-700 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shrink-0"
                   >
                     <RotateCcw className={cn("w-3 h-3", isStatsLoading && "animate-spin")} />
                     <span>REFRESH</span>
@@ -966,7 +966,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                       "h-8 px-2.5 flex items-center justify-center gap-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shrink-0",
                       isCopied
                         ? "bg-emerald-500 border-emerald-500 text-white shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600"
                     )}
                   >
                     {isCopied ? <Check className="w-3 h-3 stroke-[3]" /> : <Copy className="w-3 h-3" />}
@@ -985,7 +985,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                       "h-8 px-2.5 flex items-center justify-center gap-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shrink-0",
                       isEditingNote
                         ? "bg-emerald-500 border-emerald-500 text-white shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600"
                     )}
                   >
                     {isEditingNote ? (
@@ -1022,7 +1022,7 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                   onClick={() => {
                     onNextQuestion()
                   }}
-                  className="h-8 px-3 flex items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs active:scale-[0.98] transition-all cursor-pointer shrink-0"
+                  className="h-8 px-3 flex items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs active:scale-[0.98] transition-all cursor-pointer shrink-0"
                 >
                   <span>NEXT</span>
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1043,11 +1043,11 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
                     className={cn(
                       "py-2.5 flex flex-col items-center justify-center gap-1 border-b-2 transition-all cursor-pointer select-none",
                       isActive
-                        ? "border-orange-500 text-orange-600 bg-orange-50/20 font-black"
+                        ? "border-indigo-600 text-indigo-600 bg-indigo-50/20 font-black"
                         : "border-transparent text-slate-400 hover:text-slate-600 font-bold"
                     )}
                   >
-                    <IconComponent className={cn("w-4 h-4", isActive ? "text-orange-500" : "text-slate-400")} />
+                    <IconComponent className={cn("w-4 h-4", isActive ? "text-indigo-600" : "text-slate-400")} />
                     <span className="text-[9px] uppercase tracking-wider leading-none">{tab.label}</span>
                   </button>
                 )

@@ -599,9 +599,115 @@ async def get_quiz_data(request: Request, quiz_id: int, db: AsyncSession = Depen
     }
 
 @router.get("/{quiz_id}/play-data")
-async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str] = None, stubs: bool = False, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
     user_id = user.id if user else None
+
+    from app.modules.quiz.services.media_resolver import resolve_central_url, get_sso_server_url
+    sso_server_url = await get_sso_server_url(db)
+
+    if stubs:
+        # Blazing-fast stubs query: load quiz metadata + groups, and lightweight question stubs without 8000+ options or text
+        quiz_res = await db.execute(
+            select(Quiz).where(Quiz.id == quiz_id).options(
+                selectinload(Quiz.groups)
+            )
+        )
+        quiz = quiz_res.scalar_one_or_none()
+        if not quiz:
+            return JSONResponse(status_code=404, content={"error": "Quiz not found"})
+
+        q_stmt = select(
+            Question.id,
+            Question.group_id,
+            Question.order_in_group,
+            Question.allow_shuffle
+        ).where(Question.quiz_id == quiz_id).order_by(Question.id)
+        q_rows = (await db.execute(q_stmt)).all()
+        q_ids = [r[0] for r in q_rows]
+
+        user_stats = {}
+        is_collaborator = False
+        mastery_map = {}
+        stats_map = {}
+
+        if user_id:
+            from app.modules.gamification.interface import GamificationInterface
+            from app.modules.quiz.models import QuizCollaborator, UserQuestionMastery, UserAnswer, QuizAttempt
+            user_stats = await GamificationInterface.get_user_stats(db, user_id)
+            collab_res = await db.execute(select(QuizCollaborator).where(QuizCollaborator.quiz_id == quiz_id, QuizCollaborator.user_id == user_id))
+            is_collaborator = collab_res.scalar() is not None
+
+            if q_ids:
+                mastery_stmt = select(UserQuestionMastery.question_id, UserQuestionMastery.box_level, UserQuestionMastery.is_ignored).where(
+                    UserQuestionMastery.user_id == user_id,
+                    UserQuestionMastery.question_id.in_(q_ids)
+                )
+                mastery_res = await db.execute(mastery_stmt)
+                mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
+
+                stats_query = select(
+                    UserAnswer.question_id,
+                    func.count(UserAnswer.id).label("total"),
+                    func.sum(func.cast(UserAnswer.is_correct, Integer)).label("correct"),
+                    func.avg(UserAnswer.active_time).label("avg_time")
+                ).join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id).where(
+                    QuizAttempt.user_id == user_id,
+                    UserAnswer.question_id.in_(q_ids)
+                ).group_by(UserAnswer.question_id)
+                stats_results = await db.execute(stats_query)
+                for row in stats_results:
+                    tot = row.total or 0
+                    cor = row.correct or 0
+                    stats_map[row.question_id] = {
+                        "total": tot,
+                        "correct": cor,
+                        "wrong": tot - cor,
+                        "avg_time": round(row.avg_time if row.avg_time else 0, 1)
+                    }
+
+        return {
+            "id": quiz.id,
+            "title": quiz.title,
+            "description": quiz.description,
+            "ai_prompt": quiz.ai_prompt,
+            "instruction": quiz.instruction,
+            "time_limit": quiz.time_limit or 0,
+            "category_id": quiz.category_id,
+            "creator_id": quiz.creator_id,
+            "is_collaborator": is_collaborator,
+            "practice_settings": quiz.practice_settings or {},
+            "user_total_xp": user_stats.get("xp", 0),
+            "groups": [
+                {
+                    "id": g.id,
+                    "group_code": g.group_code,
+                    "title": g.title,
+                    "passage_text": g.passage_text,
+                    "audio_url": resolve_central_url(g.audio_url, sso_server_url),
+                    "image_url": resolve_central_url(g.image_url, sso_server_url),
+                    "raw_audio_url": g.audio_url,
+                    "raw_image_url": g.image_url,
+                    "allow_shuffle": g.allow_shuffle
+                } for g in getattr(quiz, 'groups', [])
+            ],
+            "questions": [
+                {
+                    "id": r[0],
+                    "group_id": r[1],
+                    "order_in_group": r[2] or 0,
+                    "allow_shuffle": r[3] if r[3] is not None else True,
+                    "stats": stats_map.get(r[0], {"total": 0, "correct": 0, "wrong": 0, "avg_time": 0}),
+                    "box_level": mastery_map.get(r[0], {}).get("box_level", 1),
+                    "is_ignored": mastery_map.get(r[0], {}).get("is_ignored", False),
+                    "is_loaded": False,
+                    "options": []
+                }
+                for r in q_rows
+            ]
+        }
+
+    # Full data mode (used when stubs=False)
     if mode in ("mcq", "typing", "listening") or not user_id:
         quiz = await QuizService.get_quiz_by_id(db, quiz_id)
     else:
@@ -624,9 +730,6 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
         )
         mastery_res = await db.execute(mastery_stmt)
         mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
-    
-    from app.modules.quiz.services.media_resolver import resolve_central_url, get_sso_server_url
-    sso_server_url = await get_sso_server_url(db)
     
     return {
         "id": quiz.id,
@@ -671,6 +774,7 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 "stats": getattr(q, 'stats', None),
                 "box_level": mastery_map.get(q.id, {}).get("box_level", 1),
                 "is_ignored": mastery_map.get(q.id, {}).get("is_ignored", False),
+                "is_loaded": True,
                 "options": [
                     {"id": o.id, "content": o.content, "is_correct": o.is_correct}
                     for o in q.options
@@ -678,6 +782,68 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
             } for q in quiz.questions
         ]
     }
+
+@router.post("/{quiz_id}/questions-batch")
+@router.get("/{quiz_id}/questions-batch")
+async def get_quiz_questions_batch(request: Request, quiz_id: int, ids: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    question_ids = []
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                question_ids = body.get("question_ids", [])
+            elif isinstance(body, list):
+                question_ids = body
+        except Exception:
+            question_ids = []
+    if not question_ids and ids:
+        try:
+            question_ids = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+        except Exception:
+            question_ids = []
+
+    if not question_ids:
+        return []
+
+    # Bound batch size for security/performance (max 100 per call)
+    question_ids = question_ids[:100]
+
+    from app.modules.quiz.services.media_resolver import resolve_central_url, get_sso_server_url
+    sso_server_url = await get_sso_server_url(db)
+
+    stmt = select(Question).where(
+        Question.quiz_id == quiz_id,
+        Question.id.in_(question_ids)
+    ).options(
+        selectinload(Question.options)
+    )
+    result = await db.execute(stmt)
+    questions = result.scalars().all()
+
+    return [
+        {
+            "id": q.id,
+            "group_id": q.group_id,
+            "order_in_group": q.order_in_group or 0,
+            "allow_shuffle": q.allow_shuffle if q.allow_shuffle is not None else True,
+            "image": resolve_central_url(q.image, sso_server_url),
+            "audio": resolve_central_url(q.audio, sso_server_url),
+            "raw_image": q.image,
+            "raw_audio": q.audio,
+            "question_type": q.question_type or "normal",
+            "content": q.content,
+            "explanation": q.explanation,
+            "ai_explanation": q.ai_explanation,
+            "others": q.others if isinstance(q.others, dict) else {},
+            "options": [
+                {"id": o.id, "content": o.content, "is_correct": o.is_correct}
+                for o in q.options
+            ],
+            "is_loaded": True
+        }
+        for q in questions
+    ]
+
 
 @router.post("/{quiz_id}/exam/submit")
 async def submit_exam_attempt(request: Request, quiz_id: int, payload: dict, db: AsyncSession = Depends(get_db)):

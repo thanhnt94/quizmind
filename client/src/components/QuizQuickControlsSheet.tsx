@@ -77,7 +77,7 @@ const QUIZ_MODES = [
     short: 'MASTERY',
     name: 'Leitner Spaced Repetition',
     icon: '🏆',
-    activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-500/20'
+    activeClass: 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
   },
   {
     id: 'review',
@@ -181,7 +181,7 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
   const fontSize = userSettings?.font_size ?? '100%'
   const fontMeta = (() => {
     const pct = parseInt(fontSize, 10) || 100
-    if (pct <= 85) return { label: '85%', sub: 'Compact', active: true, color: 'text-amber-600' }
+    if (pct <= 85) return { label: '85%', sub: 'Compact', active: true, color: 'text-violet-600' }
     if (pct <= 105) return { label: '100%', sub: 'Normal', active: false, color: 'text-slate-500' }
     if (pct <= 120) return { label: '115%', sub: 'Large', active: true, color: 'text-indigo-600' }
     return { label: '130%', sub: 'XL', active: true, color: 'text-purple-600' }
@@ -248,7 +248,7 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
             {/* Header Bar */}
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                   <Sliders className="w-3.5 h-3.5" />
                 </div>
                 <div className="text-left">
@@ -265,7 +265,7 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                     onClose()
                     onOpenSettings()
                   }}
-                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-orange-50 hover:text-orange-600 text-slate-500 flex items-center justify-center transition-all active:scale-90 cursor-pointer border border-slate-200/60 shadow-2xs group"
+                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 flex items-center justify-center transition-all active:scale-90 cursor-pointer border border-slate-200/60 shadow-2xs group"
                   title="All Quiz Settings"
                 >
                   <Settings className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform duration-300" />
@@ -405,17 +405,17 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                   className={cn(
                     "flex flex-col items-center justify-center p-2 rounded-2xl border transition-all active:scale-95 text-center min-h-[72px] gap-1.5 cursor-pointer select-none",
                     autoAdvance
-                      ? "bg-amber-50 border-amber-300 text-amber-700 shadow-2xs"
+                      ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-2xs"
                       : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/70 text-slate-500"
                   )}
                   title={`Auto Next: ${autoAdvance ? 'ON (2s)' : 'OFF'}`}
                 >
-                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", autoAdvance ? "bg-amber-500 text-white shadow-2xs" : "bg-white text-slate-400 border border-slate-200/60")}>
+                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", autoAdvance ? "bg-indigo-600 text-white shadow-2xs" : "bg-white text-slate-400 border border-slate-200/60")}>
                     <Zap className="w-4 h-4" />
                   </div>
                   <div className="flex flex-col items-center leading-none gap-0.5">
                     <span className="text-[10px] font-bold tracking-tight">Auto Next</span>
-                    <span className={cn("text-[8px] font-black uppercase tracking-wider", autoAdvance ? "text-amber-600" : "text-slate-400")}>
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider", autoAdvance ? "text-indigo-600" : "text-slate-400")}>
                       {autoAdvance ? "ON" : "OFF"}
                     </span>
                   </div>
@@ -441,15 +441,15 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                   onClick={() => {
                     showLocalToast?.("Instant Answer Flow: TAP", 'info')
                   }}
-                  className="flex flex-col items-center justify-center p-2 rounded-2xl border bg-orange-50 border-orange-300 text-orange-700 shadow-2xs transition-all active:scale-95 text-center min-h-[72px] gap-1.5 cursor-pointer select-none"
+                  className="flex flex-col items-center justify-center p-2 rounded-2xl border bg-indigo-50 border-indigo-200 text-indigo-700 shadow-2xs transition-all active:scale-95 text-center min-h-[72px] gap-1.5 cursor-pointer select-none"
                   title="Question Flow: Instant Tap"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-orange-500 text-white shadow-2xs flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white shadow-2xs flex items-center justify-center">
                     <MoveHorizontal className="w-4 h-4" />
                   </div>
                   <div className="flex flex-col items-center leading-none gap-0.5">
                     <span className="text-[10px] font-bold tracking-tight">Rate Mode</span>
-                    <span className="text-[8px] font-black uppercase tracking-wider text-orange-600">
+                    <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600">
                       TAP
                     </span>
                   </div>
@@ -548,17 +548,17 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                   className={cn(
                     "flex flex-col items-center justify-center p-2 rounded-2xl border transition-all active:scale-95 text-center min-h-[72px] gap-1.5 cursor-pointer select-none",
                     isFlagged
-                      ? "bg-amber-50 border-amber-300 text-amber-700 shadow-2xs"
+                      ? "bg-violet-50 border-violet-200 text-violet-700 shadow-2xs"
                       : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/70 text-slate-500"
                   )}
                   title={isFlagged ? "Unflag Question" : "Flag Question"}
                 >
-                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", isFlagged ? "bg-amber-500 text-white shadow-2xs" : "bg-white text-slate-400 border border-slate-200/60")}>
+                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", isFlagged ? "bg-violet-600 text-white shadow-2xs" : "bg-white text-slate-400 border border-slate-200/60")}>
                     <Star className={cn("w-4 h-4", isFlagged && "fill-white")} />
                   </div>
                   <div className="flex flex-col items-center leading-none gap-0.5">
                     <span className="text-[10px] font-bold tracking-tight">Star</span>
-                    <span className={cn("text-[8px] font-black uppercase tracking-wider", isFlagged ? "text-amber-600" : "text-slate-400")}>
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider", isFlagged ? "text-violet-600" : "text-slate-400")}>
                       {isFlagged ? "STARRED" : "OFF"}
                     </span>
                   </div>
@@ -573,17 +573,17 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                   className={cn(
                     "flex flex-col items-center justify-center p-2 rounded-2xl border transition-all active:scale-95 text-center min-h-[72px] gap-1.5 cursor-pointer select-none",
                     showingHint
-                      ? "bg-amber-100 border-amber-400 text-amber-900 shadow-2xs"
+                      ? "bg-blue-50 border-blue-200 text-blue-800 shadow-2xs"
                       : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/70 text-slate-500"
                   )}
                   title={showingHint ? "Hide AI Hint" : "Reveal AI Hint"}
                 >
-                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", showingHint ? "bg-amber-500 text-white shadow-2xs" : "bg-white text-slate-400 border border-slate-200/60")}>
+                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", showingHint ? "bg-blue-600 text-white shadow-2xs" : "bg-white text-slate-400 border border-slate-200/60")}>
                     <Lightbulb className={cn("w-4 h-4", showingHint && "fill-white")} />
                   </div>
                   <div className="flex flex-col items-center leading-none gap-0.5">
                     <span className="text-[10px] font-bold tracking-tight">AI Hint</span>
-                    <span className={cn("text-[8px] font-black uppercase tracking-wider", showingHint ? "text-amber-700" : "text-slate-400")}>
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider", showingHint ? "text-blue-700" : "text-slate-400")}>
                       {showingHint ? "ACTIVE" : "OFF"}
                     </span>
                   </div>
@@ -705,11 +705,11 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                     onClose()
                     onOpenCardHub?.('note')
                   }}
-                  className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200/80 hover:border-amber-300 transition-all active:scale-98 text-left select-none group shadow-2xs cursor-pointer"
+                  className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 hover:bg-violet-50/70 border border-slate-200/80 hover:border-violet-200 transition-all active:scale-98 text-left select-none group shadow-2xs cursor-pointer"
                   title="Open Personal Notes Drawer"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs transition-transform group-hover:scale-105">
+                    <div className="w-8 h-8 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-2xs transition-transform group-hover:scale-105">
                       <FileText className="w-4 h-4" />
                     </div>
                     <div className="flex flex-col min-w-0 leading-none gap-0.5">
@@ -717,7 +717,7 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                       <span className="text-[9px] text-slate-400 font-medium truncate">Personal Notes</span>
                     </div>
                   </div>
-                  <div className="w-5 h-5 rounded-full bg-slate-200/60 group-hover:bg-amber-100 flex items-center justify-center text-slate-400 group-hover:text-amber-600 shrink-0 transition-colors ml-1">
+                  <div className="w-5 h-5 rounded-full bg-slate-200/60 group-hover:bg-violet-100 flex items-center justify-center text-slate-400 group-hover:text-violet-600 shrink-0 transition-colors ml-1">
                     <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </button>

@@ -80,7 +80,7 @@ const STEP_META: Record<string, { emoji: string; label: string; short: string; s
     emoji: '⏱️', 
     label: 'Study Time', 
     short: 'TIME',
-    style: 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+    style: 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300'
   }
 }
 
@@ -255,7 +255,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 ? "border-cyan-400/70 shadow-cyan-950/50"
                 : isGoalReached 
                   ? "border-emerald-400/60 shadow-emerald-950/40" 
-                  : "border-amber-500/50 shadow-amber-950/40"
+                  : "border-indigo-400/50 shadow-indigo-950/40"
             )}
           >
             <motion.div
@@ -268,7 +268,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                   ? "bg-gradient-to-r from-emerald-600 via-teal-400 to-cyan-400 shadow-[0_0_35px_rgba(34,211,238,0.9)]"
                   : isGoalReached 
                     ? "bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-400 shadow-[0_0_30px_rgba(16,185,129,0.9)]" 
-                    : "bg-gradient-to-r from-amber-600 via-orange-500 to-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.9)]"
+                    : "bg-gradient-to-r from-indigo-600 via-purple-500 to-violet-400 shadow-[0_0_30px_rgba(99,102,241,0.9)]"
               )}
             />
             <motion.div
@@ -288,7 +288,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
               ) : isGoalReached ? (
                 <Trophy className="w-4 h-4 text-emerald-300 fill-emerald-300 animate-bounce" />
               ) : (
-                <Flame className="w-4 h-4 text-amber-300 fill-amber-300 animate-bounce" />
+                <Flame className="w-4 h-4 text-violet-300 fill-violet-300 animate-bounce" />
               )}
               <span>{praiseMsg}</span>
               {hasSubProg && (
@@ -298,7 +298,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                     ? "bg-cyan-950/90 border-cyan-400/80 text-cyan-200"
                     : isGoalReached 
                       ? "bg-emerald-950/80 border-emerald-400/60 text-emerald-200" 
-                      : "bg-black/70 border-amber-300/50 text-amber-300"
+                      : "bg-indigo-950/80 border-indigo-400/60 text-indigo-200"
                 )}>
                   {isOverachieved ? `+${extraCount}` : `${subProgressCurr} / ${subProgressTotal}`}
                 </span>
@@ -445,7 +445,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                       <Gauge className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                       <span className={cn(
                         "font-black text-[11px]",
-                        accuracyPercent >= 80 ? "text-emerald-600" : accuracyPercent >= 60 ? "text-amber-600" : "text-rose-600"
+                        accuracyPercent >= 80 ? "text-emerald-600" : accuracyPercent >= 60 ? "text-indigo-600" : "text-rose-600"
                       )}>
                         {accuracyPercent}%
                       </span>
@@ -467,20 +467,20 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
                 <div className="w-[1px] h-3 bg-slate-800 shrink-0" />
 
                 {/* 5. XP Score */}
-                <div className="flex items-center gap-1 shrink-0 text-amber-300" title={`Session XP: +${sessionXP} | Total: ${xp.toLocaleString()} XP`}>
-                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <div className="flex items-center gap-1 shrink-0 text-violet-300" title={`Session XP: +${sessionXP} | Total: ${xp.toLocaleString()} XP`}>
+                  <Trophy className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                   <span className="font-black text-[11px]">
                     {sessionXP > 0 ? `+${sessionXP}` : displayTotalXP}
                   </span>
-                  <span className="text-[10px] text-amber-400/80 font-semibold">XP</span>
+                  <span className="text-[10px] text-violet-400/80 font-semibold">XP</span>
                 </div>
 
                 {/* 6. Streak Flame */}
                 {streakCount > 0 && (
                   <>
                     <div className="w-[1px] h-3 bg-slate-800 shrink-0" />
-                    <div className="flex items-center gap-1 shrink-0 text-orange-400" title={`Active streak: ${streakCount} days`}>
-                      <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500 shrink-0 animate-pulse" />
+                    <div className="flex items-center gap-1 shrink-0 text-violet-300" title={`Active streak: ${streakCount} days`}>
+                      <Flame className="w-3.5 h-3.5 text-violet-400 fill-violet-400 shrink-0 animate-pulse" />
                       <span className="font-black text-[11px]">{streakCount}d</span>
                     </div>
                   </>

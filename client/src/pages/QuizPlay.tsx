@@ -56,8 +56,8 @@ interface QuestionGroup {
 
 interface Question {
   id: number
-  content: string
-  explanation: string
+  content?: string
+  explanation?: string
   ai_explanation?: string
   options: Option[]
   stats?: { total: number, correct: number, avg_time: number }
@@ -72,6 +72,7 @@ interface Question {
   audio?: string
   image?: string
   others?: Record<string, any>
+  is_loaded?: boolean
 }
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('')
@@ -341,7 +342,7 @@ export default function QuizPlay() {
         )
       case 4:
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 shadow-sm">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 border border-purple-500/20 shadow-sm">
             ⚡ PROFICIENT
           </span>
         )
@@ -353,7 +354,7 @@ export default function QuizPlay() {
         )
       case 2:
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 border border-amber-500/20 shadow-sm">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 shadow-sm">
             🌱 LEARNING
           </span>
         )
@@ -517,9 +518,54 @@ export default function QuizPlay() {
     fetchUser()
   }, [user, setUser, setGamify])
 
+  const inFlightBatchRef = useRef<Set<number>>(new Set())
+
+  const preloadBatchAroundIndex = async (centerIdx: number, customQuestions?: any[]) => {
+    const list = customQuestions || session?.questions
+    if (!list || list.length === 0 || !id) return
+
+    const start = Math.max(0, centerIdx - 5)
+    const end = Math.min(list.length, centerIdx + 30)
+    const windowSlice = list.slice(start, end)
+
+    const missingIds = windowSlice
+      .filter((q: any) => !q.is_loaded && !inFlightBatchRef.current.has(q.id))
+      .map((q: any) => q.id)
+
+    if (missingIds.length === 0) return
+
+    missingIds.forEach((qid: number) => inFlightBatchRef.current.add(qid))
+
+    try {
+      const res = await axios.post(`/api/v1/quiz/${id}/questions-batch`, { question_ids: missingIds })
+      const batch: any[] = res.data || []
+      if (batch.length > 0) {
+        const map = new Map<number, any>(batch.map((b: any) => [b.id, b]))
+        setSession((prev: any) => {
+          if (!prev || !prev.questions) return prev
+          const updated = prev.questions.map((q: any) => {
+            const found = map.get(q.id)
+            return found ? { ...q, ...found, is_loaded: true } : q
+          })
+          return { ...prev, questions: updated }
+        })
+      }
+    } catch (e) {
+      console.error("Batch preloading error:", e)
+    } finally {
+      missingIds.forEach((qid: number) => inFlightBatchRef.current.delete(qid))
+    }
+  }
+
+  useEffect(() => {
+    if (session?.questions && session.questions.length > 0) {
+      preloadBatchAroundIndex(currentIndex)
+    }
+  }, [currentIndex, session?.questions?.length])
+
   const fetchSession = async () => {
     try {
-      const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data`)
+      const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data?stubs=1`)
       let questions = quizRes.data.questions || []
 
       const searchParams = new URLSearchParams(window.location.search)
@@ -653,6 +699,7 @@ export default function QuizPlay() {
       setCurrentIndex(curIdx)
       setSelectedOption(null)
       setShowFeedback(false)
+      preloadBatchAroundIndex(curIdx, questions)
     } catch (e) {
       navigate('/')
     }
@@ -1035,6 +1082,7 @@ export default function QuizPlay() {
     setIsEditingNote(false)
     setIsEditingAI(false)
     saveSession(sessionAnswers, idx)
+    preloadBatchAroundIndex(idx)
   }
 
   const handleExamSelectOption = (optIdx: number) => {
@@ -1335,9 +1383,8 @@ export default function QuizPlay() {
         const poll = setInterval(async () => {
           attempts++
           try {
-            // Append cache buster to completely bypass browser and proxy caching
-            const quizRes = await axios.get(`/api/v1/quiz/${id}/play-data?t=${Date.now()}`)
-            const updatedQ = quizRes.data.questions?.find((q: any) => q.id === currentQuestion.id)
+            const batchRes = await axios.post(`/api/v1/quiz/${id}/questions-batch`, { question_ids: [currentQuestion.id] })
+            const updatedQ = batchRes.data?.[0]
             if (updatedQ && updatedQ.ai_explanation) {
               setSession((prev: any) => {
                 const newQs = [...prev.questions]
@@ -1568,7 +1615,7 @@ export default function QuizPlay() {
     
     const hasInsightContent = insightFields.some((f: any) => f.hasContent)
     const tabs = [
-      { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-100', hasContent: hasInsightContent },
+      { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-violet-600', bg: 'bg-violet-100', hasContent: hasInsightContent },
       { id: 'ai', label: 'AI ANALYSIS', icon: Sparkles, color: 'text-indigo-600', bg: 'bg-indigo-100', hasContent: !!currentQuestion?.ai_explanation },
       { id: 'note', label: 'NOTE', icon: StickyNote, color: 'text-emerald-500', bg: 'bg-emerald-100', hasContent: !!personalNote },
       { id: 'community', label: 'COMMUNITY', icon: MessageSquare, color: 'text-purple-600', bg: 'bg-purple-100', hasContent: contributions.length > 0 }
@@ -1586,8 +1633,8 @@ export default function QuizPlay() {
                  <div className="flex flex-col gap-2.5 mb-3.5">
                    <div className="flex items-center justify-between">
                      <div className="flex items-center gap-2">
-                       <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center">
-                          <Lightbulb className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                       <div className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-950/60 flex items-center justify-center">
+                          <Lightbulb className="w-3.5 h-3.5 fill-violet-600 text-violet-600" />
                        </div>
                        <span className="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">
                          LEARNING INSIGHT
@@ -1634,7 +1681,7 @@ export default function QuizPlay() {
                              className={cn(
                                "px-2.5 py-1 rounded-lg text-xs font-black transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
                                isSelected
-                                 ? "bg-amber-500 text-white shadow-2xs"
+                                 ? "bg-violet-600 text-white shadow-2xs"
                                  : "bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700 hover:bg-white"
                              )}
                            >
@@ -1714,7 +1761,7 @@ export default function QuizPlay() {
                        onClick={() => setIsEditingPrompt(!isEditingPrompt)}
                        className={cn(
                          "text-[9px] font-black uppercase tracking-widest transition-all px-2.5 py-1.5 rounded-md",
-                         isEditingPrompt ? "bg-amber-600 text-white shadow-sm" : "text-amber-500 hover:text-amber-600 hover:bg-white"
+                         isEditingPrompt ? "bg-indigo-600 text-white shadow-sm" : "text-indigo-600 hover:text-indigo-700 hover:bg-white"
                        )}
                      >
                        {isEditingPrompt ? 'CLOSE PROMPT' : 'PROMPT'}
@@ -1752,12 +1799,12 @@ export default function QuizPlay() {
                </div>
                
                {isEditingPrompt ? (
-                 <div className="space-y-3 mt-2 bg-amber-50/50 border border-amber-100 rounded-2xl p-4">
+                 <div className="space-y-3 mt-2 bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4">
                    <div className="flex items-center justify-between">
-                     <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">EDIT SYSTEM PROMPT FOR AI</span>
+                     <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider">EDIT SYSTEM PROMPT FOR AI</span>
                      <button 
                        onClick={savePrompt}
-                       className="text-[9px] font-black bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                       className="text-[9px] font-black bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition-all"
                      >
                        SAVE PROMPT
                      </button>
@@ -1766,9 +1813,9 @@ export default function QuizPlay() {
                      value={promptInput}
                      onChange={(e) => setPromptInput(e.target.value)}
                      placeholder="Enter System Prompt to guide the AI..."
-                     className="w-full h-80 bg-white rounded-xl p-4 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-amber-500 outline-none border border-amber-200 resize-none transition-all"
+                     className="w-full h-80 bg-white rounded-xl p-4 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none border border-indigo-200 resize-none transition-all"
                    />
-                   <p className="text-[9px] font-medium text-amber-600/80 italic leading-relaxed">
+                   <p className="text-[9px] font-medium text-indigo-600/80 italic leading-relaxed">
                      * Guide: Use variables <code>{"{{question}}"}</code>, <code>{"{{options}}"}</code>, <code>{"{{correct_answer}}"}</code> to insert dynamic data. The new prompt will be applied to all subsequently regenerated questions.
                    </p>
                  </div>
@@ -1905,7 +1952,7 @@ export default function QuizPlay() {
                           {c.type === 'correction' && (
                             <span className={cn(
                               "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider",
-                              c.status === 'approved' ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
+                              c.status === 'approved' ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500"
                             )}>
                               Suggestion
                             </span>
@@ -2010,7 +2057,7 @@ export default function QuizPlay() {
                     onClick={() => setContributionType('correction')}
                     className={cn(
                       "px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer",
-                      contributionType === 'correction' ? "bg-amber-500 text-white shadow-2xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      contributionType === 'correction' ? "bg-violet-600 text-white shadow-2xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                     )}
                   >
                     ⚠️ Suggestion
@@ -2083,7 +2130,7 @@ export default function QuizPlay() {
                        "w-9 sm:w-11 h-9 sm:h-11 flex items-center justify-center rounded-lg sm:rounded-xl transition-all duration-300 relative cursor-pointer",
                        isActive 
                          ? (
-                             tab.id === 'insight' ? "text-amber-500 bg-white shadow-md border border-amber-100/60 scale-105" :
+                             tab.id === 'insight' ? "text-violet-600 bg-white shadow-md border border-violet-100/60 scale-105" :
                              tab.id === 'ai' ? "text-indigo-600 bg-white shadow-md border border-indigo-100/60 scale-105" :
                              tab.id === 'note' ? "text-emerald-600 bg-white shadow-md border border-emerald-100/60 scale-105" :
                              "text-purple-600 bg-white shadow-md border border-purple-100/60 scale-105"
@@ -2096,7 +2143,7 @@ export default function QuizPlay() {
                        {tab.hasContent && (
                          <span className={cn(
                            "absolute -top-1 -right-1 w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full border border-white animate-pulse",
-                           tab.id === 'insight' ? "bg-amber-500" :
+                           tab.id === 'insight' ? "bg-violet-600" :
                            tab.id === 'ai' ? "bg-indigo-600" :
                            tab.id === 'note' ? "bg-emerald-500" :
                            "bg-purple-600"
@@ -2203,9 +2250,9 @@ export default function QuizPlay() {
               <span className="text-[14px] font-black text-slate-600">{remainingCount}</span>
               <span className="text-[8px] font-bold text-slate-400 uppercase">REMAIN</span>
             </div>
-            <div className="flex flex-col items-center p-2 bg-amber-50 rounded-xl shadow-sm border border-amber-100/50">
-              <span className="text-[14px] font-black text-amber-600">{flaggedCount}</span>
-              <span className="text-[8px] font-bold text-amber-500 uppercase">FLAGGED</span>
+            <div className="flex flex-col items-center p-2 bg-violet-50 rounded-xl shadow-sm border border-violet-100/50">
+              <span className="text-[14px] font-black text-violet-600">{flaggedCount}</span>
+              <span className="text-[8px] font-bold text-violet-500 uppercase">FLAGGED</span>
             </div>
           </div>
         </div>
@@ -2247,98 +2294,101 @@ export default function QuizPlay() {
     )
   }
 
-  const renderQuestionMapGrid = () => (
-    <div className="grid grid-cols-8 md:grid-cols-10 lg:grid-cols-5 gap-3 p-1 pb-4">
-      {session.questions?.map((q: any, i: number) => {
-        if (isExamMode) {
-          const isAnswered = examAnswers[i] !== undefined
-          const isFlagged = flaggedQuestions.has(i)
+  const questionMapGrid = useMemo(() => {
+    if (!session?.questions) return null
+    return (
+      <div className="grid grid-cols-8 md:grid-cols-10 lg:grid-cols-5 gap-3 p-1 pb-4">
+        {session.questions.map((q: any, i: number) => {
+          if (isExamMode) {
+            const isAnswered = examAnswers[i] !== undefined
+            const isFlagged = flaggedQuestions.has(i)
+            const isActive = currentIndex === i
+            const detail = isReviewMode && examResults?.detailed_results?.find((d: any) => d.question_id === q.id)
+            const isReviewCorrect = detail?.is_correct
+
+            return (
+              <button
+                key={i}
+                onClick={() => {
+                  navigateToQuestion(i)
+                  setIsMapOpen(false)
+                }}
+                className={cn(
+                  "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
+                  isReviewMode
+                    ? (isReviewCorrect ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs" : "bg-rose-500 text-white border-rose-600 shadow-2xs")
+                    : isAnswered
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                    : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300",
+                  isActive ? "ring-2 ring-indigo-500 ring-offset-2 scale-105 z-10" : ""
+                )}
+              >
+                <span className="relative z-10">{i + 1}</span>
+                {isFlagged && !isReviewMode && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-violet-600 rounded-full border border-white" />
+                )}
+                {isReviewMode && (
+                  <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                    {isReviewCorrect ? (
+                      <Check className="w-5 h-5 text-white stroke-[3]" />
+                    ) : (
+                      <X className="w-5 h-5 text-white stroke-[3]" />
+                    )}
+                  </div>
+                )}
+              </button>
+            )
+          }
+
+          const hasAttemptedThisSession = sessionAnswers[i] !== undefined
+          const selectedOptIdx = sessionAnswers[i]
+          const sessionCorrect = selectedOptIdx !== undefined ? (q.options?.[selectedOptIdx]?.is_correct ?? false) : false
+          const totalStats = q.stats?.total || 0
+          const correctStats = q.stats?.correct || 0
+          const ratio = totalStats > 0 ? (correctStats / totalStats) * 100 : 0
+
           const isActive = currentIndex === i
-          const detail = isReviewMode && examResults?.detailed_results?.find((d: any) => d.question_id === q.id)
-          const isReviewCorrect = detail?.is_correct
 
           return (
-            <button
-              key={i}
+            <button 
+              key={i} 
               onClick={() => {
                 navigateToQuestion(i)
                 setIsMapOpen(false)
               }}
               className={cn(
                 "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
-                isReviewMode
-                  ? (isReviewCorrect ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs" : "bg-rose-500 text-white border-rose-600 shadow-2xs")
-                  : isAnswered
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                  : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300",
-                isActive ? "ring-2 ring-indigo-500 ring-offset-2 scale-105 z-10" : ""
+                q.is_ignored ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 grayscale hover:opacity-100 hover:grayscale-0" :
+                isActive 
+                  ? "border-indigo-400 bg-indigo-50/30 z-10 scale-105 shadow-sm" 
+                  : "border-slate-100 hover:border-indigo-200 bg-white",
+                !q.is_ignored && (totalStats === 0 ? "text-slate-400" : "text-slate-700")
               )}
+              style={
+                !q.is_ignored && totalStats > 0 
+                  ? { background: `linear-gradient(to top, #DCFCE7 0%, #DCFCE7 ${ratio}%, #FEE2E2 ${ratio}%, #FEE2E2 100%)` } 
+                  : {}
+              }
             >
-              <span className="relative z-10">{i + 1}</span>
-              {isFlagged && !isReviewMode && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border border-white" />
-              )}
-              {isReviewMode && (
+              {q.is_ignored ? (
+                <EyeOff className="w-5 h-5 text-slate-400 absolute inset-0 m-auto z-20 pointer-events-none" />
+              ) : !hasAttemptedThisSession ? (
+                <span className="relative z-10">{i + 1}</span>
+              ) : (
                 <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                  {isReviewCorrect ? (
-                    <Check className="w-5 h-5 text-white stroke-[3]" />
+                  {sessionCorrect ? (
+                    <Check className="w-6 h-6 text-emerald-700 stroke-[4] animate-in zoom-in-50 duration-300" />
                   ) : (
-                    <X className="w-5 h-5 text-white stroke-[3]" />
+                    <X className="w-6 h-6 text-red-700 stroke-[4] animate-in zoom-in-50 duration-300" />
                   )}
                 </div>
               )}
             </button>
           )
-        }
-
-        const hasAttemptedThisSession = sessionAnswers[i] !== undefined
-        const selectedOptIdx = sessionAnswers[i]
-        const sessionCorrect = selectedOptIdx !== undefined ? q.options[selectedOptIdx]?.is_correct : false
-        const totalStats = q.stats?.total || 0
-        const correctStats = q.stats?.correct || 0
-        const ratio = totalStats > 0 ? (correctStats / totalStats) * 100 : 0
-
-        const isActive = currentIndex === i
-
-        return (
-          <button 
-            key={i} 
-            onClick={() => {
-              navigateToQuestion(i)
-              setIsMapOpen(false)
-            }}
-            className={cn(
-              "relative aspect-square rounded-xl border flex items-center justify-center font-black text-[11px] transition-all duration-200",
-              q.is_ignored ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 grayscale hover:opacity-100 hover:grayscale-0" :
-              isActive 
-                ? "border-indigo-400 bg-indigo-50/30 z-10 scale-105 shadow-sm" 
-                : "border-slate-100 hover:border-indigo-200 bg-white",
-              !q.is_ignored && (totalStats === 0 ? "text-slate-400" : "text-slate-700")
-            )}
-            style={
-              !q.is_ignored && totalStats > 0 
-                ? { background: `linear-gradient(to top, #DCFCE7 0%, #DCFCE7 ${ratio}%, #FEE2E2 ${ratio}%, #FEE2E2 100%)` } 
-                : {}
-            }
-          >
-            {q.is_ignored ? (
-              <EyeOff className="w-5 h-5 text-slate-400 absolute inset-0 m-auto z-20 pointer-events-none" />
-            ) : !hasAttemptedThisSession ? (
-              <span className="relative z-10">{i + 1}</span>
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                {sessionCorrect ? (
-                  <Check className="w-6 h-6 text-emerald-700 stroke-[4] animate-in zoom-in-50 duration-300" />
-                ) : (
-                  <X className="w-6 h-6 text-red-700 stroke-[4] animate-in zoom-in-50 duration-300" />
-                )}
-              </div>
-            )}
-          </button>
-        )
-      })}
-    </div>
-  )
+        })}
+      </div>
+    )
+  }, [session?.questions, isExamMode, examAnswers, flaggedQuestions, currentIndex, isReviewMode, examResults, sessionAnswers])
 
   const renderQuestionMedia = () => {
     const rawAudio = currentQuestion?.audio || currentQuestion?.audio_url
@@ -2391,9 +2441,25 @@ export default function QuizPlay() {
   }
 
   const renderOptionsList = () => {
+    if (!currentQuestion?.is_loaded) {
+      return (
+        <div className="grid grid-cols-1 gap-3 animate-pulse">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="p-4 md:p-5 rounded-2xl border-2 border-slate-100 bg-white/80 flex items-center gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-100/60" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-slate-200/70 rounded-full w-3/4" />
+                <div className="h-3 bg-slate-100 rounded-full w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
     return (
       <div className="grid grid-cols-1 gap-3">
-        {currentQuestion?.options.map((opt, idx) => {
+        {currentQuestion?.options?.map((opt, idx) => {
           if (isExamMode) {
             const isSelected = examAnswers[currentIndex] === idx
             const examDetail = isReviewMode ? examResults?.detailed_results?.find((d: any) => d.question_id === currentQuestion?.id) : null
@@ -2542,7 +2608,24 @@ export default function QuizPlay() {
     )
   }
 
-  if (!session) return <div className="min-h-screen flex items-center justify-center font-black animate-pulse">LOADING SESSION...</div>
+  if (!session) {
+    return (
+      <div className="min-h-screen h-[100dvh] flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/30 to-slate-50 text-slate-800">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-16 h-16 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-3xl bg-indigo-500/20 animate-ping" />
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <Brain className="w-7 h-7 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <h3 className="text-sm font-black text-slate-800 tracking-wider uppercase">Loading QuizMind Session</h3>
+            <p className="text-xs text-indigo-500 font-semibold animate-pulse">Preparing questions queue...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen h-[100dvh] flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/20 to-slate-50 text-slate-900 font-sans overflow-hidden relative">
@@ -2555,18 +2638,18 @@ export default function QuizPlay() {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={cn(
               "fixed bottom-[136px] left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-2xl font-black text-[12px] uppercase tracking-[0.1em] shadow-xl flex items-center gap-3 backdrop-blur-md border whitespace-nowrap",
-              currentQuestion.options[selectedOption].is_correct 
+              currentQuestion.options?.[selectedOption]?.is_correct 
                 ? "bg-emerald-500/90 text-white border-emerald-400/30 shadow-emerald-200/20" 
-                : "bg-amber-400/90 text-slate-800 border-amber-300/30 shadow-amber-200/20"
+                : "bg-rose-500/90 text-white border-rose-400/30 shadow-rose-200/20"
             )}
           >
-            {currentQuestion.options[selectedOption].is_correct ? (
+            {currentQuestion.options?.[selectedOption]?.is_correct ? (
               <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
                 <Check className="w-3 h-3 text-white stroke-[4]" />
               </div>
             ) : (
-              <div className="w-5 h-5 rounded-full bg-white/60 flex items-center justify-center">
-                <Sparkles className="w-3 h-3 text-amber-700" />
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                <X className="w-3 h-3 text-white stroke-[4]" />
               </div>
             )}
             {badgeMessage}
@@ -2585,7 +2668,7 @@ export default function QuizPlay() {
               className={cn(
                 "fixed bottom-32 left-1/2 -translate-x-1/2 z-[1001] px-6 py-3 rounded-2xl font-black text-base shadow-2xl pointer-events-none transition-all duration-300",
                 isLimitless 
-                  ? "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white shadow-amber-500/50 border border-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.6)] animate-bounce" 
+                  ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 text-white shadow-indigo-500/50 border border-indigo-400 drop-shadow-[0_0_12px_rgba(99,102,241,0.6)] animate-bounce" 
                   : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-indigo-300/50"
               )}
             >
@@ -2694,12 +2777,12 @@ export default function QuizPlay() {
                 className={cn(
                   "w-9 h-9 flex items-center justify-center rounded-xl border transition-all active:scale-90",
                   flaggedQuestions.has(currentIndex)
-                    ? "bg-amber-50 border-amber-300 text-amber-600"
-                    : "bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-500"
+                    ? "bg-violet-50 border-violet-300 text-violet-600"
+                    : "bg-slate-50 border-slate-200 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
                 )}
                 title="Flag question"
               >
-                <Flag className={cn("w-4 h-4", flaggedQuestions.has(currentIndex) && "fill-amber-500")} />
+                <Flag className={cn("w-4 h-4", flaggedQuestions.has(currentIndex) && "fill-violet-600 text-violet-600")} />
               </button>
             )}
 
@@ -2768,7 +2851,7 @@ export default function QuizPlay() {
                    <span>+{sessionXP}</span>
                 </div>
                 {streak >= 2 && (
-                  <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-[8px] font-black shadow-sm shadow-orange-200">
+                  <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[8px] font-black shadow-sm shadow-indigo-200">
                     <Flame className="w-3 h-3 fill-white" />
                     <span>{streak}🔥</span>
                   </div>
@@ -2808,7 +2891,7 @@ export default function QuizPlay() {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 onClick={copyQuestionToClipboard}
-                className="w-9 h-9 flex items-center justify-center bg-amber-50 border border-amber-100 rounded-xl text-amber-500 shadow-sm active:scale-90 transition-all hover:bg-amber-100"
+                className="w-9 h-9 flex items-center justify-center bg-violet-50 border border-violet-100 rounded-xl text-violet-600 shadow-sm active:scale-90 transition-all hover:bg-violet-100"
                 title="Copy question"
               >
                 <Copy className="w-4 h-4" />
@@ -2831,7 +2914,7 @@ export default function QuizPlay() {
           <button 
             type="button"
             onClick={() => setIsQuickControlsOpen(true)}
-            className="w-9 h-9 flex items-center justify-center bg-orange-50 border border-orange-200 rounded-xl text-orange-600 hover:bg-orange-100 shadow-sm active:scale-90 transition-all cursor-pointer"
+            className="w-9 h-9 flex items-center justify-center bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-600 hover:bg-indigo-100 shadow-sm active:scale-90 transition-all cursor-pointer"
             title="Quick Controls"
           >
             <Sliders className="w-4 h-4" />
@@ -2859,10 +2942,10 @@ export default function QuizPlay() {
             {/* Grade banner */}
             {(() => {
               const acc = examResults?.accuracy_pct || 0
-              const grade = acc >= 90 ? { label: 'S', color: 'from-amber-400 to-yellow-500', text: 'OUTSTANDING!' } :
+              const grade = acc >= 90 ? { label: 'S', color: 'from-violet-600 via-indigo-600 to-purple-600', text: 'OUTSTANDING!' } :
                             acc >= 80 ? { label: 'A', color: 'from-emerald-500 to-teal-600', text: 'EXCELLENT!' } :
                             acc >= 65 ? { label: 'B', color: 'from-indigo-500 to-blue-600', text: 'GOOD JOB!' } :
-                            acc >= 50 ? { label: 'C', color: 'from-amber-500 to-orange-600', text: 'PASSED!' } :
+                            acc >= 50 ? { label: 'C', color: 'from-blue-600 to-indigo-600', text: 'PASSED!' } :
                                         { label: 'F', color: 'from-rose-500 to-pink-600', text: 'KEEP PRACTICING!' }
               return (
                 <div className={cn("p-6 rounded-[2rem] bg-gradient-to-tr text-white shadow-lg", grade.color)}>
@@ -2890,9 +2973,9 @@ export default function QuizPlay() {
                 <span className="text-[9px] font-black text-indigo-500 uppercase tracking-wider block">XP Awarded</span>
                 <span className="text-lg font-black text-indigo-700">+{examResults?.xp_gained || 0} XP</span>
               </div>
-              <div className="p-3.5 bg-amber-50 border border-amber-200/70 rounded-2xl">
-                <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Time Taken</span>
-                <span className="text-lg font-black text-amber-700">
+              <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">Time Taken</span>
+                <span className="text-lg font-black text-slate-800">
                   {Math.floor(examTimeSpent / 60)}m {examTimeSpent % 60}s
                 </span>
               </div>
@@ -3159,9 +3242,16 @@ export default function QuizPlay() {
                         </div>
 
                         {/* Question Text */}
-                        <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
-                          {currentQuestion?.content}
-                        </h2>
+                        {!currentQuestion?.is_loaded ? (
+                          <div className="space-y-2.5 md:mb-8 mb-5 mt-1 animate-pulse">
+                            <div className="h-6 bg-slate-200/80 rounded-xl w-3/4"></div>
+                            <div className="h-6 bg-slate-200/60 rounded-xl w-1/2"></div>
+                          </div>
+                        ) : (
+                          <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
+                            {currentQuestion?.content}
+                          </h2>
+                        )}
 
                         {/* Question Media */}
                         {renderQuestionMedia()}
@@ -3173,7 +3263,7 @@ export default function QuizPlay() {
                         {isReviewMode && currentQuestion?.explanation && (
                           <div className="mt-6 p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100/80 text-left space-y-2">
                             <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
-                              <Lightbulb className="w-4 h-4 text-amber-500" />
+                              <Lightbulb className="w-4 h-4 text-violet-600" />
                               <span className="uppercase tracking-wider">Solution & Explanation</span>
                             </div>
                             <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-medium">
@@ -3208,9 +3298,16 @@ export default function QuizPlay() {
                       </div>
 
                       {/* Question Text */}
-                      <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
-                        {currentQuestion?.content}
-                      </h2>
+                      {!currentQuestion?.is_loaded ? (
+                        <div className="space-y-2.5 md:mb-8 mb-5 mt-1 animate-pulse">
+                          <div className="h-6 bg-slate-200/80 rounded-xl w-3/4"></div>
+                          <div className="h-6 bg-slate-200/60 rounded-xl w-1/2"></div>
+                        </div>
+                      ) : (
+                        <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
+                          {currentQuestion?.content}
+                        </h2>
+                      )}
 
                       {/* Question Media */}
                       {renderQuestionMedia()}
@@ -3222,7 +3319,7 @@ export default function QuizPlay() {
                       {isReviewMode && currentQuestion?.explanation && (
                         <div className="mt-6 p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100/80 text-left space-y-2">
                           <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
-                            <Lightbulb className="w-4 h-4 text-amber-500" />
+                            <Lightbulb className="w-4 h-4 text-violet-600" />
                             <span className="uppercase tracking-wider">Solution & Explanation</span>
                           </div>
                           <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-medium">
@@ -3247,7 +3344,7 @@ export default function QuizPlay() {
               </h4>
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-4">
                 {renderSessionStats()}
-                {renderQuestionMapGrid()}
+                {questionMapGrid}
               </div>
             </div>
           </aside>
@@ -3282,12 +3379,12 @@ export default function QuizPlay() {
                 className={cn(
                   "px-3.5 h-12 rounded-2xl border flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer",
                   flaggedQuestions.has(currentIndex)
-                    ? "bg-amber-50 border-amber-300 text-amber-600 shadow-sm"
-                    : "bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                    ? "bg-violet-50 border-violet-300 text-violet-600 shadow-sm"
+                    : "bg-slate-50 border-slate-200 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
                 )}
                 title="Flag Question for Review"
               >
-                <Flag className={cn("w-4 h-4", flaggedQuestions.has(currentIndex) && "fill-amber-500")} />
+                <Flag className={cn("w-4 h-4", flaggedQuestions.has(currentIndex) && "fill-violet-600 text-violet-600")} />
                 <span className="hidden sm:inline text-xs font-black">
                   {flaggedQuestions.has(currentIndex) ? "Flagged" : "Flag"}
                 </span>
@@ -3343,14 +3440,14 @@ export default function QuizPlay() {
                   className={cn(
                     "w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-95 cursor-pointer relative",
                     justAnswered || (currentQuestion?.explanation && currentQuestion.explanation.trim())
-                      ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 hover:bg-amber-100 shadow-xs ring-2 ring-amber-200/50 dark:ring-amber-900/30"
-                      : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                      ? "bg-violet-50 dark:bg-violet-950/50 border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-100 shadow-xs ring-2 ring-violet-200/50 dark:ring-violet-900/30"
+                      : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
                   )}
                   title="View Explanation & AI Insights"
                 >
                   <Lightbulb className="w-5 h-5" />
                   {(currentQuestion?.explanation && currentQuestion.explanation.trim()) && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-violet-600 ring-2 ring-white dark:ring-slate-900" />
                   )}
                 </button>
               )}
@@ -3359,7 +3456,7 @@ export default function QuizPlay() {
               <button 
                 type="button"
                 onClick={() => setIsQuickControlsOpen(true)} 
-                className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/60 rounded-2xl text-orange-600 hover:text-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900/40 shadow-xs active:scale-95 transition-all cursor-pointer"
+                className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 rounded-2xl text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 shadow-xs active:scale-95 transition-all cursor-pointer"
                 title="Quick Controls"
               >
                 <Sliders className="w-5 h-5" />
@@ -3427,13 +3524,13 @@ export default function QuizPlay() {
                 {activeBottomTab === 'question' && (
                   <motion.div
                     layoutId="activeBottomTabBg"
-                    className="absolute inset-0 bg-orange-500/10 dark:bg-orange-500/20"
+                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
                 <span className={cn(
                   "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
-                  activeBottomTab === 'question' ? "text-orange-600 dark:text-orange-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                  activeBottomTab === 'question' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
                 )}>
                   <BookOpen className="w-3.5 h-3.5 shrink-0" />
                   QUESTION
@@ -3455,15 +3552,15 @@ export default function QuizPlay() {
                 {activeBottomTab === 'stats' && (
                   <motion.div
                     layoutId="activeBottomTabBg"
-                    className="absolute inset-0 bg-orange-500/10 dark:bg-orange-500/20"
+                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
                 <span className={cn(
                   "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
-                  activeBottomTab === 'stats' ? "text-orange-600 dark:text-orange-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                  activeBottomTab === 'stats' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
                 )}>
-                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-orange-500" />
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
                   CARD HUB
                 </span>
               </button>
@@ -3479,10 +3576,10 @@ export default function QuizPlay() {
             session.questions[Number(idx)]?.options[optIdx as number]?.is_correct
           ).length
           const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0
-          const grade = accuracy >= 90 ? { label: 'S', color: 'from-yellow-400 to-amber-500', text: 'OUTSTANDING!' } :
+          const grade = accuracy >= 90 ? { label: 'S', color: 'from-violet-600 via-indigo-600 to-purple-600', text: 'OUTSTANDING!' } :
                         accuracy >= 75 ? { label: 'A', color: 'from-emerald-400 to-teal-500', text: 'EXCELLENT!' } :
                         accuracy >= 60 ? { label: 'B', color: 'from-indigo-400 to-blue-500', text: 'WELL DONE!' } :
-                        accuracy >= 45 ? { label: 'C', color: 'from-amber-400 to-orange-500', text: 'KEEP IT UP!' } :
+                        accuracy >= 45 ? { label: 'C', color: 'from-blue-600 to-indigo-600', text: 'KEEP IT UP!' } :
                                          { label: 'D', color: 'from-rose-400 to-pink-500', text: 'KEEP PRACTICING!' }
           return (
             <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
@@ -3567,7 +3664,7 @@ export default function QuizPlay() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                {renderSessionStats()}
-               {renderQuestionMapGrid()}
+               {questionMapGrid}
             </div>
           </motion.div>
         )}
@@ -3628,9 +3725,9 @@ export default function QuizPlay() {
                       <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">XP Earned</span>
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                         </div>
-                        <div className="text-2xl font-black text-amber-500">+{sessionXP}</div>
+                        <div className="text-2xl font-black text-indigo-600">+{sessionXP}</div>
                         <div className="text-[10px] font-semibold text-slate-400">Total {initialTotalXP + sessionXP} XP</div>
                       </div>
 
@@ -3646,9 +3743,9 @@ export default function QuizPlay() {
                       <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Streak</span>
-                          <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+                          <Flame className="w-3.5 h-3.5 text-violet-500 fill-violet-500" />
                         </div>
-                        <div className="text-2xl font-black text-orange-500">{streak || 1}d</div>
+                        <div className="text-2xl font-black text-violet-600">{streak || 1}d</div>
                         <div className="text-[10px] font-semibold text-slate-400">Keep it burning!</div>
                       </div>
                     </div>
@@ -3679,7 +3776,7 @@ export default function QuizPlay() {
           >
             <div className="flex items-center justify-between p-3 px-4 border-b border-slate-100 bg-white shadow-sm flex-shrink-0">
               <div className="flex items-center gap-2">
-                <Lightbulb className="w-4 h-4 text-amber-500" />
+                <Lightbulb className="w-4 h-4 text-violet-600" />
                 <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">
                   {activeFeedbackTab === 'insight' ? 'LEARNING INSIGHTS' : 
                    activeFeedbackTab === 'ai' ? 'AI DEEP ANALYSIS' : 
@@ -3704,13 +3801,13 @@ export default function QuizPlay() {
       {/* ⚡ LIMITLESS MODE SCREEN FLASH OVERLAY */}
       <AnimatePresence>
         {isLimitlessStrike && (
-          <div className="pointer-events-none fixed inset-0 z-[1999] border-[8px] border-amber-400/50 shadow-[inset_0_0_100px_rgba(245,158,11,0.4)] animate-pulse flex items-center justify-center">
+          <div className="pointer-events-none fixed inset-0 z-[1999] border-[8px] border-indigo-400/50 shadow-[inset_0_0_100px_rgba(99,102,241,0.4)] animate-pulse flex items-center justify-center">
             <motion.div 
               initial={{ scale: 0.7, opacity: 0 }}
               animate={{ scale: [1, 1.15, 1], opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 }}
-              className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 tracking-widest drop-shadow-[0_0_15px_rgba(245,158,11,0.7)] uppercase text-center"
+              className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 tracking-widest drop-shadow-[0_0_15px_rgba(99,102,241,0.7)] uppercase text-center"
             >
               ⚡ OVERDRIVE STRIKE! ⚡
             </motion.div>
@@ -4048,7 +4145,7 @@ export default function QuizPlay() {
                 <div className="flex items-center justify-center gap-4 mb-8 bg-slate-950/40 border border-white/5 rounded-2xl p-4">
                   <div className="text-center flex-1 border-r border-white/5">
                     <span className="text-[10px] font-black tracking-widest text-slate-500 block uppercase mb-1">XP REWARD</span>
-                    <span className="text-lg font-black text-amber-400">+{activeUnlockedBadge.xp_reward} XP ✨</span>
+                    <span className="text-lg font-black text-violet-400">+{activeUnlockedBadge.xp_reward} XP ✨</span>
                   </div>
                   <div className="text-center flex-1">
                     <span className="text-[10px] font-black tracking-widest text-slate-500 block uppercase mb-1">BONUS REWARD</span>
@@ -4106,15 +4203,15 @@ export default function QuizPlay() {
                   <span className="text-[9px] font-bold text-rose-400 block uppercase">Unanswered</span>
                 </div>
                 <div className="p-2 bg-white rounded-xl shadow-2xs">
-                  <span className="text-base font-black text-amber-600">{flaggedQuestions.size}</span>
-                  <span className="text-[9px] font-bold text-amber-400 block uppercase">Flagged</span>
+                  <span className="text-base font-black text-violet-600">{flaggedQuestions.size}</span>
+                  <span className="text-[9px] font-bold text-violet-400 block uppercase">Flagged</span>
                 </div>
               </div>
 
               {((session?.questions?.length || 0) - Object.keys(examAnswers).length) > 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-left flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs font-bold text-amber-800 leading-snug">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-left flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-rose-800 leading-snug">
                     You still have {Math.max(0, (session?.questions?.length || 0) - Object.keys(examAnswers).length)} unanswered question(s). Unanswered questions will receive 0 points.
                   </p>
                 </div>

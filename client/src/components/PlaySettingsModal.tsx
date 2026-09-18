@@ -244,13 +244,13 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                 <span>Auto-Next Question</span>
               </label>
               <span className={cn(
                 "text-[10px] font-black uppercase px-2 py-0.5 rounded-md",
                 effectiveAutoAdvance !== 'off'
-                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300"
                   : "text-slate-400"
               )}>
                 {effectiveAutoAdvance !== 'off' ? `Auto in ${effectiveAutoAdvance}` : 'Off'}
