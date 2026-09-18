@@ -373,6 +373,9 @@ export default function QuizPlay() {
 
   useEffect(() => {
     fetchSession()
+  }, [id])
+
+  useEffect(() => {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         // Only increment if feedback is NOT shown
@@ -382,9 +385,17 @@ export default function QuizPlay() {
     }, 1000)
     return () => {
       clearInterval(timerRef.current)
-      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
     }
-  }, [id, showFeedback])
+  }, [showFeedback])
+
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current)
+        autoAdvanceTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
