@@ -258,6 +258,7 @@ export default function QuizPlay() {
   const [isPassageDrawerOpen, setIsPassageDrawerOpen] = useState(false)
 
   const timerRef = useRef<any>(null)
+  const autoAdvanceTimerRef = useRef<any>(null)
   const currentQuestion: Question | null = session?.questions?.[currentIndex] || null
 
   // ── Grouped Question Resolution ──
@@ -376,7 +377,10 @@ export default function QuizPlay() {
         return prev + 1
       })
     }, 1000)
-    return () => clearInterval(timerRef.current)
+    return () => {
+      clearInterval(timerRef.current)
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
+    }
   }, [id, showFeedback])
 
   useEffect(() => {
@@ -733,6 +737,22 @@ export default function QuizPlay() {
     setBadgeVisible(true)
     setTimeout(() => setBadgeVisible(false), 2000)
 
+    // Auto-Advance if enabled (off, 1s, 2s, 3s)
+    const rawAutoSetting = userSettings?.auto_advance
+    const autoSec = (rawAutoSetting === '1s' || rawAutoSetting === '1') ? 1
+      : (rawAutoSetting === '2s' || rawAutoSetting === '2') ? 2
+      : (rawAutoSetting === '3s' || rawAutoSetting === '3') ? 3
+      : 0
+
+    if (autoSec > 0) {
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current)
+      }
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        handleNext()
+      }, autoSec * 1000)
+    }
+
     // Check session progress milestones
     const answered = Object.keys(newAnswers).length
     const total = session?.questions?.length || 1
@@ -942,6 +962,10 @@ export default function QuizPlay() {
   }
 
   const navigateToQuestion = (idx: number) => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+    }
     setCurrentIndex(idx)
     setJustAnswered(false)
 
@@ -1051,6 +1075,10 @@ export default function QuizPlay() {
   }
 
   const handleNext = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+    }
     if (!session || !session.questions) return
 
     const questions = session.questions

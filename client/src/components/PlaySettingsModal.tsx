@@ -90,6 +90,19 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
     { id: '130%', label: '130% XL' }
   ]
 
+  const AUTO_ADVANCE_OPTIONS = [
+    { id: 'off', label: 'Off' },
+    { id: '1s', label: '1s' },
+    { id: '2s', label: '2s' },
+    { id: '3s', label: '3s' }
+  ]
+
+  const rawAuto = userSettings?.auto_advance
+  const effectiveAutoAdvance = (rawAuto === '1s' || rawAuto === '1') ? '1s'
+    : (rawAuto === '2s' || rawAuto === '2') ? '2s'
+    : (rawAuto === '3s' || rawAuto === '3') ? '3s'
+    : 'off'
+
   const toggles = [
     {
       id: 'sfx_enabled',
@@ -117,15 +130,6 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
       color: 'text-purple-500',
       activeBg: 'bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/40 dark:border-purple-800 dark:text-purple-300',
       onToggle: () => updateUserSettings({ shuffle_choices: userSettings.shuffle_choices === false })
-    },
-    {
-      id: 'auto_advance',
-      label: 'Auto-Advance',
-      icon: Sparkles,
-      checked: Boolean(userSettings.auto_advance),
-      color: 'text-amber-500',
-      activeBg: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300',
-      onToggle: () => updateUserSettings({ auto_advance: !userSettings.auto_advance })
     },
     {
       id: 'show_mastery',
@@ -230,13 +234,37 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
             </div>
             <SegmentedControl
               value={userSettings.font_size || '100%'}
-              onChange={(val) => updateUserSettings({ font_size: val })}
+              onChange={(val) => updateUserSettings({ font_size: String(val) })}
               options={FONT_SIZE_OPTIONS}
               compact
             />
           </div>
 
-          {/* 3. Quick Toggles (Grid) */}
+          {/* 3. Auto-Next Delay (Off, 1s, 2s, 3s) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Auto-Next Question</span>
+              </label>
+              <span className={cn(
+                "text-[10px] font-black uppercase px-2 py-0.5 rounded-md",
+                effectiveAutoAdvance !== 'off'
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                  : "text-slate-400"
+              )}>
+                {effectiveAutoAdvance !== 'off' ? `Auto in ${effectiveAutoAdvance}` : 'Off'}
+              </span>
+            </div>
+            <SegmentedControl
+              value={effectiveAutoAdvance}
+              onChange={(val) => updateUserSettings({ auto_advance: String(val) })}
+              options={AUTO_ADVANCE_OPTIONS}
+              compact
+            />
+          </div>
+
+          {/* 4. Quick Toggles (Grid) */}
           <div>
             <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-2">
               Features & Audio
@@ -338,7 +366,7 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
             onClick={() => {
               updateUserSettings({
                 font_size: '100%',
-                auto_advance: false,
+                auto_advance: 'off',
                 show_mastery: true,
                 shuffle_choices: true,
                 shuffle_questions: true,

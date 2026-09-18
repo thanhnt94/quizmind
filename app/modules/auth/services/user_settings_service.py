@@ -72,7 +72,12 @@ class UserSettingsService:
             "exam_batch_size": 10 if settings_obj.exam_batch_size is None else settings_obj.exam_batch_size,
             "instant_feedback": True if settings_obj.instant_feedback is None else settings_obj.instant_feedback,
             "font_size": settings_obj.font_size or "100%",
-            "auto_advance": False if settings_obj.auto_advance is None else settings_obj.auto_advance,
+            "auto_advance": (
+                "1s" if settings_obj.auto_advance in ("1s", "1", 1, True, "True", "true")
+                else "2s" if settings_obj.auto_advance in ("2s", "2", 2)
+                else "3s" if settings_obj.auto_advance in ("3s", "3", 3)
+                else "off"
+            ),
             "show_mastery": True if settings_obj.show_mastery is None else settings_obj.show_mastery,
             "updated_at": settings_obj.updated_at.isoformat() if settings_obj.updated_at else None
         }

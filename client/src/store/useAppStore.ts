@@ -24,7 +24,7 @@ export interface UserSettings {
   exam_batch_size?: number;
   instant_feedback?: boolean;
   font_size?: string;
-  auto_advance?: boolean;
+  auto_advance?: string;
   show_mastery?: boolean;
   updated_at?: string | null;
 }
@@ -49,7 +49,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   exam_batch_size: 10,
   instant_feedback: true,
   font_size: '100%',
-  auto_advance: false,
+  auto_advance: 'off',
   show_mastery: true,
   updated_at: null,
 };

@@ -49,7 +49,7 @@ class UserGlobalSettings(Base):
     exam_batch_size = Column(Integer, default=10)
     instant_feedback = Column(Boolean, default=True)
     font_size = Column(String(20), default="100%") # '85%' | '100%' | '115%' | '130%'
-    auto_advance = Column(Boolean, default=False)
+    auto_advance = Column(String(20), default="off") # 'off' | '1s' | '2s' | '3s'
     show_mastery = Column(Boolean, default=True)
     
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
