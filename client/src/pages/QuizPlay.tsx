@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send, BarChart2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -176,9 +176,12 @@ export default function QuizPlay() {
   const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
   const [isMapOpen, setIsMapOpen] = useState(false)
+  const [isStatsOpen, setIsStatsOpen] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isQuitModalOpen, setIsQuitModalOpen] = useState(false)
   const [activeFeedbackTab, setActiveFeedbackTab] = useState<'insight' | 'ai' | 'note'>('insight')
+
+  const activeBottomTab: 'map' | 'question' | 'stats' = isStatsOpen ? 'stats' : (isMapOpen ? 'map' : 'question')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [activeUnlockedBadge, setActiveUnlockedBadge] = useState<any | null>(null)
@@ -849,17 +852,6 @@ export default function QuizPlay() {
 
       const goalUpdate = res.data.goal_update
       if (goalUpdate) {
-        setGoalToast({
-          visible: !goalUpdate.just_completed,
-          message: goalUpdate.motivational_message,
-          isTargetMet: goalUpdate.is_target_met,
-          justCompleted: goalUpdate.just_completed,
-          streakCount: goalUpdate.streak_count,
-          doneToday: goalUpdate.done_today,
-          dailyTarget: goalUpdate.daily_target,
-          bonusXP: goalUpdate.bonus_xp
-        })
-        
         setActiveGoal((prev: any) => {
           if (!prev) return {
             goal_id: goalUpdate.goal_id,
@@ -885,76 +877,6 @@ export default function QuizPlay() {
             days_remaining_est: Math.ceil(remainingQs / prev.daily_target)
           }
         })
-
-        // Auto-dismiss milestone toast after 4.5 seconds
-        setTimeout(() => {
-          setGoalToast(prev => prev ? { ...prev, visible: false } : null)
-        }, 4500)
-
-        if (goalUpdate.just_completed) {
-          setShowGoalCelebration(true)
-          // Epic continuous confetti shower from bottom corners
-          const end = Date.now() + 4.5 * 1000;
-          const colors = ['#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
-          
-          (function frame() {
-            confetti({
-              particleCount: 4,
-              angle: 60,
-              spread: 55,
-              origin: { x: 0, y: 0.8 },
-              colors: colors
-            });
-            confetti({
-              particleCount: 4,
-              angle: 120,
-              spread: 55,
-              origin: { x: 1, y: 0.8 },
-              colors: colors
-            });
-            
-            if (Date.now() < end) {
-              requestAnimationFrame(frame);
-            }
-          }());
-        } else if (goalUpdate.is_target_met) {
-          if (correct && goalUpdate.done_today > goalUpdate.daily_target) {
-            // Screen flash lightning overlay
-            setIsLimitlessStrike(true);
-            setTimeout(() => setIsLimitlessStrike(false), 800);
-
-            // Epic multi-angle golden/purple fireworks cascade!
-            confetti({
-              particleCount: 50,
-              angle: 60,
-              spread: 75,
-              origin: { x: 0.15, y: 0.85 },
-              colors: ['#F59E0B', '#F97316', '#EF4444', '#8B5CF6', '#FFF']
-            });
-            confetti({
-              particleCount: 50,
-              angle: 120,
-              spread: 75,
-              origin: { x: 0.85, y: 0.85 },
-              colors: ['#F59E0B', '#F97316', '#EF4444', '#8B5CF6', '#FFF']
-            });
-            confetti({
-              particleCount: 40,
-              spread: 100,
-              origin: { x: 0.5, y: 0.5 },
-              colors: ['#F59E0B', '#F97316', '#FFF']
-            });
-          } else {
-            // Epic gold/rose sparkle burst from the top right corner near the toast
-            confetti({
-              particleCount: 20,
-              angle: 220,
-              spread: 45,
-              origin: { x: 0.9, y: 0.12 },
-              colors: ['#F59E0B', '#F97316', '#EF4444', '#EC4899']
-            });
-          }
-        }
       }
     } catch (e) {
       console.error("Failed to record answer")
@@ -2320,103 +2242,7 @@ export default function QuizPlay() {
       </AnimatePresence>
 
       {/* Goal Milestone Toast */}
-      <AnimatePresence>
-        {goalToast && goalToast.visible && (() => {
-          const isLimitless = goalToast.doneToday > goalToast.dailyTarget
-          return (
-            <motion.div
-              initial={{ opacity: 0, x: 200, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 200, scale: 0.9 }}
-              className={cn(
-                "fixed top-24 right-6 z-[1002] max-w-sm w-82 backdrop-blur-xl rounded-[2rem] p-5 flex items-center gap-4 border transition-all duration-300",
-                isLimitless 
-                  ? "bg-slate-950/95 border-amber-500/60 shadow-[0_0_40px_rgba(245,158,11,0.35),inset_0_1px_1px_rgba(255,255,255,0.15)] text-white" 
-                  : "bg-white/95 border-slate-100 shadow-[0_20px_50px_rgba(99,102,241,0.15)] text-slate-900"
-              )}
-            >
-              {/* Circular Progress Ring or Flame Icon */}
-              <div className="relative w-14 h-14 flex-shrink-0 flex items-center justify-center">
-                {goalToast.justCompleted ? (
-                  <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-400 to-red-500 flex items-center justify-center shadow-lg shadow-orange-100 animate-bounce">
-                    <Flame className="w-6 h-6 text-white fill-white" />
-                  </div>
-                ) : (
-                  <>
-                    <svg className="w-14 h-14 transform -rotate-90">
-                      <circle
-                        cx="28"
-                        cy="28"
-                        r="22"
-                        className={isLimitless ? "stroke-slate-900" : "stroke-slate-100"}
-                        strokeWidth="3.5"
-                        fill="transparent"
-                      />
-                      <circle
-                        cx="28"
-                        cy="28"
-                        r="22"
-                        className={cn(
-                          "transition-all duration-1000 ease-out",
-                          isLimitless ? "stroke-amber-400 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" : (goalToast.isTargetMet ? "stroke-emerald-500" : "stroke-indigo-600")
-                        )}
-                        strokeWidth="3.5"
-                        fill="transparent"
-                        strokeDasharray={2 * Math.PI * 22}
-                        strokeDashoffset={2 * Math.PI * 22 * (1 - Math.min(1, goalToast.doneToday / goalToast.dailyTarget))}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <span className={cn(
-                      "absolute text-[10px] font-black",
-                      isLimitless ? "text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-pulse" : "text-slate-700"
-                    )}>
-                      {isLimitless ? `⚡${goalToast.doneToday}` : `${goalToast.doneToday}/${goalToast.dailyTarget}`}
-                    </span>
-                  </>
-                )}
-              </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className={cn(
-                    "text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded-md",
-                    goalToast.justCompleted ? "bg-amber-100 text-amber-700" : 
-                    isLimitless ? "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white animate-pulse border border-amber-400/35 shadow-lg shadow-amber-500/25 tracking-wider" :
-                    "bg-indigo-50 text-indigo-600"
-                  )}>
-                    {goalToast.justCompleted ? "GOAL REACHED" : isLimitless ? "LIMITLESS MODE ⚡" : "DAILY GOAL"}
-                  </span>
-                  {goalToast.streakCount > 0 && (
-                    <span className={cn(
-                      "flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md",
-                      isLimitless ? "bg-amber-950 text-amber-300 border border-amber-500/20" : "bg-orange-50 text-orange-600"
-                    )}>
-                      🔥 {goalToast.streakCount}d
-                    </span>
-                  )}
-                </div>
-                <p className={cn(
-                  "font-bold text-xs leading-relaxed pr-2",
-                  isLimitless ? "text-amber-200 drop-shadow-[0_0_2px_rgba(245,158,11,0.2)]" : "text-slate-600"
-                )}>
-                  {goalToast.message}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setGoalToast(prev => prev ? { ...prev, visible: false } : null)}
-                className={cn(
-                  "absolute top-4 right-4 w-6 h-6 flex items-center justify-center rounded-full transition-all",
-                  isLimitless ? "hover:bg-slate-800 text-slate-500 hover:text-slate-300" : "hover:bg-slate-50 text-slate-400 hover:text-slate-600"
-                )}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </motion.div>
-          )
-        })()}
-      </AnimatePresence>
 
       {/* Learning Mode Alert Toast */}
       <AnimatePresence>
@@ -2596,14 +2422,6 @@ export default function QuizPlay() {
             </div>
           </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsSettingsModalOpen(true)}
-            className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm active:scale-90 transition-all cursor-pointer"
-            title="Study Settings"
-          >
-            <Sliders className="w-4 h-4" />
-          </button>
-
           <button 
              onClick={() => {
                 const nextSfx = !sfxEnabled;
@@ -3135,77 +2953,143 @@ export default function QuizPlay() {
           </div>
         </footer>
       ) : (
-        <footer className="fixed bottom-0 left-0 right-0 xl:relative flex-shrink-0 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 px-4 py-3 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
-          <div className="max-w-2xl mx-auto w-full flex items-center gap-3 h-13">
-            <button onClick={() => setIsMapOpen(true)} className="lg:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all">
-              <LayoutGrid className="w-5 h-5" />
-            </button>
-
-            <button 
-              onClick={() => setIsModeMenuOpen(true)} 
-              className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 shadow-sm active:scale-95 transition-all"
-              title="Change Smart Learning Mode"
-            >
-              {(activeMode === 'roadmap' || activeMode?.startsWith('roadmap')) && <Compass className="w-5 h-5 text-indigo-600" />}
-              {activeMode === 'sequential' && <ListOrdered className="w-5 h-5" />}
-              {activeMode === 'random' && <Shuffle className="w-5 h-5" />}
-              {activeMode === 'unseen' && <EyeOff className="w-5 h-5" />}
-              {activeMode === 'review' && <AlertCircle className="w-5 h-5" />}
-              {activeMode === 'hardest' && <TrendingUp className="w-5 h-5" />}
-              {!['roadmap', 'sequential', 'random', 'unseen', 'review', 'hardest'].includes(activeMode) && !activeMode?.startsWith('roadmap') && <Sliders className="w-5 h-5" />}
-            </button>
-            
-            {showFeedback && (
+        <footer className="fixed bottom-0 left-0 right-0 xl:relative flex-shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t border-slate-100/80 dark:border-slate-800 z-[120] shadow-[0_-4px_24px_rgba(99,102,241,0.06)]">
+          <div className="max-w-2xl mx-auto w-full flex flex-col">
+            {/* Primary Action Zone */}
+            <div className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3">
+              {/* 1. Explanation Button (Lightbulb) */}
               <button 
-                onClick={() => setIsFeedbackOpen(true)} 
-                className={`xl:hidden w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl shadow-sm active:scale-95 transition-all relative ${
-                  justAnswered 
-                    ? 'bg-indigo-600 border border-indigo-600 text-white animate-[pulse_1.5s_infinite] ring-4 ring-indigo-300 ring-offset-1 drop-shadow-[0_0_12px_rgba(99,102,241,0.6)]' 
-                    : 'bg-indigo-50 border border-indigo-200 text-indigo-600 hover:bg-indigo-100'
-                }`}
-                title="View explanation and tutorial"
+                type="button"
+                onClick={() => setIsFeedbackOpen(true)}
+                className={cn(
+                  "w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-95 cursor-pointer relative",
+                  justAnswered || (currentQuestion?.explanation && currentQuestion.explanation.trim())
+                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 hover:bg-amber-100 shadow-xs ring-2 ring-amber-200/50 dark:ring-amber-900/30"
+                    : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                )}
+                title="View Explanation & AI Insights"
               >
-                <BookOpen className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
+                <Lightbulb className="w-5 h-5" />
+                {(currentQuestion?.explanation && currentQuestion.explanation.trim()) && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />
+                )}
               </button>
-            )}
 
-            {!showFeedback ? (
-              <div 
-                className="flex-1 h-12 bg-slate-50 border border-slate-200/80 text-slate-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 uppercase tracking-wider select-none shadow-xs"
-              >
-                <span>Select an option above</span>
-              </div>
-            ) : (
+              {/* 2. Study Settings Button */}
               <button 
-                onClick={handleNext}
-                className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/40 flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all"
+                type="button"
+                onClick={() => setIsSettingsModalOpen(true)} 
+                className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 dark:hover:bg-slate-700 shadow-xs active:scale-95 transition-all cursor-pointer"
+                title="Study Settings"
               >
-                NEXT QUESTION <ChevronRight className="w-4 h-4" />
+                <Sliders className="w-5 h-5" />
               </button>
-            )}
+
+              {/* 3. Main Action CTA */}
+              {!showFeedback ? (
+                <div className="flex-1 h-11 sm:h-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 text-slate-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 uppercase tracking-wider select-none shadow-xs">
+                  <span>Select an option above</span>
+                </div>
+              ) : (
+                <button 
+                  type="button"
+                  onClick={handleNext} 
+                  className="flex-1 h-11 sm:h-12 bg-gradient-to-r from-indigo-600 via-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-300/40 flex items-center justify-center gap-2 uppercase tracking-widest active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <span>NEXT QUESTION</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Interactive Navigation Tabs (Always Accessible on Mobile - Vocaburn style) */}
+            <div className="w-full h-11 grid grid-cols-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-100 dark:border-slate-800 p-0 relative md:hidden">
+              {/* 1. Card Map Tab */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsMapOpen(true)
+                  setIsStatsOpen(false)
+                  setIsFeedbackOpen(false)
+                }}
+                className="relative flex items-center justify-center gap-1.5 py-2.5 px-1 transition-all active:scale-95 overflow-hidden cursor-pointer"
+                title="Question Map"
+              >
+                {activeBottomTab === 'map' && (
+                  <motion.div
+                    layoutId="activeBottomTabBg"
+                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className={cn(
+                  "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
+                  activeBottomTab === 'map' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                )}>
+                  <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                  CARD MAP
+                </span>
+              </button>
+
+              {/* 2. Question View Tab */}
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsMapOpen(false)
+                  setIsStatsOpen(false)
+                  setIsFeedbackOpen(false)
+                }}
+                className="relative flex items-center justify-center gap-1.5 py-2.5 px-1 transition-all active:scale-95 overflow-hidden cursor-pointer"
+                title="Current Question"
+              >
+                {activeBottomTab === 'question' && (
+                  <motion.div
+                    layoutId="activeBottomTabBg"
+                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className={cn(
+                  "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
+                  activeBottomTab === 'question' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                )}>
+                  <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                  QUESTION
+                </span>
+              </button>
+
+              {/* 3. Stats Tab */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsStatsOpen(true)
+                  setIsMapOpen(false)
+                  setIsFeedbackOpen(false)
+                }}
+                className="relative flex items-center justify-center gap-1.5 py-2.5 px-1 transition-all active:scale-95 overflow-hidden cursor-pointer"
+                title="Session Stats & Analytics"
+              >
+                {activeBottomTab === 'stats' && (
+                  <motion.div
+                    layoutId="activeBottomTabBg"
+                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className={cn(
+                  "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
+                  activeBottomTab === 'stats' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                )}>
+                  <BarChart2 className="w-3.5 h-3.5 shrink-0" />
+                  STATS
+                </span>
+              </button>
+            </div>
           </div>
         </footer>
-      )}
-
-      {/* 💡 Quick Explanation & AI Tutor Float Handle */}
-      {justAnswered && !isFeedbackOpen && (
-        <div 
-          onClick={() => setIsFeedbackOpen(true)}
-          className="fixed bottom-[76px] left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-lg bg-white/95 border border-indigo-200 text-slate-800 py-2.5 px-4 rounded-2xl shadow-lg shadow-indigo-100/50 flex items-center justify-between cursor-pointer backdrop-blur-md active:scale-98 transition-all hover:border-indigo-300 group select-none xl:hidden"
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-600"></span>
-            </span>
-            <span className="text-xs font-bold tracking-tight">💡 View Explanation & AI Tutor</span>
-          </div>
-          <div className="flex items-center gap-1 text-indigo-600 font-bold text-xs">
-            <span>Open</span>
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </div>
       )}
       {/* ✅ SESSION COMPLETE SUMMARY MODAL */}
       <AnimatePresence>
@@ -3309,6 +3193,101 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
+      {/* Mobile Stats Modal */}
+      <AnimatePresence>
+        {isStatsOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: 50 }} 
+            className="fixed inset-0 z-[200] bg-[#F8FAFC] dark:bg-slate-950 flex flex-col h-screen h-[100dvh]"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <BarChart2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-[12px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.2em]">SESSION STATS</h4>
+                  <p className="text-[10px] font-bold text-slate-400">Live progress & accuracy breakdown</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsStatsOpen(false)} 
+                className="w-8 h-8 flex items-center justify-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 hover:text-slate-700 active:scale-95 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar pb-24 space-y-4">
+              {renderSessionStats()}
+
+              {(() => {
+                const answeredCount = Object.keys(sessionAnswers).length
+                const correctCount = Object.entries(sessionAnswers).filter(([idx, optIdx]) => {
+                  const q = session.questions[Number(idx)]
+                  return q?.options?.[optIdx]?.is_correct
+                }).length
+                const totalCount = session.questions?.length || 0
+                const remainingCount = Math.max(0, totalCount - answeredCount)
+                const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0
+
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</span>
+                          <Target className="w-3.5 h-3.5 text-indigo-500" />
+                        </div>
+                        <div className="text-2xl font-black text-slate-800 dark:text-slate-100">{accuracy}%</div>
+                        <div className="text-[10px] font-semibold text-slate-400">{correctCount} of {answeredCount} correct</div>
+                      </div>
+
+                      <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">XP Earned</span>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        </div>
+                        <div className="text-2xl font-black text-amber-500">+{sessionXP}</div>
+                        <div className="text-[10px] font-semibold text-slate-400">Total {initialTotalXP + sessionXP} XP</div>
+                      </div>
+
+                      <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remaining</span>
+                          <Clock className="w-3.5 h-3.5 text-blue-500" />
+                        </div>
+                        <div className="text-2xl font-black text-slate-800 dark:text-slate-100">{remainingCount}</div>
+                        <div className="text-[10px] font-semibold text-slate-400">{Math.round((answeredCount / Math.max(1, totalCount)) * 100)}% completed</div>
+                      </div>
+
+                      <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Streak</span>
+                          <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+                        </div>
+                        <div className="text-2xl font-black text-orange-500">{streak || 1}d</div>
+                        <div className="text-[10px] font-semibold text-slate-400">Keep it burning!</div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setIsStatsOpen(false)}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-300/30 flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer"
+                    >
+                      <span>Continue Question</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )
+              })()}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Feedback Modal */}
       <AnimatePresence>
         {isFeedbackOpen && (
@@ -3318,10 +3297,19 @@ export default function QuizPlay() {
             exit={{ opacity: 0, y: 50 }} 
             className="fixed inset-0 z-[200] bg-[#F8FAFC] xl:hidden flex flex-col h-screen h-[100dvh]"
           >
-            <div className="flex items-center justify-center p-3 border-b border-slate-100 bg-white shadow-sm flex-shrink-0">
-              <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.4em]">
-                {activeFeedbackTab === 'insight' ? 'LEARNING INSIGHTS' : activeFeedbackTab === 'ai' ? 'AI DEEP ANALYSIS' : 'PERSONAL NOTES'}
-              </h4>
+            <div className="flex items-center justify-between p-3 px-4 border-b border-slate-100 bg-white shadow-sm flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-amber-500" />
+                <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">
+                  {activeFeedbackTab === 'insight' ? 'LEARNING INSIGHTS' : activeFeedbackTab === 'ai' ? 'AI DEEP ANALYSIS' : 'PERSONAL NOTES'}
+                </h4>
+              </div>
+              <button 
+                onClick={() => setIsFeedbackOpen(false)} 
+                className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 active:scale-95 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                {renderFeedbackArea(true)}
@@ -3347,80 +3335,7 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
-      {/* 🏆 DAILY GOAL CELEBRATION MODAL */}
-      <AnimatePresence>
-        {showGoalCelebration && goalToast && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                setShowGoalCelebration(false)
-                confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } })
-              }}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl pointer-events-auto"
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8, y: 50 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 50 }}
-              transition={{ type: 'spring', bounce: 0.35, duration: 0.6 }}
-              className="relative w-full max-w-md bg-white rounded-[3rem] p-8 shadow-[0_25px_60px_rgba(99,102,241,0.3)] border border-slate-100/80 overflow-hidden text-center z-10 pointer-events-auto"
-            >
-              {/* Top premium border indicator */}
-              <div className="absolute top-0 left-0 w-full h-2.5 bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500"></div>
-              
-              {/* Spinning/glowing light background aura */}
-              <div className="absolute top-12 left-1/2 -translate-x-1/2 w-56 h-56 bg-gradient-to-tr from-amber-200/20 to-orange-200/20 rounded-full blur-3xl animate-pulse pointer-events-none" />
-              
-              {/* Giant Bouncing Trophy Icon */}
-              <div className="relative w-28 h-28 mx-auto mb-6 flex items-center justify-center">
-                <div className="absolute inset-0 bg-gradient-to-tr from-amber-400 to-orange-500 rounded-[2.5rem] rotate-12 scale-95 opacity-20 animate-pulse" />
-                <div className="relative w-24 h-24 bg-gradient-to-tr from-amber-400 via-orange-500 to-red-500 rounded-[2rem] flex items-center justify-center shadow-lg shadow-orange-300 transform hover:scale-105 transition-all">
-                  <Trophy className="w-12 h-12 text-white fill-white animate-bounce" />
-                </div>
-              </div>
-              
-              <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-4 py-1.5 rounded-full uppercase tracking-[0.2em] mb-4 inline-block shadow-sm">
-                Daily Goal Achieved! 🏆
-              </span>
-              
-              <h3 className="text-3xl font-black text-slate-800 tracking-tight leading-tight mb-3">
-                SUPER STUDY DISCIPLINE!
-              </h3>
-              
-              <p className="text-slate-500 font-bold text-xs leading-relaxed mb-8 px-4">
-                {goalToast.message}
-              </p>
-              
-              {/* Rewards Summary Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-gradient-to-br from-indigo-50/50 via-purple-50/30 to-white border border-indigo-100/50 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm">
-                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">BONUS REWARD</span>
-                  <span className="text-xl font-black text-indigo-600">⚡ +{goalToast.bonusXP || 50} XP</span>
-                </div>
-                <div className="bg-gradient-to-br from-orange-50/50 via-amber-50/30 to-white border border-orange-100/50 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm">
-                  <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">DAILY STREAK</span>
-                  <span className="text-xl font-black text-orange-600">🔥 {goalToast.streakCount}d</span>
-                </div>
-              </div>
-              
-              {/* High Motivation Action Button */}
-              <button 
-                onClick={() => {
-                  setShowGoalCelebration(false)
-                  confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } })
-                }}
-                className="w-full py-4 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-orange-200 hover:shadow-orange-300 hover:scale-[1.02] active:scale-[0.98] transition-all"
-              >
-                AWESOME, KEEP GOING! 🚀
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
 
       {/* Exit Confirmation Modal */}
       <AnimatePresence>

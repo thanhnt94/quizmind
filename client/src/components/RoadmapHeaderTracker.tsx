@@ -496,22 +496,7 @@ export const RoadmapHeaderTracker: React.FC<RoadmapHeaderTrackerProps> = ({
           </AnimatePresence>
         </div>
       </div>
-
-      {/* 3. RIGHT: Settings button */}
-      {onOpenSettings && (
-        <div className="flex items-center shrink-0 z-[140]">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onOpenSettings()
-            }}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 border border-slate-200/90 flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-2xs cursor-pointer"
-            title="Study Settings"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+      {/* Settings button removed from top header per mobile-first single dock rule */}
     </div>
   )
 }
