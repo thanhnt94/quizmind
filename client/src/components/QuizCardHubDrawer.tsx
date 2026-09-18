@@ -21,7 +21,14 @@ import {
   LayoutGrid,
   FileText,
   Lightbulb,
-  CornerDownRight
+  CornerDownRight,
+  CheckCircle2,
+  XCircle,
+  Flame,
+  Trophy,
+  Target,
+  Layers,
+  Info
 } from 'lucide-react'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -292,28 +299,39 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
       total_reviews: currentQuestion?.stats?.total || 0,
       total_time_seconds: Math.round((currentQuestion?.stats?.total || 0) * (currentQuestion?.stats?.avg_time || 0)),
       avg_time_seconds: currentQuestion?.stats?.avg_time || 0,
+      correct_count: currentQuestion?.stats?.correct || 0,
+      incorrect_count: Math.max(0, (currentQuestion?.stats?.total || 0) - (currentQuestion?.stats?.correct || 0)),
       accuracy_percent: currentQuestion?.stats?.total > 0
         ? Math.round(((currentQuestion?.stats?.correct || 0) / currentQuestion.stats.total) * 100)
         : 0,
-      again_count: Math.max(0, (currentQuestion?.stats?.total || 0) - (currentQuestion?.stats?.correct || 0)),
-      hard_count: 0,
-      good_count: currentQuestion?.stats?.correct || 0,
-      easy_count: 0,
-      again_percent: currentQuestion?.stats?.total > 0
-        ? Math.round((((currentQuestion?.stats?.total || 0) - (currentQuestion?.stats?.correct || 0)) / currentQuestion.stats.total) * 100)
-        : 0,
-      hard_percent: 0,
-      good_percent: currentQuestion?.stats?.total > 0
-        ? Math.round(((currentQuestion?.stats?.correct || 0) / currentQuestion.stats.total) * 100)
-        : 0,
-      easy_percent: 0
-    },
-    fsrs: {
-      stability: null,
-      difficulty: 5.0,
-      retrievability: 100
+      incorrect_percent: currentQuestion?.stats?.total > 0
+        ? Math.round((Math.max(0, (currentQuestion?.stats?.total || 0) - (currentQuestion?.stats?.correct || 0)) / currentQuestion.stats.total) * 100)
+        : 0
     }
   }
+
+  const totalReviews = effectiveCard.reviews_summary?.total_reviews ?? 0
+  const correctCount = effectiveCard.reviews_summary?.correct_count ?? 0
+  const incorrectCount = effectiveCard.reviews_summary?.incorrect_count ?? Math.max(0, totalReviews - correctCount)
+  const accuracyPercent = effectiveCard.reviews_summary?.accuracy_percent ?? (totalReviews > 0 ? Math.round((correctCount / totalReviews) * 100) : 0)
+  const incorrectPercent = effectiveCard.reviews_summary?.incorrect_percent ?? (totalReviews > 0 ? Math.round((incorrectCount / totalReviews) * 100) : 0)
+  const currentBoxLevel = effectiveCard.box_level || 1
+  const consecutiveStreak = effectiveCard.consecutive_correct || 0
+
+  const difficultyInfo = useMemo(() => {
+    if (totalReviews === 0) return { label: 'Unranked', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' }
+    if (accuracyPercent >= 80) return { label: 'Easy', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' }
+    if (accuracyPercent >= 50) return { label: 'Medium', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' }
+    return { label: 'Hard', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' }
+  }, [totalReviews, accuracyPercent])
+
+  const leitnerStages = [
+    { box: 1, title: 'Box 1', label: 'Learning', desc: 'Entry / Reset', req: 'Initial' },
+    { box: 2, title: 'Box 2', label: 'Developing', desc: '2 in a row', req: '2 in a row' },
+    { box: 3, title: 'Box 3', label: 'Familiar', desc: '3 in a row', req: '3 in a row' },
+    { box: 4, title: 'Box 4', label: 'Proficient', desc: '4 in a row', req: '4 in a row' },
+    { box: 5, title: 'Box 5', label: 'Mastered', desc: '5+ in a row', req: '5 in a row 🏆' },
+  ]
 
   const subtabs = [
     { id: 'stats' as const, label: 'STATS', icon: BarChart3 },
@@ -429,111 +447,179 @@ export const QuizCardHubDrawer: React.FC<QuizCardHubDrawerProps> = ({
 
                 {/* 2. Four Hero KPI Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {/* Total Reviews */}
+                  {/* Total Attempts */}
                   <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col items-center justify-center text-center">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">TOTAL REVIEWS</span>
-                    <span className="text-lg font-black text-slate-800">{effectiveCard.reviews_summary?.total_reviews ?? 0}</span>
-                    <span className="text-[8.5px] font-bold text-emerald-600">
-                      Accuracy: {effectiveCard.reviews_summary?.accuracy_percent ?? 0}%
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">TOTAL ATTEMPTS</span>
+                    <span className="text-lg font-black text-slate-800">{totalReviews}</span>
+                    <span className={cn(
+                      "text-[8.5px] font-bold",
+                      accuracyPercent >= 80 ? "text-emerald-600" :
+                      accuracyPercent >= 50 ? "text-amber-600" :
+                      totalReviews > 0 ? "text-rose-600" : "text-slate-400"
+                    )}>
+                      Accuracy: {accuracyPercent}%
                     </span>
                   </div>
 
-                  {/* Total Time */}
+                  {/* Response Time */}
                   <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col items-center justify-center text-center">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">TOTAL TIME</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">RESPONSE TIME</span>
                     <span className="text-lg font-black text-orange-600">
                       {formatSeconds(effectiveCard.reviews_summary?.total_time_seconds || 0)}
                     </span>
                     <span className="text-[8.5px] font-bold text-slate-400">
-                      Avg {effectiveCard.reviews_summary?.avg_time_seconds ?? 0}s / review
+                      Avg {effectiveCard.reviews_summary?.avg_time_seconds ?? 0}s / attempt
                     </span>
                   </div>
 
-                  {/* Stability */}
+                  {/* Leitner Box Level */}
                   <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col items-center justify-center text-center">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">STABILITY (S)</span>
-                    <span className="text-lg font-black text-purple-600">
-                      {effectiveCard.fsrs?.stability ? `${effectiveCard.fsrs.stability}d` : 'New'}
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">LEITNER BOX</span>
+                    <span className={cn(
+                      "text-lg font-black",
+                      currentBoxLevel === 5 ? "text-emerald-600" :
+                      currentBoxLevel >= 3 ? "text-blue-600" : "text-amber-600"
+                    )}>
+                      Box {currentBoxLevel} / 5
                     </span>
-                    <span className="text-[8.5px] font-bold text-purple-500">
-                      Diff: Standard
+                    <span className="text-[8.5px] font-bold text-slate-500">
+                      {currentBoxLevel === 5 ? '🏆 Mastered' :
+                       currentBoxLevel === 4 ? 'Proficient' :
+                       currentBoxLevel === 3 ? 'Familiar' :
+                       currentBoxLevel === 2 ? 'Developing' : 'Learning'}
                     </span>
                   </div>
 
-                  {/* Recall */}
+                  {/* Difficulty */}
                   <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col items-center justify-center text-center">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">RECALL (R)</span>
-                    <span className="text-lg font-black text-emerald-600">
-                      {effectiveCard.fsrs?.retrievability ?? 100}%
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">DIFFICULTY</span>
+                    <span className={cn("text-lg font-black", difficultyInfo.color)}>
+                      {difficultyInfo.label}
                     </span>
                     <span className="text-[8.5px] font-bold text-slate-400">
-                      Optimal
+                      {consecutiveStreak > 0 ? `${consecutiveStreak} in a row` : 'No streak'}
                     </span>
                   </div>
                 </div>
 
-                {/* 3. Rating Distribution */}
+                {/* 3. Quiz Answer Performance Breakdown */}
                 <div className="bg-white p-4 sm:p-4.5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <BarChart3 className="w-3.5 h-3.5 text-orange-500" />
-                      Rating Distribution
+                      <Target className="w-3.5 h-3.5 text-orange-500" />
+                      Answer Breakdown
                     </h4>
                     <span className="text-[9px] font-bold text-slate-400">
-                      {effectiveCard.reviews_summary?.total_reviews ?? 0} ratings total
+                      {totalReviews} attempts total
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
-                    {/* AGAIN */}
-                    <div className="p-2.5 rounded-2xl bg-rose-50/80 border border-rose-100 flex flex-col items-center justify-center text-center">
-                      <span className="text-[8.5px] font-black text-rose-500 uppercase tracking-wider">AGAIN (1)</span>
-                      <span className="text-base font-black text-rose-700">{effectiveCard.reviews_summary?.again_count ?? 0}</span>
-                      <span className="text-[8px] font-bold text-rose-500">{effectiveCard.reviews_summary?.again_percent ?? 0}%</span>
+                  <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                    {/* CORRECT */}
+                    <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-100/90 flex flex-col items-center justify-center text-center">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span className="text-[8.5px] font-black text-emerald-600 uppercase tracking-wider">CORRECT</span>
+                      </div>
+                      <span className="text-lg sm:text-xl font-black text-emerald-700">{correctCount}</span>
+                      <span className="text-[8.5px] font-bold text-emerald-600">{accuracyPercent}%</span>
                     </div>
 
-                    {/* HARD */}
-                    <div className="p-2.5 rounded-2xl bg-amber-50/80 border border-amber-100 flex flex-col items-center justify-center text-center">
-                      <span className="text-[8.5px] font-black text-amber-600 uppercase tracking-wider">HARD (2)</span>
-                      <span className="text-base font-black text-amber-700">{effectiveCard.reviews_summary?.hard_count ?? 0}</span>
-                      <span className="text-[8px] font-bold text-amber-600">{effectiveCard.reviews_summary?.hard_percent ?? 0}%</span>
+                    {/* INCORRECT */}
+                    <div className="p-3 rounded-2xl bg-rose-50/80 border border-rose-100/90 flex flex-col items-center justify-center text-center">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <XCircle className="w-3 h-3 text-rose-500" />
+                        <span className="text-[8.5px] font-black text-rose-500 uppercase tracking-wider">INCORRECT</span>
+                      </div>
+                      <span className="text-lg sm:text-xl font-black text-rose-700">{incorrectCount}</span>
+                      <span className="text-[8.5px] font-bold text-rose-500">{incorrectPercent}%</span>
                     </div>
 
-                    {/* GOOD */}
-                    <div className="p-2.5 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex flex-col items-center justify-center text-center">
-                      <span className="text-[8.5px] font-black text-indigo-600 uppercase tracking-wider">GOOD (3)</span>
-                      <span className="text-base font-black text-indigo-700">{effectiveCard.reviews_summary?.good_count ?? 0}</span>
-                      <span className="text-[8px] font-bold text-indigo-600">{effectiveCard.reviews_summary?.good_percent ?? 0}%</span>
-                    </div>
-
-                    {/* EASY */}
-                    <div className="p-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex flex-col items-center justify-center text-center">
-                      <span className="text-[8.5px] font-black text-emerald-600 uppercase tracking-wider">EASY (4)</span>
-                      <span className="text-base font-black text-emerald-700">{effectiveCard.reviews_summary?.easy_count ?? 0}</span>
-                      <span className="text-[8px] font-bold text-emerald-600">{effectiveCard.reviews_summary?.easy_percent ?? 0}%</span>
+                    {/* STREAK */}
+                    <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-100/90 flex flex-col items-center justify-center text-center">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <Flame className="w-3 h-3 text-amber-600" />
+                        <span className="text-[8.5px] font-black text-amber-600 uppercase tracking-wider">STREAK</span>
+                      </div>
+                      <span className="text-lg sm:text-xl font-black text-amber-700">{consecutiveStreak}</span>
+                      <span className="text-[8px] font-bold text-amber-600 truncate max-w-full">
+                        {currentBoxLevel >= 5 ? 'Max Level 🏆' : `${Math.max(1, currentBoxLevel + 1 - consecutiveStreak)} to Box ${currentBoxLevel + 1}`}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* 4. Projected Next Intervals */}
-                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">NEXT INTERVALS:</span>
+                {/* 4. Leitner Mastery Ladder (5 Boxes) */}
+                <div className="bg-white p-4 sm:p-4.5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                      Leitner Mastery Ladder
+                    </h4>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border",
+                      currentBoxLevel === 5 ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-orange-50 text-orange-600 border-orange-200"
+                    )}>
+                      {currentBoxLevel === 5 ? '🏆 Goal Completed' : `Box ${currentBoxLevel} of 5`}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-black">
-                      Again: 10m
-                    </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-100 text-[9px] font-black">
-                      Hard: 1d
-                    </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 text-[9px] font-black">
-                      Good: 3d
-                    </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px] font-black">
-                      Easy: 7d
-                    </span>
+
+                  {/* 5-Step Progress Grid */}
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                    {leitnerStages.map((st) => {
+                      const isCurrent = currentBoxLevel === st.box
+                      const isCompleted = currentBoxLevel > st.box
+                      return (
+                        <div
+                          key={st.box}
+                          className={cn(
+                            "relative p-2 rounded-2xl flex flex-col items-center text-center transition-all",
+                            isCurrent
+                              ? "bg-orange-50/90 border-2 border-orange-400 shadow-sm ring-2 ring-orange-100 scale-[1.02]"
+                              : isCompleted
+                              ? "bg-slate-50 border border-slate-200/80 opacity-90"
+                              : "bg-slate-50/50 border border-dashed border-slate-200 opacity-60"
+                          )}
+                        >
+                          {/* Indicator badge */}
+                          <div className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black mb-1",
+                            isCurrent
+                              ? "bg-orange-500 text-white shadow-2xs"
+                              : isCompleted
+                              ? "bg-emerald-500 text-white"
+                              : "bg-slate-200 text-slate-500"
+                          )}>
+                            {isCompleted ? <Check className="w-3 h-3" /> : st.box}
+                          </div>
+
+                          <span className={cn(
+                            "text-[9px] sm:text-[10px] font-black leading-tight truncate w-full",
+                            isCurrent ? "text-orange-700" : isCompleted ? "text-slate-700" : "text-slate-400"
+                          )}>
+                            {st.label}
+                          </span>
+
+                          <span className="text-[7.5px] font-bold text-slate-400 mt-0.5 hidden sm:block">
+                            {st.req}
+                          </span>
+
+                          {isCurrent && (
+                            <span className="mt-1 px-1.5 py-0.2 rounded-md bg-orange-500 text-white text-[7px] font-black tracking-widest uppercase">
+                              NOW
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Micro Rule Pill */}
+                  <div className="p-2.5 rounded-2xl bg-slate-50/90 border border-slate-200/60 flex items-center gap-2 text-left">
+                    <Info className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                    <p className="text-[9.5px] font-semibold text-slate-500 leading-snug">
+                      <strong className="text-slate-700 font-bold">Leitner Rule:</strong> Correct answers advance question to next box (+1 streak). An incorrect answer immediately resets to <strong className="text-rose-600 font-bold">Box 1</strong> for relearning.
+                    </p>
                   </div>
                 </div>
               </div>

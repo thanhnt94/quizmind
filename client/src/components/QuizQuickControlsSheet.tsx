@@ -762,7 +762,7 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                     </div>
                     <div className="flex flex-col min-w-0 leading-none gap-0.5">
                       <span className="text-[11px] font-bold text-slate-800 tracking-tight truncate">Card Stats</span>
-                      <span className="text-[9px] text-slate-400 font-medium truncate">FSRS & History</span>
+                      <span className="text-[9px] text-slate-400 font-medium truncate">Mastery & Stats</span>
                     </div>
                   </div>
                   <div className="w-5 h-5 rounded-full bg-slate-200/60 group-hover:bg-teal-100 flex items-center justify-center text-slate-400 group-hover:text-teal-600 shrink-0 transition-colors ml-1">

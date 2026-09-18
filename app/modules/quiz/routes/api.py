@@ -3294,7 +3294,7 @@ async def get_today_review_quizzes(request: Request, db: AsyncSession = Depends(
 
 @router.get("/question/{question_id}/detailed-stats")
 async def get_question_detailed_stats(request: Request, question_id: int, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import Question, UserQuestionMastery, UserAnswer
+    from app.modules.quiz.models import Question, UserQuestionMastery, UserAnswer, QuizAttempt
     user_id = await get_request_user_id(request, db)
 
     # 1. Fetch question
@@ -3313,32 +3313,50 @@ async def get_question_detailed_stats(request: Request, question_id: int, db: As
     mastery = mastery_res.scalar_one_or_none()
 
     # 3. Fetch past answers for this question
-    answers_stmt = select(UserAnswer).where(
-        UserAnswer.user_id == user_id,
-        UserAnswer.question_id == question_id
-    ).order_by(UserAnswer.created_at.desc())
+    answers_stmt = (
+        select(UserAnswer)
+        .join(QuizAttempt, UserAnswer.attempt_id == QuizAttempt.id)
+        .where(
+            QuizAttempt.user_id == user_id,
+            UserAnswer.question_id == question_id
+        )
+        .order_by(UserAnswer.created_at.desc())
+    )
     answers_res = await db.execute(answers_stmt)
     answers = answers_res.scalars().all()
 
     total_reviews = len(answers)
-    total_time_seconds = sum(a.time_taken or 0.0 for a in answers)
+    total_time_seconds = sum(getattr(a, 'active_time', 0.0) or 0.0 for a in answers)
     avg_time_seconds = round(total_time_seconds / total_reviews, 1) if total_reviews > 0 else 0.0
     correct_count = sum(1 for a in answers if a.is_correct)
-    accuracy_percent = round((correct_count / total_reviews * 100), 1) if total_reviews > 0 else 0.0
-
     incorrect_count = total_reviews - correct_count
-    again_count = incorrect_count
-    hard_count = sum(1 for a in answers if a.is_correct and (a.time_taken or 0) > 15)
-    good_count = sum(1 for a in answers if a.is_correct and 5 <= (a.time_taken or 0) <= 15)
-    easy_count = sum(1 for a in answers if a.is_correct and (a.time_taken or 0) < 5)
-
-    again_percent = round((again_count / total_reviews * 100)) if total_reviews > 0 else 0
-    hard_percent = round((hard_count / total_reviews * 100)) if total_reviews > 0 else 0
-    good_percent = round((good_count / total_reviews * 100)) if total_reviews > 0 else 0
-    easy_percent = round((easy_count / total_reviews * 100)) if total_reviews > 0 else 0
+    accuracy_percent = round((correct_count / total_reviews * 100), 1) if total_reviews > 0 else 0.0
+    incorrect_percent = round((incorrect_count / total_reviews * 100), 1) if total_reviews > 0 else 0.0
 
     box_level = mastery.box_level if mastery else 1
     consecutive_correct = mastery.consecutive_correct if mastery else 0
+
+    # Difficulty classification based on user performance
+    if total_reviews == 0:
+        difficulty_label = "Unranked"
+        difficulty_color = "slate"
+    elif accuracy_percent >= 80:
+        difficulty_label = "Easy"
+        difficulty_color = "emerald"
+    elif accuracy_percent >= 50:
+        difficulty_label = "Medium"
+        difficulty_color = "amber"
+    else:
+        difficulty_label = "Hard"
+        difficulty_color = "rose"
+
+    box_names = {
+        1: "Box 1 · Learning",
+        2: "Box 2 · Developing",
+        3: "Box 3 · Familiar",
+        4: "Box 4 · Proficient",
+        5: "Box 5 · Mastered"
+    }
 
     return {
         "card": {
@@ -3347,33 +3365,25 @@ async def get_question_detailed_stats(request: Request, question_id: int, db: As
             "explanation": q.explanation,
             "ai_explanation": q.ai_explanation,
             "box_level": box_level,
+            "box_name": box_names.get(box_level, f"Box {box_level}"),
             "consecutive_correct": consecutive_correct,
-            "fsrs": {
-                "stability": round(box_level * 1.5, 1) if box_level > 1 else None,
-                "difficulty": 5.0,
-                "retrievability": 100 if accuracy_percent >= 80 else (80 if accuracy_percent >= 50 else 60),
-                "state": 2 if box_level >= 2 else (1 if total_reviews > 0 else 0),
-                "due": None
+            "difficulty": {
+                "label": difficulty_label,
+                "color": difficulty_color
             },
             "reviews_summary": {
                 "total_reviews": total_reviews,
                 "total_time_seconds": round(total_time_seconds, 1),
                 "avg_time_seconds": avg_time_seconds,
                 "correct_count": correct_count,
+                "incorrect_count": incorrect_count,
                 "accuracy_percent": accuracy_percent,
-                "again_count": again_count,
-                "hard_count": hard_count,
-                "good_count": good_count,
-                "easy_count": easy_count,
-                "again_percent": again_percent,
-                "hard_percent": hard_percent,
-                "good_percent": good_percent,
-                "easy_percent": easy_percent
+                "incorrect_percent": incorrect_percent
             },
             "history_logs": [
                 {
                     "is_correct": a.is_correct,
-                    "time_taken": a.time_taken,
+                    "time_taken": getattr(a, 'active_time', 0.0),
                     "created_at": a.created_at.isoformat() if a.created_at else None
                 }
                 for a in answers[:10]
