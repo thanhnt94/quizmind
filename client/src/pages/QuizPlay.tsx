@@ -710,13 +710,6 @@ export default function QuizPlay() {
       confetti({ particleCount: updatedStreak >= 5 ? 250 : 150, spread: updatedStreak >= 5 ? 100 : 70, origin: { y: 0.6 }, colors: confettiColors })
 
       setAnswerContext({ wasCorrect: true, prevTotal, prevCorrect, timeTaken, avgTime, newStreak: updatedStreak, xpGained })
-
-      // Auto-Advance if enabled
-      if (userSettings?.auto_advance) {
-        setTimeout(() => {
-          handleNext()
-        }, 1200)
-      }
     } else {
       if (sfxEnabled) playIncorrectSound()
       if (userSettings?.haptic_enabled !== false && navigator.vibrate) {
@@ -739,12 +732,6 @@ export default function QuizPlay() {
 
     setBadgeVisible(true)
     setTimeout(() => setBadgeVisible(false), 2000)
-
-    // Auto-expand explanation on mobile if enabled
-    if (userSettings?.auto_expand_explanation !== false && window.innerWidth < 1280) {
-      setIsFeedbackOpen(true)
-    }
-    setTimeout(() => setBadgeVisible(false), 2500)
 
     // Check session progress milestones
     const answered = Object.keys(newAnswers).length
