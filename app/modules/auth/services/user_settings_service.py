@@ -27,7 +27,8 @@ class UserSettingsService:
             "score_mode", "time_mode", "last_quiz_id",
             "home_active_tab", "roadmap_quiz_order", "quizzes_quiz_order",
             "shuffle_choices", "shuffle_questions", "auto_expand_explanation",
-            "exam_batch_size", "instant_feedback"
+            "exam_batch_size", "instant_feedback",
+            "font_size", "auto_advance", "show_mastery"
         }
         
         updated = False
@@ -70,5 +71,8 @@ class UserSettingsService:
             "auto_expand_explanation": True if settings_obj.auto_expand_explanation is None else settings_obj.auto_expand_explanation,
             "exam_batch_size": 10 if settings_obj.exam_batch_size is None else settings_obj.exam_batch_size,
             "instant_feedback": True if settings_obj.instant_feedback is None else settings_obj.instant_feedback,
+            "font_size": settings_obj.font_size or "100%",
+            "auto_advance": False if settings_obj.auto_advance is None else settings_obj.auto_advance,
+            "show_mastery": True if settings_obj.show_mastery is None else settings_obj.show_mastery,
             "updated_at": settings_obj.updated_at.isoformat() if settings_obj.updated_at else None
         }

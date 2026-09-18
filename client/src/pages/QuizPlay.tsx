@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { useRoadmapStatus } from '@/hooks/useRoadmapStatus'
 import { RoadmapHeaderTracker } from '@/components/RoadmapHeaderTracker'
+import { PlaySettingsModal } from '@/components/PlaySettingsModal'
 
 interface Option {
   id: number
@@ -213,7 +214,27 @@ export default function QuizPlay() {
   const [showGoalCelebration, setShowGoalCelebration] = useState(false)
   const [isLimitlessStrike, setIsLimitlessStrike] = useState(false)
   const [activeMode, setActiveMode] = useState<string>(userSettings?.quiz_learning_mode || 'sequential')
-  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const isModeMenuOpen = isSettingsModalOpen
+  const setIsModeMenuOpen = setIsSettingsModalOpen
+
+  const getQuestionFontSize = (size?: string) => {
+    switch (size) {
+      case '85%': return 'text-lg md:text-xl'
+      case '115%': return 'text-2xl md:text-3xl'
+      case '130%': return 'text-3xl md:text-4xl'
+      default: return 'text-xl md:text-2xl'
+    }
+  }
+
+  const getOptionFontSize = (size?: string) => {
+    switch (size) {
+      case '85%': return 'text-xs md:text-sm'
+      case '115%': return 'text-base md:text-lg'
+      case '130%': return 'text-lg md:text-xl'
+      default: return 'text-sm md:text-base'
+    }
+  }
   const [learningModeAlert, setLearningModeAlert] = useState<{
     visible: boolean;
     message: string;
@@ -420,12 +441,23 @@ export default function QuizPlay() {
       fetchNote()
       setIsEditingInsight(false)
       setSelectedInsightField('explanation')
+
+      // Autoplay Question Audio if enabled
+      if (userSettings?.autoplay_audio === 'question' || userSettings?.autoplay_audio === 'always') {
+        const audioSrc = currentQuestion.audio_url || currentGroup?.audio_url
+        if (audioSrc) {
+          try {
+            const aud = new Audio(audioSrc)
+            aud.play().catch(e => console.log("Autoplay audio blocked:", e))
+          } catch (e) {}
+        }
+      }
     }
   }, [currentIndex, currentQuestion])
 
   // Tự động đóng toàn bộ các popup/toast khi người dùng click mở bất kỳ khung thông tin hoặc modal phụ nào
   useEffect(() => {
-    if (isFeedbackOpen || isMapOpen || isEditModalOpen || isQuitModalOpen || isSessionSummaryOpen) {
+    if (isFeedbackOpen || isMapOpen || isEditModalOpen || isQuitModalOpen || isSessionSummaryOpen || isSettingsModalOpen) {
       setGoalToast(prev => prev ? { ...prev, visible: false } : null)
       setShowGoalCelebration(false)
       setBadgeVisible(false)
@@ -433,7 +465,7 @@ export default function QuizPlay() {
       setActiveMasteryUpgrade(null)
       setLearningModeAlert(null)
     }
-  }, [isFeedbackOpen, isMapOpen, isEditModalOpen, isQuitModalOpen, isSessionSummaryOpen])
+  }, [isFeedbackOpen, isMapOpen, isEditModalOpen, isQuitModalOpen, isSessionSummaryOpen, isSettingsModalOpen])
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -647,6 +679,9 @@ export default function QuizPlay() {
 
     if (correct) {
       if (sfxEnabled) playCorrectSound()
+      if (userSettings?.haptic_enabled !== false && navigator.vibrate) {
+        navigator.vibrate(15)
+      }
       updatedStreak = streak + 1
       setStreak(updatedStreak)
       const xpGained = isFirstEver ? 15 : (updatedStreak >= 5 ? 20 : 10)
@@ -675,8 +710,18 @@ export default function QuizPlay() {
       confetti({ particleCount: updatedStreak >= 5 ? 250 : 150, spread: updatedStreak >= 5 ? 100 : 70, origin: { y: 0.6 }, colors: confettiColors })
 
       setAnswerContext({ wasCorrect: true, prevTotal, prevCorrect, timeTaken, avgTime, newStreak: updatedStreak, xpGained })
+
+      // Auto-Advance if enabled
+      if (userSettings?.auto_advance) {
+        setTimeout(() => {
+          handleNext()
+        }, 1200)
+      }
     } else {
       if (sfxEnabled) playIncorrectSound()
+      if (userSettings?.haptic_enabled !== false && navigator.vibrate) {
+        navigator.vibrate([25, 40, 25])
+      }
       updatedStreak = 0
       setStreak(0)
       const xpGained = 0
@@ -693,6 +738,12 @@ export default function QuizPlay() {
     }
 
     setBadgeVisible(true)
+    setTimeout(() => setBadgeVisible(false), 2000)
+
+    // Auto-expand explanation on mobile if enabled
+    if (userSettings?.auto_expand_explanation !== false && window.innerWidth < 1280) {
+      setIsFeedbackOpen(true)
+    }
     setTimeout(() => setBadgeVisible(false), 2500)
 
     // Check session progress milestones
@@ -2082,7 +2133,8 @@ export default function QuizPlay() {
                       {String.fromCharCode(65 + idx)}
                     </div>
                     <span className={cn(
-                      "font-semibold text-sm md:text-base leading-snug",
+                      "font-semibold leading-snug",
+                      getOptionFontSize(userSettings?.font_size),
                       isCorrectOpt ? "text-emerald-950 font-bold" : isUserChoice ? "text-rose-950 font-bold" : "text-slate-700"
                     )}>
                       {opt.content}
@@ -2127,7 +2179,10 @@ export default function QuizPlay() {
                   )}>
                     {String.fromCharCode(65 + idx)}
                   </div>
-                  <span className="flex-1 font-semibold text-sm md:text-base leading-snug">
+                  <span className={cn(
+                    "flex-1 font-semibold leading-snug",
+                    getOptionFontSize(userSettings?.font_size)
+                  )}>
                     {opt.content}
                   </span>
                   {isSelected && (
@@ -2171,7 +2226,8 @@ export default function QuizPlay() {
                    {String.fromCharCode(65 + idx)}
                  </div>
                  <span className={cn(
-                   "flex-1 font-semibold text-sm md:text-base leading-snug",
+                   "flex-1 font-semibold leading-snug",
+                   getOptionFontSize(userSettings?.font_size),
                    selectedOption === idx
                      ? (opt.is_correct ? "text-emerald-800" : "text-rose-800")
                      : (showFeedback && opt.is_correct ? "text-emerald-800" : "text-slate-700 group-hover:text-slate-900")
@@ -2482,6 +2538,7 @@ export default function QuizPlay() {
               subProgressTotal={session.questions?.length || 1}
               streakCount={roadmapStatus.streak || streak || 0}
               onExit={() => navigate(`/quiz/${id}/roadmap`)}
+              onOpenSettings={() => setIsSettingsModalOpen(true)}
               timeMode={timeMode}
               onToggleTimeMode={() => setTimeMode(prev => prev === 'card' ? 'today' : prev === 'today' ? 'all' : 'card')}
               scoreMode={scoreMode}
@@ -2524,6 +2581,14 @@ export default function QuizPlay() {
             </div>
           </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm active:scale-90 transition-all cursor-pointer"
+            title="Study Settings"
+          >
+            <Sliders className="w-4 h-4" />
+          </button>
+
           <button 
              onClick={() => {
                 const nextSfx = !sfxEnabled;
@@ -2874,8 +2939,13 @@ export default function QuizPlay() {
 
                         {/* Top Question Row */}
                         <div className="flex items-center justify-between gap-4 md:mb-6 mb-4">
-                          <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
-                            {currentIndex + 1}
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
+                              {currentIndex + 1}
+                            </div>
+                            {userSettings?.show_mastery !== false && currentQuestion?.box_level !== undefined && (
+                              getMasteryPill(currentQuestion.box_level)
+                            )}
                           </div>
                           {activeGoal && (
                             <div className="flex items-center gap-2">
@@ -2887,7 +2957,9 @@ export default function QuizPlay() {
                         </div>
 
                         {/* Question Text */}
-                        <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
+                        <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
+                          {currentQuestion?.content}
+                        </h2>
 
                         {/* Options List */}
                         {renderOptionsList()}
@@ -2913,8 +2985,13 @@ export default function QuizPlay() {
                     <div className="bg-white md:p-8 p-5 rounded-[2.5rem] border border-slate-200/90 shadow-xs relative overflow-hidden">
                       {/* Top Question Row */}
                       <div className="flex items-center justify-between gap-4 md:mb-6 mb-4">
-                        <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
-                          {currentIndex + 1}
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-600 rounded-2xl text-white font-black text-base shadow-xs">
+                            {currentIndex + 1}
+                          </div>
+                          {userSettings?.show_mastery !== false && currentQuestion?.box_level !== undefined && (
+                            getMasteryPill(currentQuestion.box_level)
+                          )}
                         </div>
                         {activeGoal && (
                           <div className="flex items-center gap-2">
@@ -2926,7 +3003,9 @@ export default function QuizPlay() {
                       </div>
 
                       {/* Question Text */}
-                      <h2 className="text-xl md:text-2xl font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1">{currentQuestion?.content}</h2>
+                      <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
+                        {currentQuestion?.content}
+                      </h2>
 
                       {/* Options List */}
                       {renderOptionsList()}
@@ -3496,140 +3575,21 @@ export default function QuizPlay() {
         )}
       </AnimatePresence>
 
-      {/* ⚙️ SMART LEARNING MODE MODAL */}
-      <AnimatePresence>
-        {isModeMenuOpen && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModeMenuOpen(false)}
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md pointer-events-auto"
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
-              className="relative w-full max-w-md bg-white rounded-[2.5rem] p-6 shadow-[0_25px_60px_rgba(99,102,241,0.25)] border border-slate-100 overflow-hidden z-[1010] pointer-events-auto"
-            >
-              {/* Top premium border indicator */}
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-              
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100">
-                    <Sliders className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <h3 className="text-lg font-black text-slate-800 tracking-tight uppercase">Smart Learning Modes</h3>
-                </div>
-                <button 
-                  onClick={() => setIsModeMenuOpen(false)} 
-                  className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 active:scale-95 transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              
-              {/* Description */}
-              <p className="text-slate-500 font-bold text-xs leading-relaxed mb-5">
-                Customize how QuizMind serves the next question. Choose a pathway that matches your active study goals.
-              </p>
-              
-              {/* Mode Options List */}
-              <div className="space-y-2.5 mb-6">
-                {[
-                  {
-                    id: 'sequential',
-                    name: 'Sequential Order',
-                    desc: 'Follow deck natural sequence from first to last question.',
-                    icon: ListOrdered,
-                    color: 'from-blue-500 to-indigo-500',
-                    bg: 'bg-blue-50/50 border-blue-100'
-                  },
-                  {
-                    id: 'random',
-                    name: 'Shuffle Mode',
-                    desc: 'Serve questions in a completely randomized, unexpected order.',
-                    icon: Shuffle,
-                    color: 'from-purple-500 to-indigo-500',
-                    bg: 'bg-purple-50/50 border-purple-100'
-                  },
-                  {
-                    id: 'unseen',
-                    name: 'New Cards First',
-                    desc: 'Prioritize questions you have never attempted in this deck.',
-                    icon: EyeOff,
-                    color: 'from-teal-500 to-emerald-500',
-                    bg: 'bg-teal-50/50 border-teal-100'
-                  },
-                  {
-                    id: 'review',
-                    name: 'Mistakes First',
-                    desc: 'Focus on review cards you answered incorrectly in prior attempts.',
-                    icon: AlertCircle,
-                    color: 'from-amber-500 to-red-500',
-                    bg: 'bg-amber-50/50 border-amber-100'
-                  },
-                  {
-                    id: 'hardest',
-                    name: 'Hardest First (SRS)',
-                    desc: 'Prioritize questions with the lowest accuracy ratio first.',
-                    icon: TrendingUp,
-                    color: 'from-rose-500 to-pink-500',
-                    bg: 'bg-rose-50/50 border-rose-100'
-                  }
-                ].map((m) => {
-                  const Icon = m.icon
-                  const isSelected = activeMode === m.id
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => {
-                        applyLearningMode(m.id)
-                      }}
-                      className={cn(
-                        "w-full p-4 rounded-2xl border-2 text-left flex items-start gap-4 transition-all duration-200 active:scale-[0.99]",
-                        isSelected 
-                          ? "border-indigo-500 bg-indigo-50/20 shadow-md shadow-indigo-100/50" 
-                          : "border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50/30"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center text-white bg-gradient-to-br shadow-md flex-shrink-0",
-                        m.color
-                      )}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="font-bold text-sm text-slate-800">{m.name}</span>
-                          {isSelected && (
-                            <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-200">
-                              <Check className="w-3 h-3 text-white stroke-[3]" />
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[11px] font-semibold text-slate-500 leading-relaxed block">{m.desc}</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-              
-              <button 
-                onClick={() => setIsModeMenuOpen(false)}
-                className="w-full py-3.5 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-slate-300 active:scale-95 transition-all hover:bg-slate-800"
-              >
-                APPLY & CLOSE
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* ⚙️ Study Settings Modal */}
+      <PlaySettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        activeMode={activeMode}
+        applyLearningMode={applyLearningMode}
+        currentQuestion={currentQuestion}
+        copyQuestionToClipboard={copyQuestionToClipboard}
+        handleIgnoreQuestion={handleIgnoreQuestion}
+        openEditModal={openEditModal}
+        canEdit={canEdit}
+        setIsQuitModalOpen={setIsQuitModalOpen}
+        currentIndex={currentIndex}
+        totalQuestions={session.questions?.length || 0}
+      />
 
 
 
