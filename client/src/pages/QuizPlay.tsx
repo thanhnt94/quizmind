@@ -12,6 +12,9 @@ import { useAppStore } from '@/store/useAppStore'
 import { useRoadmapStatus } from '@/hooks/useRoadmapStatus'
 import { RoadmapHeaderTracker } from '@/components/RoadmapHeaderTracker'
 import { PlaySettingsModal } from '@/components/PlaySettingsModal'
+import { QuizQuickControlsSheet } from '@/components/QuizQuickControlsSheet'
+import { QuizCardHubDrawer } from '@/components/QuizCardHubDrawer'
+
 
 interface Option {
   id: number
@@ -187,7 +190,11 @@ export default function QuizPlay() {
   const [activeReplyId, setActiveReplyId] = useState<number | null>(null)
   const [replyInputs, setReplyInputs] = useState<Record<number, string>>({})
 
-  const activeBottomTab: 'map' | 'question' | 'stats' = isStatsOpen ? 'stats' : (isMapOpen ? 'map' : 'question')
+  const [isQuickControlsOpen, setIsQuickControlsOpen] = useState(false)
+  const [isCardHubOpen, setIsCardHubOpen] = useState(false)
+  const [cardHubSubTab, setCardHubSubTab] = useState<'stats' | 'insight' | 'note' | 'community'>('stats')
+  const activeBottomTab: 'map' | 'question' | 'stats' = (isCardHubOpen || isStatsOpen) ? 'stats' : (isMapOpen ? 'map' : 'question')
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [activeUnlockedBadge, setActiveUnlockedBadge] = useState<any | null>(null)
@@ -2759,6 +2766,14 @@ export default function QuizPlay() {
             {currentQuestion?.is_ignored ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
           <button 
+            type="button"
+            onClick={() => setIsQuickControlsOpen(true)}
+            className="w-9 h-9 flex items-center justify-center bg-orange-50 border border-orange-200 rounded-xl text-orange-600 hover:bg-orange-100 shadow-sm active:scale-90 transition-all cursor-pointer"
+            title="Quick Controls"
+          >
+            <Sliders className="w-4 h-4" />
+          </button>
+          <button 
             onClick={openEditModal}
             className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm active:scale-90 transition-all"
             title="Edit question"
@@ -3246,7 +3261,10 @@ export default function QuizPlay() {
               {(showFeedback || isReviewMode || isExamSubmitted) && (
                 <button 
                   type="button"
-                  onClick={() => setIsFeedbackOpen(true)}
+                  onClick={() => {
+                    setCardHubSubTab('insight')
+                    setIsCardHubOpen(true)
+                  }}
                   className={cn(
                     "w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-95 cursor-pointer relative",
                     justAnswered || (currentQuestion?.explanation && currentQuestion.explanation.trim())
@@ -3262,12 +3280,12 @@ export default function QuizPlay() {
                 </button>
               )}
 
-              {/* 2. Study Settings Button */}
+              {/* 2. Quick Controls Button */}
               <button 
                 type="button"
-                onClick={() => setIsSettingsModalOpen(true)} 
-                className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 dark:hover:bg-slate-700 shadow-xs active:scale-95 transition-all cursor-pointer"
-                title="Study Settings"
+                onClick={() => setIsQuickControlsOpen(true)} 
+                className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/60 rounded-2xl text-orange-600 hover:text-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900/40 shadow-xs active:scale-95 transition-all cursor-pointer"
+                title="Quick Controls"
               >
                 <Sliders className="w-5 h-5" />
               </button>
@@ -3298,7 +3316,7 @@ export default function QuizPlay() {
                   e.stopPropagation()
                   setIsMapOpen(true)
                   setIsStatsOpen(false)
-                  setIsFeedbackOpen(false)
+                  setIsCardHubOpen(false)
                 }}
                 className="relative flex items-center justify-center gap-1.5 py-2.5 px-1 transition-all active:scale-95 overflow-hidden cursor-pointer"
                 title="Question Map"
@@ -3315,7 +3333,7 @@ export default function QuizPlay() {
                   activeBottomTab === 'map' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
                 )}>
                   <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
-                  CARD MAP
+                  MAP
                 </span>
               </button>
 
@@ -3326,7 +3344,7 @@ export default function QuizPlay() {
                   e.stopPropagation()
                   setIsMapOpen(false)
                   setIsStatsOpen(false)
-                  setIsFeedbackOpen(false)
+                  setIsCardHubOpen(false)
                 }}
                 className="relative flex items-center justify-center gap-1.5 py-2.5 px-1 transition-all active:scale-95 overflow-hidden cursor-pointer"
                 title="Current Question"
@@ -3334,44 +3352,44 @@ export default function QuizPlay() {
                 {activeBottomTab === 'question' && (
                   <motion.div
                     layoutId="activeBottomTabBg"
-                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
+                    className="absolute inset-0 bg-orange-500/10 dark:bg-orange-500/20"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
                 <span className={cn(
                   "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
-                  activeBottomTab === 'question' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                  activeBottomTab === 'question' ? "text-orange-600 dark:text-orange-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
                 )}>
                   <BookOpen className="w-3.5 h-3.5 shrink-0" />
                   QUESTION
                 </span>
               </button>
 
-              {/* 3. Stats Tab */}
+              {/* 3. Card Hub Tab (Replaced STATS) */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setIsStatsOpen(true)
+                  setIsCardHubOpen(true)
                   setIsMapOpen(false)
-                  setIsFeedbackOpen(false)
+                  setIsStatsOpen(false)
                 }}
                 className="relative flex items-center justify-center gap-1.5 py-2.5 px-1 transition-all active:scale-95 overflow-hidden cursor-pointer"
-                title="Session Stats & Analytics"
+                title="Card Hub & Performance"
               >
                 {activeBottomTab === 'stats' && (
                   <motion.div
                     layoutId="activeBottomTabBg"
-                    className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20"
+                    className="absolute inset-0 bg-orange-500/10 dark:bg-orange-500/20"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
                 <span className={cn(
                   "relative z-10 flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider truncate transition-colors duration-200",
-                  activeBottomTab === 'stats' ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
+                  activeBottomTab === 'stats' ? "text-orange-600 dark:text-orange-400 font-black" : "text-slate-400 hover:text-slate-600 dark:text-slate-500"
                 )}>
-                  <BarChart2 className="w-3.5 h-3.5 shrink-0" />
-                  STATS
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-orange-500" />
+                  CARD HUB
                 </span>
               </button>
             </div>
@@ -3794,6 +3812,66 @@ export default function QuizPlay() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 🎛️ Quick Controls Bottom Sheet */}
+      <QuizQuickControlsSheet
+        isOpen={isQuickControlsOpen}
+        onClose={() => setIsQuickControlsOpen(false)}
+        onOpenSettings={() => {
+          setIsQuickControlsOpen(false)
+          setIsSettingsModalOpen(true)
+        }}
+        activeMode={activeMode}
+        onSelectMode={applyLearningMode}
+        currentQuestion={currentQuestion}
+        onOpenCardHub={(tab) => {
+          setCardHubSubTab(tab)
+          setIsCardHubOpen(true)
+        }}
+        canEdit={canEdit}
+        onOpenEditModal={openEditModal}
+        isFlagged={flaggedQuestions.has(currentIndex)}
+        onToggleFlag={() => toggleFlagQuestion(currentIndex)}
+        isIgnored={currentQuestion?.is_ignored}
+        onToggleIgnore={handleIgnoreQuestion}
+        showingHint={false}
+        showMasteryBadges={userSettings?.show_mastery ?? true}
+        onToggleMasteryBadges={() => {
+          const cur = userSettings?.show_mastery ?? true
+          updateUserSettings({ show_mastery: !cur })
+        }}
+        showLocalToast={(msg, type) => {
+          setLearningModeAlert({ visible: true, message: msg, type: type === 'warning' ? 'warning' : 'info' })
+          setTimeout(() => setLearningModeAlert(null), 2500)
+        }}
+      />
+
+      {/* ✨ All-In-One Card Hub Drawer */}
+      <QuizCardHubDrawer
+        isOpen={isCardHubOpen}
+        onClose={() => setIsCardHubOpen(false)}
+        activeSubTab={cardHubSubTab}
+        onSubTabChange={(tab) => setCardHubSubTab(tab)}
+        currentQuestion={currentQuestion}
+        currentIndex={currentIndex}
+        totalQuestions={session?.questions?.length || 0}
+        canEdit={canEdit}
+        onNextQuestion={handleNext}
+        onSaveExplanation={async (val) => {
+          setInsightInput(val)
+          await saveInsight()
+        }}
+        onClearAIExplanation={clearAIExplanation}
+        onAskAIExplanation={async () => {
+          await askAI()
+        }}
+        isAskingAI={isAskingAI}
+        passageContent={currentGroup?.passage_content}
+        showLocalToast={(msg, type) => {
+          setLearningModeAlert({ visible: true, message: msg, type: type === 'warning' ? 'warning' : 'info' })
+          setTimeout(() => setLearningModeAlert(null), 2500)
+        }}
+      />
 
       {/* ⚙️ Study Settings Modal */}
       <PlaySettingsModal

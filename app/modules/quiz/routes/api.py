@@ -3292,3 +3292,94 @@ async def get_today_review_quizzes(request: Request, db: AsyncSession = Depends(
     return {"quizzes": quizzes, "decks": quizzes}
 
 
+@router.get("/question/{question_id}/detailed-stats")
+async def get_question_detailed_stats(request: Request, question_id: int, db: AsyncSession = Depends(get_db)):
+    from app.modules.quiz.models import Question, UserQuestionMastery, UserAnswer
+    user_id = await get_request_user_id(request, db)
+
+    # 1. Fetch question
+    q_stmt = select(Question).where(Question.id == question_id)
+    q_res = await db.execute(q_stmt)
+    q = q_res.scalar_one_or_none()
+    if not q:
+        return JSONResponse(status_code=404, content={"error": "Question not found"})
+
+    # 2. Fetch user mastery
+    mastery_stmt = select(UserQuestionMastery).where(
+        UserQuestionMastery.user_id == user_id,
+        UserQuestionMastery.question_id == question_id
+    )
+    mastery_res = await db.execute(mastery_stmt)
+    mastery = mastery_res.scalar_one_or_none()
+
+    # 3. Fetch past answers for this question
+    answers_stmt = select(UserAnswer).where(
+        UserAnswer.user_id == user_id,
+        UserAnswer.question_id == question_id
+    ).order_by(UserAnswer.created_at.desc())
+    answers_res = await db.execute(answers_stmt)
+    answers = answers_res.scalars().all()
+
+    total_reviews = len(answers)
+    total_time_seconds = sum(a.time_taken or 0.0 for a in answers)
+    avg_time_seconds = round(total_time_seconds / total_reviews, 1) if total_reviews > 0 else 0.0
+    correct_count = sum(1 for a in answers if a.is_correct)
+    accuracy_percent = round((correct_count / total_reviews * 100), 1) if total_reviews > 0 else 0.0
+
+    incorrect_count = total_reviews - correct_count
+    again_count = incorrect_count
+    hard_count = sum(1 for a in answers if a.is_correct and (a.time_taken or 0) > 15)
+    good_count = sum(1 for a in answers if a.is_correct and 5 <= (a.time_taken or 0) <= 15)
+    easy_count = sum(1 for a in answers if a.is_correct and (a.time_taken or 0) < 5)
+
+    again_percent = round((again_count / total_reviews * 100)) if total_reviews > 0 else 0
+    hard_percent = round((hard_count / total_reviews * 100)) if total_reviews > 0 else 0
+    good_percent = round((good_count / total_reviews * 100)) if total_reviews > 0 else 0
+    easy_percent = round((easy_count / total_reviews * 100)) if total_reviews > 0 else 0
+
+    box_level = mastery.box_level if mastery else 1
+    consecutive_correct = mastery.consecutive_correct if mastery else 0
+
+    return {
+        "card": {
+            "id": q.id,
+            "content": q.content,
+            "explanation": q.explanation,
+            "ai_explanation": q.ai_explanation,
+            "box_level": box_level,
+            "consecutive_correct": consecutive_correct,
+            "fsrs": {
+                "stability": round(box_level * 1.5, 1) if box_level > 1 else None,
+                "difficulty": 5.0,
+                "retrievability": 100 if accuracy_percent >= 80 else (80 if accuracy_percent >= 50 else 60),
+                "state": 2 if box_level >= 2 else (1 if total_reviews > 0 else 0),
+                "due": None
+            },
+            "reviews_summary": {
+                "total_reviews": total_reviews,
+                "total_time_seconds": round(total_time_seconds, 1),
+                "avg_time_seconds": avg_time_seconds,
+                "correct_count": correct_count,
+                "accuracy_percent": accuracy_percent,
+                "again_count": again_count,
+                "hard_count": hard_count,
+                "good_count": good_count,
+                "easy_count": easy_count,
+                "again_percent": again_percent,
+                "hard_percent": hard_percent,
+                "good_percent": good_percent,
+                "easy_percent": easy_percent
+            },
+            "history_logs": [
+                {
+                    "is_correct": a.is_correct,
+                    "time_taken": a.time_taken,
+                    "created_at": a.created_at.isoformat() if a.created_at else None
+                }
+                for a in answers[:10]
+            ]
+        }
+    }
+
+
+

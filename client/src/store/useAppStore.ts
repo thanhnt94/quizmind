@@ -26,6 +26,7 @@ export interface UserSettings {
   font_size?: string;
   auto_advance?: string;
   show_mastery?: boolean;
+  options_layout?: string;
   updated_at?: string | null;
 }
 
@@ -51,6 +52,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   font_size: '100%',
   auto_advance: 'off',
   show_mastery: true,
+  options_layout: 'full',
   updated_at: null,
 };
 
