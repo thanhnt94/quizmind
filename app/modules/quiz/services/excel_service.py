@@ -86,12 +86,14 @@ class ExcelQuizService:
             known_cols = [
                 "question", "option_a", "option_b", "option_c", "option_d", 
                 "answer", "correct_answer", "correct_answer_text", 
-                "question_image_file", "question_audio_file", "guidance", "explanation",
+                "image", "question_image_file", "image_url", "image_file", "ảnh", "hình ảnh", "link ảnh",
+                "audio", "question_audio_file", "audio_url", "audio_file", "âm thanh", "file nghe", "link audio",
+                "guidance", "explanation",
                 "group_id", "group_code", "group", "nhóm câu hỏi", "nhóm", "mã nhóm", "passage_id",
                 "group_title", "tiêu đề nhóm", "tên nhóm", "group_name",
                 "passage", "passage_content", "passage_text", "bài đọc", "ngữ cảnh", "context", "đoạn văn",
-                "group_audio", "audio nhóm", "audio_chung", "group_audio_file",
-                "group_image", "ảnh nhóm", "image_chung", "group_image_file",
+                "group_audio", "audio nhóm", "audio_chung", "group_audio_file", "group_audio_url",
+                "group_image", "ảnh nhóm", "image_chung", "group_image_file", "group_image_url",
                 "group_order", "sub_order", "thứ tự trong nhóm", "thứ tự", "câu số trong nhóm",
                 "allow_shuffle", "shuffle", "xáo trộn", "cho phép xáo trộn", "shuffle_options"
             ]
@@ -127,6 +129,8 @@ class ExcelQuizService:
                 allow_shuffle = False
 
             order_in_group = 0
+            from app.modules.quiz.services.media_resolver import unresolve_central_url
+
             if group_code:
                 # Order within group
                 raw_order = find_col_val(["group_order", "sub_order", "thứ tự trong nhóm", "thứ tự", "câu số trong nhóm"])
@@ -134,8 +138,8 @@ class ExcelQuizService:
                     group_counters[group_code] = 0
                     g_title = find_col_val(["group_title", "tiêu đề nhóm", "tên nhóm", "group_name"])
                     g_passage = find_col_val(["passage", "passage_content", "passage_text", "bài đọc", "ngữ cảnh", "context", "đoạn văn"])
-                    g_audio = find_col_val(["group_audio", "audio nhóm", "audio_chung", "group_audio_file"])
-                    g_image = find_col_val(["group_image", "ảnh nhóm", "image_chung", "group_image_file"])
+                    g_audio = unresolve_central_url(find_col_val(["group_audio", "audio nhóm", "audio_chung", "group_audio_file", "group_audio_url"]))
+                    g_image = unresolve_central_url(find_col_val(["group_image", "ảnh nhóm", "image_chung", "group_image_file", "group_image_url"]))
 
                     groups_dict[group_code] = {
                         "group_code": group_code,
@@ -148,8 +152,8 @@ class ExcelQuizService:
                 else:
                     # Update group info if current row has passage/audio and group doesn't
                     g_passage = find_col_val(["passage", "passage_content", "passage_text", "bài đọc", "ngữ cảnh", "context", "đoạn văn"])
-                    g_audio = find_col_val(["group_audio", "audio nhóm", "audio_chung", "group_audio_file"])
-                    g_image = find_col_val(["group_image", "ảnh nhóm", "image_chung", "group_image_file"])
+                    g_audio = unresolve_central_url(find_col_val(["group_audio", "audio nhóm", "audio_chung", "group_audio_file", "group_audio_url"]))
+                    g_image = unresolve_central_url(find_col_val(["group_image", "ảnh nhóm", "image_chung", "group_image_file", "group_image_url"]))
                     if g_passage and not groups_dict[group_code]["passage_text"]:
                         groups_dict[group_code]["passage_text"] = g_passage
                     if g_audio and not groups_dict[group_code]["audio_url"]:
@@ -166,14 +170,17 @@ class ExcelQuizService:
                 else:
                     order_in_group = group_counters[group_code]
 
+            raw_q_img = find_col_val(["image", "question_image_file", "image_url", "image_file", "ảnh", "hình ảnh", "link ảnh"])
+            raw_q_audio = find_col_val(["audio", "question_audio_file", "audio_url", "audio_file", "âm thanh", "file nghe", "link audio"])
+
             question_data = {
                 "id": q_id,
                 "content": question_text,
                 "explanation": get_val("guidance") or get_val("explanation"),
                 "ai_explanation": get_val(ai_col) if ai_col else "",
                 "question_type": q_type,
-                "image": get_val("image") or get_val("question_image_file"),
-                "audio": get_val("audio") or get_val("question_audio_file"),
+                "image": unresolve_central_url(raw_q_img) if raw_q_img else "",
+                "audio": unresolve_central_url(raw_q_audio) if raw_q_audio else "",
                 "group_code": group_code,
                 "order_in_group": order_in_group,
                 "allow_shuffle": allow_shuffle,

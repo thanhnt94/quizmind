@@ -22,6 +22,7 @@ from app.modules.stats.routes.api import router as stats_router
 from app.modules.auth.routes.api import router as auth_router
 from app.modules.admin.routes.api import router as admin_router, ecosystem_sync
 from app.modules.gamification.routes.api import router as gamification_router
+from app.modules.media.routes import router as media_router
 
 
 @asynccontextmanager
@@ -118,6 +119,7 @@ app.include_router(stats_router, prefix=settings.API_V1_STR)
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(admin_router, prefix=settings.API_V1_STR)
 app.include_router(gamification_router, prefix=settings.API_V1_STR)
+app.include_router(media_router)
 app.include_router(sso_api_router)
 
 

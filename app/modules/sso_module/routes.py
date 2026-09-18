@@ -57,10 +57,13 @@ async def get_auth_config(db: AsyncSession = Depends(get_db)):
             _HEALTH_CACHE["status"] = sso_active
             _HEALTH_CACHE["ts"] = now
             
+    server_url = (config.server_url if config and config.server_url else "https://auth.inmind.site").rstrip('/')
     return {
         "auth_provider": "central" if sso_active else "local",
         "sso_enabled": sso_active,
-        "jump_url": f"{config.server_url.rstrip('/')}/api/auth/jump/{config.client_id}" if sso_active else None
+        "server_url": server_url,
+        "central_auth_url": server_url,
+        "jump_url": f"{server_url}/api/auth/jump/{config.client_id}" if sso_active else None
     }
 
 

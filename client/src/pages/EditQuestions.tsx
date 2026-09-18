@@ -25,6 +25,8 @@ import {
 } from 'lucide-react'
 import axios from 'axios'
 import { cn } from '@/lib/utils'
+import { MediaUrlInput } from '@/components/common/MediaUrlInput'
+import { resolveMediaUrl } from '@/lib/mediaResolver'
 
 const EditQuestions = () => {
   const { id } = useParams()
@@ -95,15 +97,16 @@ const EditQuestions = () => {
     if (!editingQuestion) return
     setIsSaving(true)
     try {
-      await axios.patch(`/api/v1/quiz/question/${editingQuestion.id}`, {
+      const payload = {
         content: editingQuestion.content,
         explanation: editingQuestion.explanation,
         options: editingQuestion.options,
-        image: editingQuestion.image,
-        audio: editingQuestion.audio,
+        image: editingQuestion.image || editingQuestion.image_url || null,
+        audio: editingQuestion.audio || editingQuestion.audio_url || null,
         others: editingQuestion.others
-      })
-      setQuestions(questions.map(q => q.id === editingQuestion.id ? editingQuestion : q))
+      }
+      await axios.patch(`/api/v1/quiz/question/${editingQuestion.id}`, payload)
+      setQuestions(questions.map(q => q.id === editingQuestion.id ? { ...editingQuestion, ...payload } : q))
       setEditingQuestion(null)
     } catch (err) {
       alert('Failed to update question')
@@ -240,10 +243,20 @@ const EditQuestions = () => {
                               <span className="max-w-[120px] truncate">{opt.content}</span>
                            </div>
                         ))}
-                        {(q.image || q.audio) && (
-                           <div className="flex items-center gap-1.5 ml-1 px-2 py-1 bg-slate-50 rounded-lg">
-                              {q.image && <ImageIcon className="w-3 h-3 text-slate-400" />}
-                              {q.audio && <Music className="w-3 h-3 text-slate-400" />}
+                        {(q.image || q.audio || q.image_url || q.audio_url) && (
+                           <div className="flex items-center gap-1.5 ml-1 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
+                              {(q.image || q.image_url) && (
+                                 <div className="flex items-center gap-1 text-[9px] font-bold text-indigo-600" title={q.image || q.image_url}>
+                                    <ImageIcon className="w-3 h-3 text-indigo-500" />
+                                    <span className="hidden sm:inline">Image</span>
+                                 </div>
+                              )}
+                              {(q.audio || q.audio_url) && (
+                                 <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600" title={q.audio || q.audio_url}>
+                                    <Music className="w-3 h-3 text-amber-500" />
+                                    <span className="hidden sm:inline">Audio</span>
+                                 </div>
+                              )}
                            </div>
                         )}
                      </div>
@@ -347,6 +360,24 @@ const EditQuestions = () => {
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Question Content</label>
                            <textarea rows={3} value={editingQuestion.content} onChange={(e) => setEditingQuestion({ ...editingQuestion, content: e.target.value })} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-6 text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none leading-relaxed" />
+                        </div>
+
+                        {/* Question Media Vault Inputs */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-100">
+                           <MediaUrlInput
+                              label="Question Image"
+                              sublabel="central-media://, central:// or upload"
+                              mediaType="image"
+                              value={editingQuestion.image || editingQuestion.image_url || ''}
+                              onChange={(val) => setEditingQuestion({ ...editingQuestion, image: val, image_url: val })}
+                           />
+                           <MediaUrlInput
+                              label="Question Audio"
+                              sublabel="central-tts://, central:// or upload"
+                              mediaType="audio"
+                              value={editingQuestion.audio || editingQuestion.audio_url || ''}
+                              onChange={(val) => setEditingQuestion({ ...editingQuestion, audio: val, audio_url: val })}
+                           />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                            {editingQuestion.options.map((opt: any, idx: number) => (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send, BarChart2, MessageSquare, Heart, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send, BarChart2, MessageSquare, Heart, Trash2, Maximize2, Music } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -14,6 +14,8 @@ import { RoadmapHeaderTracker } from '@/components/RoadmapHeaderTracker'
 import { PlaySettingsModal } from '@/components/PlaySettingsModal'
 import { QuizQuickControlsSheet } from '@/components/QuizQuickControlsSheet'
 import { QuizCardHubDrawer } from '@/components/QuizCardHubDrawer'
+import { MediaUrlInput } from '@/components/common/MediaUrlInput'
+import { resolveMediaUrl } from '@/lib/mediaResolver'
 
 
 interface Option {
@@ -67,6 +69,8 @@ interface Question {
   allow_shuffle?: boolean
   audio_url?: string
   image_url?: string
+  audio?: string
+  image?: string
   others?: Record<string, any>
 }
 const TypewriterText = ({ text }: { text: string }) => {
@@ -197,6 +201,7 @@ export default function QuizPlay() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null)
   const [activeUnlockedBadge, setActiveUnlockedBadge] = useState<any | null>(null)
   const [activeMasteryUpgrade, setActiveMasteryUpgrade] = useState<any | null>(null)
   const [editFormData, setEditFormData] = useState<any>(null)
@@ -475,7 +480,8 @@ export default function QuizPlay() {
 
       // Autoplay Question Audio if enabled
       if (userSettings?.autoplay_audio === 'question' || userSettings?.autoplay_audio === 'always') {
-        const audioSrc = currentQuestion.audio_url || currentGroup?.audio_url
+        const rawAudio = currentQuestion.audio || currentQuestion.audio_url || currentGroup?.audio_url
+        const audioSrc = resolveMediaUrl(rawAudio)
         if (audioSrc) {
           try {
             const aud = new Audio(audioSrc)
@@ -1430,6 +1436,8 @@ export default function QuizPlay() {
       content: currentQuestion.content,
       explanation: currentQuestion.explanation,
       ai_explanation: currentQuestion.ai_explanation,
+      image: currentQuestion.image || currentQuestion.image_url || '',
+      audio: currentQuestion.audio || currentQuestion.audio_url || '',
       options: currentQuestion.options.map(o => ({ id: o.id, content: o.content, is_correct: o.is_correct }))
     })
     setIsEditModalOpen(true)
@@ -1439,14 +1447,19 @@ export default function QuizPlay() {
     if (!currentQuestion || !editFormData) return
     setIsSavingEdit(true)
     try {
-      await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, editFormData)
+      const payload = {
+        ...editFormData,
+        image: editFormData.image || null,
+        audio: editFormData.audio || null
+      }
+      await axios.patch(`/api/v1/quiz/question/${currentQuestion.id}`, payload)
       
       // Update local state
       setSession((prev: any) => {
         const newQs = [...prev.questions]
         newQs[currentIndex] = { 
           ...newQs[currentIndex], 
-          ...editFormData,
+          ...payload,
           options: editFormData.options 
         }
         return { ...prev, questions: newQs }
@@ -2327,6 +2340,56 @@ export default function QuizPlay() {
     </div>
   )
 
+  const renderQuestionMedia = () => {
+    const rawAudio = currentQuestion?.audio || currentQuestion?.audio_url
+    const resolvedAudio = resolveMediaUrl(rawAudio)
+    const rawImage = currentQuestion?.image || currentQuestion?.image_url
+    const resolvedImage = resolveMediaUrl(rawImage)
+
+    if (!rawAudio && !rawImage) return null
+
+    return (
+      <div className="space-y-3 mb-5 mt-1">
+        {/* Question Audio */}
+        {rawAudio && resolvedAudio && (
+          <div className="p-3 bg-indigo-50/80 border border-indigo-100/90 rounded-2xl flex items-center gap-3 shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Headphones className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider block mb-1">
+                Question Audio Track
+              </span>
+              <audio controls src={resolvedAudio} className="w-full h-8 rounded-lg" />
+            </div>
+          </div>
+        )}
+
+        {/* Question Image */}
+        {rawImage && resolvedImage && (
+          <div className="relative group max-w-md mx-auto">
+            <div
+              onClick={() => setZoomedImageUrl(resolvedImage)}
+              className="rounded-2xl overflow-hidden border border-slate-200/90 bg-white cursor-pointer relative shadow-xs hover:border-indigo-300 transition-all p-1"
+            >
+              <img
+                src={resolvedImage}
+                alt="Question illustration"
+                className="w-full max-h-72 object-contain rounded-xl mx-auto"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none'
+                }}
+              />
+              <div className="absolute top-3 right-3 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <Maximize2 className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const renderOptionsList = () => {
     return (
       <div className="grid grid-cols-1 gap-3">
@@ -3035,13 +3098,19 @@ export default function QuizPlay() {
                               <Headphones className="w-4 h-4 text-indigo-600 animate-pulse" />
                               <span>Section Audio Track</span>
                             </div>
-                            <audio controls src={currentGroup.audio_url} className="w-full h-10 rounded-xl" />
+                            <audio controls src={resolveMediaUrl(currentGroup.audio_url)} className="w-full h-10 rounded-xl" />
                           </div>
                         )}
 
                         {currentGroup.image_url && (
-                          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
-                            <img src={currentGroup.image_url} alt="Passage illustration" className="w-full max-h-72 object-contain mx-auto" />
+                          <div
+                            onClick={() => setZoomedImageUrl(resolveMediaUrl(currentGroup.image_url))}
+                            className="rounded-2xl overflow-hidden border border-slate-200 bg-white cursor-pointer group relative"
+                          >
+                            <img src={resolveMediaUrl(currentGroup.image_url)} alt="Passage illustration" className="w-full max-h-72 object-contain mx-auto" />
+                            <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Maximize2 className="w-4 h-4" />
+                            </div>
                           </div>
                         )}
 
@@ -3094,6 +3163,9 @@ export default function QuizPlay() {
                           {currentQuestion?.content}
                         </h2>
 
+                        {/* Question Media */}
+                        {renderQuestionMedia()}
+
                         {/* Options List */}
                         {renderOptionsList()}
 
@@ -3139,6 +3211,9 @@ export default function QuizPlay() {
                       <h2 className={cn("font-bold leading-snug text-slate-800 md:mb-8 mb-5 mt-1 transition-all", getQuestionFontSize(userSettings?.font_size))}>
                         {currentQuestion?.content}
                       </h2>
+
+                      {/* Question Media */}
+                      {renderQuestionMedia()}
 
                       {/* Options List */}
                       {renderOptionsList()}
@@ -3733,6 +3808,24 @@ export default function QuizPlay() {
                         className="w-full h-24 p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 transition-all resize-none"
                       />
                    </div>
+
+                   {/* Question Media Inputs */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50/70 rounded-2xl border border-slate-100">
+                      <MediaUrlInput
+                        label="QUESTION IMAGE"
+                        sublabel="central-media://, central:// or upload"
+                        mediaType="image"
+                        value={editFormData.image || ''}
+                        onChange={(val) => setEditFormData({ ...editFormData, image: val })}
+                      />
+                      <MediaUrlInput
+                        label="QUESTION AUDIO"
+                        sublabel="central-tts://, central:// or upload"
+                        mediaType="audio"
+                        value={editFormData.audio || ''}
+                        onChange={(val) => setEditFormData({ ...editFormData, audio: val })}
+                      />
+                   </div>
                    
                    {/* Options */}
                    <div className="space-y-3">
@@ -4087,13 +4180,19 @@ export default function QuizPlay() {
                     <Headphones className="w-4 h-4 text-indigo-600 animate-pulse" />
                     <span>Audio Track</span>
                   </div>
-                  <audio controls src={currentGroup.audio_url} className="w-full h-10 rounded-xl" />
+                  <audio controls src={resolveMediaUrl(currentGroup.audio_url)} className="w-full h-10 rounded-xl" />
                 </div>
               )}
 
               {currentGroup.image_url && (
-                <div className="rounded-2xl overflow-hidden border border-slate-200">
-                  <img src={currentGroup.image_url} alt="Passage illustration" className="w-full max-h-64 object-contain mx-auto" />
+                <div
+                  onClick={() => setZoomedImageUrl(resolveMediaUrl(currentGroup.image_url))}
+                  className="rounded-2xl overflow-hidden border border-slate-200 cursor-pointer group relative"
+                >
+                  <img src={resolveMediaUrl(currentGroup.image_url)} alt="Passage illustration" className="w-full max-h-64 object-contain mx-auto" />
+                  <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Maximize2 className="w-4 h-4" />
+                  </div>
                 </div>
               )}
 
@@ -4115,6 +4214,32 @@ export default function QuizPlay() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Global Image Zoom Modal */}
+      {zoomedImageUrl && (
+        <div
+          onClick={() => setZoomedImageUrl(null)}
+          className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[85vh] bg-slate-900 rounded-2xl overflow-hidden p-2 shadow-2xl border border-white/10"
+          >
+            <button
+              type="button"
+              onClick={() => setZoomedImageUrl(null)}
+              className="absolute top-4 right-4 z-10 w-8 h-8 bg-black/60 hover:bg-black/90 text-white rounded-full flex items-center justify-center cursor-pointer transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img
+              src={zoomedImageUrl}
+              alt="Enlarged media"
+              className="max-w-full max-h-[80vh] object-contain rounded-xl mx-auto"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

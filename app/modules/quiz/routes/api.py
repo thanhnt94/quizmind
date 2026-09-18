@@ -625,6 +625,9 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
         mastery_res = await db.execute(mastery_stmt)
         mastery_map = {row[0]: {"box_level": row[1], "is_ignored": row[2]} for row in mastery_res.all()}
     
+    from app.modules.quiz.services.media_resolver import resolve_central_url, get_sso_server_url
+    sso_server_url = await get_sso_server_url(db)
+    
     return {
         "id": quiz.id,
         "title": quiz.title,
@@ -643,8 +646,10 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 "group_code": g.group_code,
                 "title": g.title,
                 "passage_text": g.passage_text,
-                "audio_url": g.audio_url,
-                "image_url": g.image_url,
+                "audio_url": resolve_central_url(g.audio_url, sso_server_url),
+                "image_url": resolve_central_url(g.image_url, sso_server_url),
+                "raw_audio_url": g.audio_url,
+                "raw_image_url": g.image_url,
                 "allow_shuffle": g.allow_shuffle
             } for g in getattr(quiz, 'groups', [])
         ],
@@ -654,8 +659,10 @@ async def get_quiz_play_data(request: Request, quiz_id: int, mode: Optional[str]
                 "group_id": q.group_id,
                 "order_in_group": q.order_in_group or 0,
                 "allow_shuffle": q.allow_shuffle if q.allow_shuffle is not None else True,
-                "image": q.image,
-                "audio": q.audio,
+                "image": resolve_central_url(q.image, sso_server_url),
+                "audio": resolve_central_url(q.audio, sso_server_url),
+                "raw_image": q.image,
+                "raw_audio": q.audio,
                 "question_type": q.question_type or "normal",
                 "content": q.content,
                 "explanation": q.explanation,
@@ -1441,6 +1448,9 @@ async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size
         mastery_res = await db.execute(mastery_stmt)
         ignored_map = {row[0]: row[1] for row in mastery_res.all()}
     
+    from app.modules.quiz.services.media_resolver import resolve_central_url, get_sso_server_url
+    sso_server_url = await get_sso_server_url(db)
+
     return {
         "questions": [
             {
@@ -1450,8 +1460,10 @@ async def get_quiz_questions(request: Request, quiz_id: int, page: int = 1, size
                 "explanation": q.explanation,
                 "ai_explanation": q.ai_explanation,
                 "points": q.points,
-                "image": q.image,
-                "audio": q.audio,
+                "image": resolve_central_url(q.image, sso_server_url),
+                "audio": resolve_central_url(q.audio, sso_server_url),
+                "raw_image": q.image,
+                "raw_audio": q.audio,
                 "others": q.others if isinstance(q.others, dict) else {},
                 "stats": stats_map.get(q.id, {"total": 0, "correct": 0, "wrong": 0}),
                 "is_ignored": ignored_map.get(q.id, False),
@@ -1671,12 +1683,13 @@ async def update_question(question_id: int, data: dict, db: AsyncSession = Depen
     question = result.scalar_one_or_none()
     if not question: return JSONResponse(status_code=404, content={"error": "Question not found"})
     
+    from app.modules.quiz.services.media_resolver import unresolve_central_url
     if "content" in data: question.content = data["content"]
     if "explanation" in data: question.explanation = data["explanation"]
     if "ai_explanation" in data: question.ai_explanation = data["ai_explanation"]
     if "points" in data: question.points = data["points"]
-    if "image" in data: question.image = data["image"]
-    if "audio" in data: question.audio = data["audio"]
+    if "image" in data: question.image = unresolve_central_url(data["image"])
+    if "audio" in data: question.audio = unresolve_central_url(data["audio"])
     if "others" in data:
         from sqlalchemy.orm.attributes import flag_modified
         question.others = data["others"]
@@ -3358,12 +3371,19 @@ async def get_question_detailed_stats(request: Request, question_id: int, db: As
         5: "Box 5 · Mastered"
     }
 
+    from app.modules.quiz.services.media_resolver import resolve_central_url, get_sso_server_url
+    sso_server_url = await get_sso_server_url(db)
+
     return {
         "card": {
             "id": q.id,
             "content": q.content,
             "explanation": q.explanation,
             "ai_explanation": q.ai_explanation,
+            "image": resolve_central_url(q.image, sso_server_url),
+            "audio": resolve_central_url(q.audio, sso_server_url),
+            "raw_image": q.image,
+            "raw_audio": q.audio,
             "box_level": box_level,
             "box_name": box_names.get(box_level, f"Box {box_level}"),
             "consecutive_correct": consecutive_correct,

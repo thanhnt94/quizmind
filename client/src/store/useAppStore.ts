@@ -75,6 +75,8 @@ interface AuthConfig {
   auth_provider: string;
   sso_enabled: boolean;
   jump_url?: string | null;
+  central_auth_url?: string;
+  server_url?: string;
 }
 
 interface AppState {
