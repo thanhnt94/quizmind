@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime, Float, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime, Float, Index, PrimaryKeyConstraint
+from sqlalchemy.orm import relationship, backref
 from datetime import datetime
 from app.core.db import Base
 
@@ -67,6 +67,7 @@ class Question(Base):
     quiz = relationship("Quiz", back_populates="questions")
     group = relationship("QuestionGroup", back_populates="questions")
     options = relationship("Option", back_populates="question", cascade="all, delete-orphan")
+    contributions = relationship("QuestionContribution", back_populates="question", cascade="all, delete-orphan")
 
 class Option(Base):
     __tablename__ = "options"
@@ -245,5 +246,32 @@ class UserGlobalGoal(Base):
     daily_time_target = Column(Integer, default=20) # in minutes
     daily_card_target = Column(Integer, default=20) # number of cards
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class QuestionContribution(Base):
+    __tablename__ = "question_contributions"
+    id = Column(Integer, primary_key=True, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    parent_id = Column(Integer, ForeignKey("question_contributions.id", ondelete="CASCADE"), nullable=True, index=True)
+    type = Column(String(50), default="discussion") # discussion, tip, mnemonic, errata
+    content = Column(Text, nullable=False)
+    status = Column(String(20), default="approved") # approved, hidden
+    likes_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", lazy="joined")
+    question = relationship("Question", back_populates="contributions")
+    replies = relationship("QuestionContribution", cascade="all, delete-orphan", backref=backref("parent", remote_side=[id]))
+
+class QuestionContributionLike(Base):
+    __tablename__ = "question_contribution_likes"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    contribution_id = Column(Integer, ForeignKey("question_contributions.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "contribution_id"),
+    )
 
 

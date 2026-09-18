@@ -15,7 +15,7 @@ from app.modules.quiz.models import (
     Category, Quiz, Question, Option, QuizSession, QuizAttempt, UserAnswer,
     UserQuestionNote, QuizRoom, QuizRoomParticipant, UserQuizGoal, UserDailyProgress,
     UserGlobalGoal, QuestionGroup, QuizCollaborator, UserQuizSettings, UserQuestionMastery,
-    Tag, QuizTag
+    Tag, QuizTag, QuestionContribution, QuestionContributionLike
 )
 from app.modules.gamification.models import UserGamification, Badge, UserDailyActivity
 from app.modules.notification.models import Notification, PushSubscription

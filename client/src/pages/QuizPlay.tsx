@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import confetti from 'canvas-confetti'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send, BarChart2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, Timer, Flame, Trophy, Check, X, Sparkles, Lightbulb, StickyNote, Play, Target, CheckCircle2, XCircle, Clock, BookOpen, Hash, Copy, Edit3, Brain, FileText, HelpCircle, Sliders, ListOrdered, Shuffle, EyeOff, Eye, AlertCircle, TrendingUp, Award, Volume2, VolumeX, Compass, Flag, Headphones, CheckCircle, RotateCcw, AlertTriangle, Send, BarChart2, MessageSquare, Heart, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
@@ -179,7 +179,13 @@ export default function QuizPlay() {
   const [isStatsOpen, setIsStatsOpen] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isQuitModalOpen, setIsQuitModalOpen] = useState(false)
-  const [activeFeedbackTab, setActiveFeedbackTab] = useState<'insight' | 'ai' | 'note'>('insight')
+  const [activeFeedbackTab, setActiveFeedbackTab] = useState<'insight' | 'ai' | 'note' | 'community'>('insight')
+  const [contributions, setContributions] = useState<any[]>([])
+  const [isFetchingContributions, setIsFetchingContributions] = useState(false)
+  const [commentInput, setCommentInput] = useState('')
+  const [contributionType, setContributionType] = useState<'comment' | 'correction'>('comment')
+  const [activeReplyId, setActiveReplyId] = useState<number | null>(null)
+  const [replyInputs, setReplyInputs] = useState<Record<number, string>>({})
 
   const activeBottomTab: 'map' | 'question' | 'stats' = isStatsOpen ? 'stats' : (isMapOpen ? 'map' : 'question')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -656,6 +662,88 @@ export default function QuizPlay() {
       })
     } catch (e) {
       alert("Failed to save note.")
+    }
+  }
+
+  const fetchContributions = async () => {
+    if (!currentQuestion?.id) return
+    setIsFetchingContributions(true)
+    try {
+      const res = await axios.get(`/api/v1/quiz/question/${currentQuestion.id}/contributions`)
+      setContributions(res.data || [])
+    } catch (e) {
+      console.error("Failed to fetch contributions:", e)
+    } finally {
+      setIsFetchingContributions(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeFeedbackTab === 'community' && currentQuestion?.id) {
+      fetchContributions()
+    }
+  }, [activeFeedbackTab, currentQuestion?.id])
+
+  const handleLikeContribution = async (contribId: number) => {
+    try {
+      const res = await axios.post(`/api/v1/quiz/contributions/${contribId}/like`)
+      const data = res.data
+      const updateList = (list: any[]): any[] => {
+        return list.map(c => {
+          if (c.id === contribId) {
+            return { ...c, is_liked_by_me: data.liked, likes_count: data.likes_count }
+          }
+          if (c.replies && c.replies.length > 0) {
+            return { ...c, replies: updateList(c.replies) }
+          }
+          return c
+        })
+      }
+      setContributions(prev => updateList(prev))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleAddContribution = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!commentInput.trim() || !currentQuestion?.id) return
+    try {
+      await axios.post(`/api/v1/quiz/question/${currentQuestion.id}/contributions`, {
+        content: commentInput.trim(),
+        type: contributionType
+      })
+      setCommentInput('')
+      fetchContributions()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleAddReply = async (parentId: number) => {
+    const text = (replyInputs[parentId] || '').trim()
+    if (!text || !currentQuestion?.id) return
+    try {
+      await axios.post(`/api/v1/quiz/question/${currentQuestion.id}/contributions`, {
+        content: text,
+        type: 'comment',
+        parent_id: parentId
+      })
+      setReplyInputs(prev => ({ ...prev, [parentId]: '' }))
+      setActiveReplyId(null)
+      fetchContributions()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleDeleteContribution = async (contribId: number) => {
+    if (!window.confirm("Are you sure you want to delete this comment?")) return
+    try {
+      await axios.delete(`/api/v1/quiz/contributions/${contribId}`)
+      fetchContributions()
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -1413,6 +1501,9 @@ export default function QuizPlay() {
       }
     }
     else if (activeFeedbackTab === 'note') content = personalNote || ''
+    else if (activeFeedbackTab === 'community') {
+      content = contributions.map(c => `${c.user?.full_name || c.user?.username || 'User'}: ${c.content}`).join('\n')
+    }
     
     if (content) {
       navigator.clipboard.writeText(content)
@@ -1438,6 +1529,9 @@ export default function QuizPlay() {
     } else if (activeFeedbackTab === 'note') {
       if (isEditingNote) saveNote()
       setIsEditingNote(!isEditingNote)
+    } else if (activeFeedbackTab === 'community') {
+      const inputEl = document.getElementById('community-comment-input')
+      if (inputEl) inputEl.focus()
     }
   }
 
@@ -1450,13 +1544,14 @@ export default function QuizPlay() {
   }
 
   const renderFeedbackArea = (isMobile = false) => {
-    if (!showFeedback) return null
+    if (!showFeedback && !isReviewMode && !isExamSubmitted) return null
     
     const hasInsightContent = insightFields.some((f: any) => f.hasContent)
     const tabs = [
       { id: 'insight', label: 'INSIGHT', icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-100', hasContent: hasInsightContent },
       { id: 'ai', label: 'AI ANALYSIS', icon: Sparkles, color: 'text-indigo-600', bg: 'bg-indigo-100', hasContent: !!currentQuestion?.ai_explanation },
-      { id: 'note', label: 'PERSONAL NOTE', icon: StickyNote, color: 'text-slate-400', bg: 'bg-slate-100', hasContent: !!personalNote }
+      { id: 'note', label: 'NOTE', icon: StickyNote, color: 'text-emerald-500', bg: 'bg-emerald-100', hasContent: !!personalNote },
+      { id: 'community', label: 'COMMUNITY', icon: MessageSquare, color: 'text-purple-600', bg: 'bg-purple-100', hasContent: contributions.length > 0 }
     ]
 
     const renderTabContent = () => {
@@ -1737,6 +1832,190 @@ export default function QuizPlay() {
                )}
             </div>
           )
+        case 'community':
+          return (
+            <div className="flex flex-col min-h-full bg-white rounded-2xl md:rounded-[2rem] border border-slate-100 shadow-xs animate-in fade-in slide-in-from-bottom-2 overflow-hidden">
+              <div className="flex items-center justify-between p-3.5 border-b border-purple-100/60 bg-purple-50/30 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-black text-purple-700 uppercase tracking-wider block">
+                      Community Discussions ({contributions.length})
+                    </span>
+                    <span className="text-[9px] font-semibold text-slate-400">
+                      Share tips, mnemonics & question feedback
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3 min-h-[160px] max-h-[380px] lg:max-h-[460px]">
+                {isFetchingContributions ? (
+                  <div className="flex flex-col items-center justify-center py-12 animate-pulse">
+                    <div className="w-6 h-6 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-2" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Loading discussions...</span>
+                  </div>
+                ) : contributions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <MessageSquare className="w-8 h-8 opacity-30 mb-2" />
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">No discussions yet</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5 text-center">Be the first to ask a question or share a mnemonic!</p>
+                  </div>
+                ) : (
+                  contributions.map((c: any) => (
+                    <div key={c.id} className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 shadow-2xs space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-[10px] font-black uppercase">
+                            {c.user?.username ? c.user.username.substring(0, 2) : 'U'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-black text-slate-700">{c.user?.full_name || c.user?.username || 'User'}</span>
+                              {c.user?.role === 'admin' && (
+                                <span className="px-1.5 py-0.2 bg-rose-100 text-rose-600 rounded text-[7px] font-black uppercase">Admin</span>
+                              )}
+                            </div>
+                            <span className="text-[8px] font-bold text-slate-400">{c.created_at ? new Date(c.created_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {c.type === 'correction' && (
+                            <span className={cn(
+                              "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider",
+                              c.status === 'approved' ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
+                            )}>
+                              Suggestion
+                            </span>
+                          )}
+                          {(c.user_id === user?.id || user?.role === 'admin') && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteContribution(c.id)}
+                              className="text-slate-300 hover:text-rose-500 transition-colors p-1 cursor-pointer"
+                              title="Delete comment"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs font-semibold text-slate-600 whitespace-pre-wrap break-words pl-8">
+                        {c.content}
+                      </div>
+                      <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-2 text-[10px]">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleLikeContribution(c.id)}
+                            className={cn(
+                              "flex items-center gap-1 font-black transition-colors cursor-pointer",
+                              c.is_liked_by_me ? "text-purple-600" : "text-slate-400 hover:text-purple-500"
+                            )}
+                          >
+                            <Heart className={cn("w-3.5 h-3.5", c.is_liked_by_me && "fill-purple-600 text-purple-600")} />
+                            <span>{c.likes_count}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveReplyId(activeReplyId === c.id ? null : c.id)
+                            }}
+                            className="text-slate-400 hover:text-purple-500 font-black transition-colors cursor-pointer"
+                          >
+                            {activeReplyId === c.id ? 'Cancel' : 'Reply'}
+                          </button>
+                        </div>
+                      </div>
+                      {c.replies && c.replies.length > 0 && (
+                        <div className="pl-6 space-y-2 border-l-2 border-purple-100 ml-4 mt-2">
+                          {c.replies.map((r: any) => (
+                            <div key={r.id} className="bg-purple-50/40 p-2.5 rounded-xl text-xs space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black text-slate-700 text-[11px]">{r.user?.full_name || r.user?.username || 'User'}</span>
+                                <span className="text-[8px] font-bold text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}</span>
+                              </div>
+                              <p className="text-slate-600 font-medium">{r.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {activeReplyId === c.id && (
+                        <div className="pl-6 mt-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={replyInputs[c.id] || ''}
+                              onChange={(e) => setReplyInputs(prev => ({ ...prev, [c.id]: e.target.value }))}
+                              placeholder="Write a reply..."
+                              className="flex-1 px-3 py-1.5 bg-slate-50 border border-purple-200 rounded-xl text-xs outline-none focus:bg-white"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  handleAddReply(c.id)
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleAddReply(c.id)}
+                              className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-black hover:bg-purple-700 cursor-pointer shadow-xs"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form onSubmit={handleAddContribution} className="p-3 bg-slate-50/60 border-t border-purple-100/80 rounded-b-2xl space-y-2 flex-shrink-0 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setContributionType('comment')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer",
+                      contributionType === 'comment' ? "bg-purple-600 text-white shadow-2xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    )}
+                  >
+                    💬 Discussion
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContributionType('correction')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer",
+                      contributionType === 'correction' ? "bg-amber-500 text-white shadow-2xs" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    )}
+                  >
+                    ⚠️ Suggestion
+                  </button>
+                </div>
+                <div className="flex gap-2 items-end">
+                  <textarea
+                    id="community-comment-input"
+                    value={commentInput}
+                    onChange={(e) => setCommentInput(e.target.value)}
+                    placeholder={contributionType === 'comment' ? "Ask a question or share a tip about this question..." : "Suggest an edit or correction for this question..."}
+                    className="flex-1 min-h-[38px] max-h-[80px] p-2 bg-white rounded-xl text-xs font-semibold text-slate-700 placeholder:text-slate-400 outline-none border border-slate-200 focus:border-purple-300 resize-y"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center transition-all active:scale-90 flex-shrink-0 cursor-pointer shadow-xs"
+                    title="Post Comment"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </form>
+            </div>
+          )
       }
     }
 
@@ -1755,30 +2034,23 @@ export default function QuizPlay() {
          <div className={cn(
              "flex items-center justify-between gap-1.5 sm:gap-3 py-4 border-t border-slate-100 bg-white/95 backdrop-blur-xl sticky bottom-0 z-50 px-2 sm:px-6"
           )}>
-             {isMobile && (
+             {activeFeedbackTab !== 'community' && (
                <button 
-                 onClick={() => setIsFeedbackOpen(false)}
-                 className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-50 border border-slate-200 text-slate-500 rounded-xl hover:bg-rose-50 hover:border-rose-100 hover:text-rose-500 active:scale-90 transition-all shadow-sm"
+                 onClick={handleEditCurrentTab}
+                 className={cn(
+                   "w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-xl sm:rounded-2xl border transition-all duration-300 active:scale-90",
+                   ((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight))
+                     ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-lg shadow-emerald-100 scale-105"
+                     : "bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 shadow-sm"
+                 )}
                >
-                 <X className="w-4 h-4" />
+                 {((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight)) ? (
+                   <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3] animate-pulse" />
+                 ) : (
+                   <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                 )}
                </button>
              )}
-
-             <button 
-               onClick={handleEditCurrentTab}
-               className={cn(
-                 "w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-xl sm:rounded-2xl border transition-all duration-300 active:scale-90",
-                 ((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight))
-                   ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-lg shadow-emerald-100 scale-105"
-                   : "bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 shadow-sm"
-               )}
-             >
-               {((activeFeedbackTab === 'ai' && isEditingAI) || (activeFeedbackTab === 'note' && isEditingNote) || (activeFeedbackTab === 'insight' && isEditingInsight)) ? (
-                 <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3] animate-pulse" />
-               ) : (
-                 <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
-               )}
-             </button>
 
              <div className="flex items-center bg-slate-50 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl h-11 sm:h-14 border border-slate-200/60 shadow-inner gap-0.5 sm:gap-1">
                {tabs.map((tab: any) => {
@@ -1788,12 +2060,13 @@ export default function QuizPlay() {
                      key={tab.id}
                      onClick={() => setActiveFeedbackTab(tab.id)}
                      className={cn(
-                       "w-9 sm:w-12 h-9 sm:h-11 flex items-center justify-center rounded-lg sm:rounded-xl transition-all duration-300 relative",
+                       "w-9 sm:w-11 h-9 sm:h-11 flex items-center justify-center rounded-lg sm:rounded-xl transition-all duration-300 relative cursor-pointer",
                        isActive 
                          ? (
                              tab.id === 'insight' ? "text-amber-500 bg-white shadow-md border border-amber-100/60 scale-105" :
                              tab.id === 'ai' ? "text-indigo-600 bg-white shadow-md border border-indigo-100/60 scale-105" :
-                             "text-emerald-600 bg-white shadow-md border border-emerald-100/60 scale-105"
+                             tab.id === 'note' ? "text-emerald-600 bg-white shadow-md border border-emerald-100/60 scale-105" :
+                             "text-purple-600 bg-white shadow-md border border-purple-100/60 scale-105"
                            )
                          : "text-slate-400 hover:text-slate-600 hover:bg-white/40"
                      )}
@@ -1805,7 +2078,8 @@ export default function QuizPlay() {
                            "absolute -top-1 -right-1 w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full border border-white animate-pulse",
                            tab.id === 'insight' ? "bg-amber-500" :
                            tab.id === 'ai' ? "bg-indigo-600" :
-                           "bg-emerald-500"
+                           tab.id === 'note' ? "bg-emerald-500" :
+                           "bg-purple-600"
                          )} />
                        )}
                      </div>
@@ -2968,23 +3242,25 @@ export default function QuizPlay() {
           <div className="max-w-2xl mx-auto w-full flex flex-col">
             {/* Primary Action Zone */}
             <div className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3">
-              {/* 1. Explanation Button (Lightbulb) */}
-              <button 
-                type="button"
-                onClick={() => setIsFeedbackOpen(true)}
-                className={cn(
-                  "w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-95 cursor-pointer relative",
-                  justAnswered || (currentQuestion?.explanation && currentQuestion.explanation.trim())
-                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 hover:bg-amber-100 shadow-xs ring-2 ring-amber-200/50 dark:ring-amber-900/30"
-                    : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
-                )}
-                title="View Explanation & AI Insights"
-              >
-                <Lightbulb className="w-5 h-5" />
-                {(currentQuestion?.explanation && currentQuestion.explanation.trim()) && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />
-                )}
-              </button>
+              {/* 1. Explanation Button (Lightbulb) - only visible after answering */}
+              {(showFeedback || isReviewMode || isExamSubmitted) && (
+                <button 
+                  type="button"
+                  onClick={() => setIsFeedbackOpen(true)}
+                  className={cn(
+                    "w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-95 cursor-pointer relative",
+                    justAnswered || (currentQuestion?.explanation && currentQuestion.explanation.trim())
+                      ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 hover:bg-amber-100 shadow-xs ring-2 ring-amber-200/50 dark:ring-amber-900/30"
+                      : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                  )}
+                  title="View Explanation & AI Insights"
+                >
+                  <Lightbulb className="w-5 h-5" />
+                  {(currentQuestion?.explanation && currentQuestion.explanation.trim()) && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />
+                  )}
+                </button>
+              )}
 
               {/* 2. Study Settings Button */}
               <button 
@@ -3312,7 +3588,10 @@ export default function QuizPlay() {
               <div className="flex items-center gap-2">
                 <Lightbulb className="w-4 h-4 text-amber-500" />
                 <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">
-                  {activeFeedbackTab === 'insight' ? 'LEARNING INSIGHTS' : activeFeedbackTab === 'ai' ? 'AI DEEP ANALYSIS' : 'PERSONAL NOTES'}
+                  {activeFeedbackTab === 'insight' ? 'LEARNING INSIGHTS' : 
+                   activeFeedbackTab === 'ai' ? 'AI DEEP ANALYSIS' : 
+                   activeFeedbackTab === 'note' ? 'PERSONAL NOTES' : 
+                   'COMMUNITY DISCUSSIONS'}
                 </h4>
               </div>
               <button 

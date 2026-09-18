@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends, Request, BackgroundTasks, HTTPException
-from typing import Optional
+from typing import Optional, List, Any
 from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, Integer, or_
@@ -9,7 +9,9 @@ from app.modules.auth.services.auth_service import AuthService
 from app.modules.quiz.services.excel_service import ExcelQuizService
 from app.modules.quiz.services.quiz_service import QuizService
 from app.modules.quiz.services.ai_service import ai_service
-from app.modules.quiz.schemas import QuizSchema, QuestionSchema, OptionSchema
+from app.modules.quiz.schemas import QuizSchema, QuestionSchema, OptionSchema, ContributionCreate, ContributionResponse, ContributionStatusUpdate
+from app.modules.auth.models import User
+from app.modules.quiz.models import Question, Quiz, QuestionContribution, QuestionContributionLike
 import json
 import re
 
@@ -978,6 +980,214 @@ async def toggle_question_ignore(request: Request, question_id: int, data: dict,
         
     await db.commit()
     return {"status": "ok", "is_ignored": is_ignored}
+
+@router.get("/question/{question_id}/contributions", response_model=List[ContributionResponse])
+async def get_question_contributions(question_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user = await AuthService.get_current_user(request, db)
+    user_id = user.id if user else None
+
+    stmt = (
+        select(QuestionContribution)
+        .where(QuestionContribution.question_id == question_id, QuestionContribution.parent_id == None)
+        .options(
+            selectinload(QuestionContribution.user),
+            selectinload(QuestionContribution.replies).selectinload(QuestionContribution.user)
+        )
+        .order_by(QuestionContribution.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    contributions = result.scalars().all()
+
+    all_ids = []
+    for c in contributions:
+        all_ids.append(c.id)
+        for r in c.replies:
+            all_ids.append(r.id)
+
+    liked_ids = set()
+    if user_id and all_ids:
+        likes_stmt = select(QuestionContributionLike.contribution_id).where(
+            QuestionContributionLike.user_id == user_id,
+            QuestionContributionLike.contribution_id.in_(all_ids)
+        )
+        likes_res = await db.execute(likes_stmt)
+        liked_ids = {row[0] for row in likes_res.fetchall()}
+
+    res = []
+    for c in contributions:
+        res.append({
+            "id": c.id,
+            "question_id": c.question_id,
+            "user_id": c.user_id,
+            "parent_id": c.parent_id,
+            "type": c.type,
+            "content": c.content,
+            "status": c.status,
+            "likes_count": c.likes_count,
+            "is_liked_by_me": c.id in liked_ids,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "user": {
+                "id": c.user.id if c.user else 0,
+                "username": c.user.username if c.user else "Deleted User",
+                "full_name": getattr(c.user, 'full_name', None) or (c.user.username if c.user else "Deleted User"),
+                "role": getattr(c.user, 'role', 'user')
+            },
+            "replies": [
+                {
+                    "id": r.id,
+                    "question_id": r.question_id,
+                    "user_id": r.user_id,
+                    "parent_id": r.parent_id,
+                    "type": r.type,
+                    "content": r.content,
+                    "status": r.status,
+                    "likes_count": r.likes_count,
+                    "is_liked_by_me": r.id in liked_ids,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "user": {
+                        "id": r.user.id if r.user else 0,
+                        "username": r.user.username if r.user else "Deleted User",
+                        "full_name": getattr(r.user, 'full_name', None) or (r.user.username if r.user else "Deleted User"),
+                        "role": getattr(r.user, 'role', 'user')
+                    },
+                    "replies": []
+                } for r in sorted(c.replies, key=lambda x: x.created_at)
+            ]
+        })
+    return res
+
+@router.post("/question/{question_id}/contributions", response_model=ContributionResponse)
+async def create_question_contribution(
+    question_id: int, 
+    payload: ContributionCreate, 
+    request: Request, 
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = await get_request_user_id(request, db)
+    user = await db.get(User, user_id)
+    if not user:
+        return JSONResponse({"detail": "User not found"}, status_code=404)
+        
+    question = await db.get(Question, question_id)
+    if not question:
+        return JSONResponse({"detail": "Question not found"}, status_code=404)
+        
+    new_contrib = QuestionContribution(
+        question_id=question_id,
+        user_id=user_id,
+        parent_id=payload.parent_id,
+        type=payload.type,
+        content=payload.content,
+        status="approved"
+    )
+    db.add(new_contrib)
+    await db.commit()
+    await db.refresh(new_contrib)
+    
+    contrib_res = await db.execute(
+        select(QuestionContribution)
+        .where(QuestionContribution.id == new_contrib.id)
+        .options(selectinload(QuestionContribution.user))
+    )
+    contrib_loaded = contrib_res.scalar()
+    
+    return {
+        "id": contrib_loaded.id,
+        "question_id": contrib_loaded.question_id,
+        "user_id": contrib_loaded.user_id,
+        "parent_id": contrib_loaded.parent_id,
+        "type": contrib_loaded.type,
+        "content": contrib_loaded.content,
+        "status": contrib_loaded.status,
+        "likes_count": contrib_loaded.likes_count,
+        "is_liked_by_me": False,
+        "created_at": contrib_loaded.created_at.isoformat() if contrib_loaded.created_at else None,
+        "user": {
+            "id": contrib_loaded.user.id if contrib_loaded.user else 0,
+            "username": contrib_loaded.user.username if contrib_loaded.user else "Deleted User",
+            "full_name": getattr(contrib_loaded.user, 'full_name', None) or (contrib_loaded.user.username if contrib_loaded.user else ""),
+            "role": getattr(contrib_loaded.user, 'role', 'user')
+        },
+        "replies": []
+    }
+
+@router.post("/contributions/{contribution_id}/like")
+async def like_question_contribution(contribution_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user_id = await get_request_user_id(request, db)
+    
+    contrib = await db.get(QuestionContribution, contribution_id)
+    if not contrib:
+        return JSONResponse({"detail": "Contribution not found"}, status_code=404)
+        
+    like_stmt = select(QuestionContributionLike).where(
+        QuestionContributionLike.user_id == user_id,
+        QuestionContributionLike.contribution_id == contribution_id
+    )
+    like_res = await db.execute(like_stmt)
+    like_obj = like_res.scalar_one_or_none()
+    
+    if like_obj:
+        await db.delete(like_obj)
+        contrib.likes_count = max(0, contrib.likes_count - 1)
+        liked = False
+    else:
+        new_like = QuestionContributionLike(user_id=user_id, contribution_id=contribution_id)
+        db.add(new_like)
+        contrib.likes_count += 1
+        liked = True
+        
+    await db.commit()
+    return {"liked": liked, "likes_count": contrib.likes_count}
+
+@router.delete("/contributions/{contribution_id}")
+async def delete_question_contribution(contribution_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user_id = await get_request_user_id(request, db)
+    user = await db.get(User, user_id)
+    if not user:
+        return JSONResponse({"detail": "User not found"}, status_code=404)
+        
+    contrib = await db.get(QuestionContribution, contribution_id)
+    if not contrib:
+        return JSONResponse({"detail": "Contribution not found"}, status_code=404)
+        
+    if contrib.user_id != user_id and getattr(user, 'role', 'user') != 'admin':
+        return JSONResponse({"detail": "Permission denied"}, status_code=403)
+        
+    await db.delete(contrib)
+    await db.commit()
+    return {"status": "success"}
+
+@router.put("/contributions/{contribution_id}/status")
+async def update_question_contribution_status(
+    contribution_id: int, 
+    payload: ContributionStatusUpdate, 
+    request: Request, 
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = await get_request_user_id(request, db)
+    user = await db.get(User, user_id)
+    if not user:
+        return JSONResponse({"detail": "User not found"}, status_code=404)
+        
+    contrib = await db.get(QuestionContribution, contribution_id)
+    if not contrib:
+        return JSONResponse({"detail": "Contribution not found"}, status_code=404)
+        
+    is_authorized = False
+    if getattr(user, 'role', 'user') == 'admin':
+        is_authorized = True
+    else:
+        question = await db.get(Question, contrib.question_id)
+        quiz = await db.get(Quiz, question.quiz_id) if question else None
+        if quiz and quiz.creator_id == user_id:
+            is_authorized = True
+            
+    if not is_authorized:
+        return JSONResponse({"detail": "Permission denied. Only Admins or Quiz Creators can update status."}, status_code=403)
+        
+    contrib.status = payload.status
+    await db.commit()
+    return {"status": "success", "new_status": contrib.status}
 
 @router.get("/{quiz_id}/notes")
 async def get_quiz_notes(request: Request, quiz_id: int, db: AsyncSession = Depends(get_db)):
