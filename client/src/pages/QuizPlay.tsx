@@ -2764,7 +2764,7 @@ export default function QuizPlay() {
               subProgressCurr={Object.keys(sessionAnswers).length}
               subProgressTotal={session.questions?.length || 1}
               streakCount={roadmapStatus.streak || streak || 0}
-              onExit={() => navigate(`/quiz/${id}/roadmap`)}
+              onExit={() => navigate('/')}
               onOpenSettings={() => setIsSettingsModalOpen(true)}
               timeMode={timeMode}
               onToggleTimeMode={() => setTimeMode(prev => prev === 'card' ? 'today' : prev === 'today' ? 'all' : 'card')}
@@ -2980,11 +2980,11 @@ export default function QuizPlay() {
                 <span>Retake Exam</span>
               </button>
               <button
-                onClick={() => navigate(`/quiz/${id}`)}
+                onClick={() => navigate('/')}
                 className="py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span>Exit to Quiz</span>
+                <span>Exit to Home</span>
               </button>
             </div>
           </div>
@@ -3583,7 +3583,7 @@ export default function QuizPlay() {
                       className="py-3.5 bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-200 transition-all">
                       Keep Going
                     </button>
-                    <button onClick={() => navigate(`/quiz/${id}`)}
+                    <button onClick={() => navigate('/')}
                       className="py-3.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-all">
                       Finish &amp; Exit
                     </button>
@@ -3804,7 +3804,7 @@ export default function QuizPlay() {
                       try {
                         await axios.delete(`/api/v1/quiz/${id}/session`)
                       } catch (e) {}
-                      navigate(`/quiz/${id}`)
+                      navigate('/')
                     }}
                     className="py-4 bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-rose-200 active:scale-95 transition-all"
                   >
