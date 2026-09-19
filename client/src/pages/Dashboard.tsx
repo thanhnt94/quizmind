@@ -15,6 +15,7 @@ import DailyComparisonChart from '@/components/DailyComparisonChart'
 import { TelegramRoadmapReminderToggle } from '@/components/TelegramRoadmapReminderToggle'
 import { DashboardDailyDrawer } from '@/components/dashboard/DashboardDailyDrawer'
 import { DashboardRoadmapSection } from '@/components/dashboard/DashboardRoadmapSection'
+import { DashboardQuickSetsWidget } from '@/components/dashboard/DashboardQuickSetsWidget'
 import { QuizMindLogo } from '@/components/QuizMindLogo'
 import { QuizStartModal } from '@/components/QuizStartModal'
 
@@ -230,7 +231,6 @@ export default function Dashboard() {
   const [lbFilter, setLbFilter] = useState('today')
   const [remainingTime, setRemainingTime] = useState('')
   const [activeRoadmapIdx, setActiveRoadmapIdx] = useState(0)
-  const [quizSearch, setQuizSearch] = useState('')
   const [startModalQuiz, setStartModalQuiz] = useState<any | null>(null)
 
   const touchStartXRef = useRef<number | null>(null)
@@ -333,15 +333,6 @@ export default function Dashboard() {
     return Array.from(map.values())
   }, [dashData])
 
-  const filteredQuizzes = useMemo(() => {
-    if (!quizSearch.trim()) return allAvailableQuizzes
-    const term = quizSearch.toLowerCase()
-    return allAvailableQuizzes.filter(q => 
-      (q.title && q.title.toLowerCase().includes(term)) ||
-      (q.description && q.description.toLowerCase().includes(term))
-    )
-  }, [allAvailableQuizzes, quizSearch])
-
   const user = dashData?.user || authUser || { username: 'Learner', email: '', role: 'user' }
   const gamify = dashData?.gamify || { level: 1, xp: 0, streak: 0 }
 
@@ -352,104 +343,6 @@ export default function Dashboard() {
     if (navigator.vibrate) navigator.vibrate(8)
     updateUserSettings({ home_active_tab: tab }).catch(console.error)
   }
-
-  // ─── Render Quizzes Tab Content (Mobile & Desktop) ─────────────────────
-  const renderQuizzesTab = (isMobile: boolean) => (
-    <div className={cn("space-y-4", isMobile && "flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 space-y-3")}>
-      {/* Search & Actions Bar */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={quizSearch}
-            onChange={(e) => setQuizSearch(e.target.value)}
-            placeholder="Search quizzes by title or topic..."
-            className="w-full h-9 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Link
-            to="/quizzes"
-            className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>All Quizzes</span>
-          </Link>
-          <Link
-            to="/manage/import"
-            className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Import</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* Quizzes Grid */}
-      {filteredQuizzes.length === 0 ? (
-        <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/90 shadow-sm space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl">
-            🔍
-          </div>
-          <h3 className="text-sm font-black text-slate-800">No quizzes match your search</h3>
-          <p className="text-xs text-slate-400">Try searching for other keywords or explore the public library.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          {filteredQuizzes.map(quiz => (
-            <div
-              key={quiz.id}
-              className="bg-white border border-slate-200/90 hover:border-indigo-200 rounded-3xl p-4 sm:p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between gap-3.5 group"
-            >
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-base shrink-0 group-hover:scale-105 transition-transform">
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600">
-                    {quiz.questions_count || 0} questions
-                  </span>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                    {quiz.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 font-medium line-clamp-2 mt-1">
-                    {quiz.description || "Practice multiple choice questions and track your accuracy."}
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate(8)
-                    setStartModalQuiz(quiz)
-                  }}
-                  className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Practice</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/quiz/${quiz.id}`)}
-                  className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
-                >
-                  Details
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 
   return (
     <div className="bg-[#F8FAFC] text-slate-800 selection:bg-indigo-100 select-none font-sans">
@@ -579,7 +472,7 @@ export default function Dashboard() {
                 )}
               </button>
 
-              {/* Tab 2: Quizzes */}
+              {/* Tab 2: Sets */}
               <button
                 type="button"
                 onClick={() => switchHomeTab('quizzes')}
@@ -594,7 +487,7 @@ export default function Dashboard() {
                     activeHomeTab === 'quizzes' ? "text-indigo-600 stroke-[2.4]" : "text-slate-400"
                   )}
                 />
-                <span>Quizzes</span>
+                <span>Sets</span>
                 <span
                   className={cn(
                     "px-1.5 py-0.5 rounded-full text-[10px] font-black transition-all",
@@ -631,7 +524,15 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="flex-1 overflow-hidden p-2.5 sm:p-3 flex flex-col min-h-0">
-              {renderQuizzesTab(true)}
+              <DashboardQuickSetsWidget
+                quizzes={allAvailableQuizzes}
+                allQuizzesCount={allAvailableQuizzes.length}
+                onOpenStudyModal={(quiz) => {
+                  if (navigator.vibrate) navigator.vibrate(8)
+                  setStartModalQuiz(quiz)
+                }}
+                navigate={navigate}
+              />
             </div>
           )}
         </div>
@@ -764,7 +665,7 @@ export default function Dashboard() {
                   )}
                 >
                   <BookOpen className="w-3.5 h-3.5" />
-                  <span>All Quizzes ({allAvailableQuizzes.length})</span>
+                  <span>Sets ({allAvailableQuizzes.length})</span>
                 </button>
               </div>
 
@@ -870,7 +771,17 @@ export default function Dashboard() {
                 )}
               </div>
             ) : (
-              renderQuizzesTab(false)
+              <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm min-h-[500px]">
+                <DashboardQuickSetsWidget
+                  quizzes={allAvailableQuizzes}
+                  allQuizzesCount={allAvailableQuizzes.length}
+                  onOpenStudyModal={(quiz) => {
+                    if (navigator.vibrate) navigator.vibrate(8)
+                    setStartModalQuiz(quiz)
+                  }}
+                  navigate={navigate}
+                />
+              </div>
             )}
 
           </div>

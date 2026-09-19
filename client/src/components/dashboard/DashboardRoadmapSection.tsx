@@ -91,7 +91,7 @@ function DetailedRoadmapCard({
   return (
     <div className="flex-1 flex flex-col justify-between gap-2 sm:gap-2.5 min-h-0 w-full select-none">
       {/* ═══════════ HERO MASCOT CARD ═══════════ */}
-      <div className="bg-gradient-to-br from-amber-100/95 via-orange-50/70 to-amber-200/40 border border-orange-200/90 rounded-3xl p-3.5 sm:p-5 relative overflow-hidden shadow-xs flex flex-row items-center justify-between flex-1 min-h-[175px] shrink-0">
+      <div className="bg-gradient-to-br from-indigo-100/90 via-violet-50/70 to-purple-100/40 border border-indigo-200/90 rounded-3xl p-3.5 sm:p-5 relative overflow-hidden shadow-xs flex flex-row items-center justify-between flex-1 min-h-[175px] shrink-0">
         {/* Left Side: Title, Badges & Motivation */}
         <div className="relative z-20 flex-1 max-w-[62%] sm:max-w-[66%] min-w-0 flex flex-col justify-center gap-2 py-0.5">
           {/* Quiz Title Button */}
