@@ -4046,6 +4046,7 @@ export default function QuizPlay() {
         currentIndex={currentIndex}
         totalQuestions={session?.questions?.length || 0}
         canEdit={canEdit}
+        insightFields={insightFields}
         onNextQuestion={handleNext}
         onSaveExplanation={async (val) => {
           setInsightInput(val)
