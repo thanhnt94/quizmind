@@ -1,3 +1,10 @@
+import app.modules.quiz.models
+import app.modules.auth.models
+import app.modules.gamification.models
+import app.modules.notification.models
+import app.modules.stats.models
+import app.modules.admin.models
+import app.modules.sso_module.models
 from app.modules.quiz.models import Category, Quiz, Question, Option
 from app.modules.auth.models import User
 from app.modules.gamification.models import UserGamification, Badge

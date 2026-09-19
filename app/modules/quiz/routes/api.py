@@ -198,7 +198,7 @@ async def get_quiz_mistakes(quiz_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/record_answer")
 async def record_answer(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
-    from app.modules.quiz.models import UserAnswer, Question, QuizAttempt, UserQuestionMastery
+    from app.modules.quiz.models import UserAnswer, Question, QuizAttempt, UserQuestionMastery, UserQuizGoal, UserDailyProgress
     from app.modules.gamification.models import UserGamification, Badge
     from app.modules.gamification.interface import GamificationInterface
     from app.modules.stats.interface import StatsInterface
@@ -274,7 +274,6 @@ async def record_answer(request: Request, data: dict, db: AsyncSession = Depends
         }
         
         # --- Goal Progress Tracking Logic ---
-        from app.modules.quiz.models import UserQuizGoal, UserDailyProgress
         goal_res = await db.execute(
             select(UserQuizGoal).filter(
                 UserQuizGoal.user_id == user_id, 
@@ -1685,15 +1684,68 @@ async def archive_quiz(request: Request, quiz_id: int, db: AsyncSession = Depend
         await db.commit()
     return {"status": "ok"}
 
-@router.delete("/{quiz_id}")
+@router.post("/create")
+@router.post("")
+async def create_quiz(request: Request, data: dict, db: AsyncSession = Depends(get_db)):
+    user_id = await get_request_user_id(request, db)
+    title = data.get("title", "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Quiz title is required")
+        
+    description = data.get("description", "")
+    cover_image = data.get("cover_image", None)
+    category_id = data.get("category_id")
+    
+    from app.modules.quiz.models import Quiz, Category, QuizAttempt
+    
+    if not category_id:
+        cat_res = await db.execute(select(Category).limit(1))
+        cat = cat_res.scalar_one_or_none()
+        if not cat:
+            cat = Category(name="General", description="General Category")
+            db.add(cat)
+            await db.flush()
+        category_id = cat.id
+        
+    new_quiz = Quiz(
+        title=title,
+        description=description,
+        cover_image=cover_image,
+        category_id=category_id,
+        creator_id=user_id,
+        is_active=True,
+        time_limit=int(data.get("time_limit", 0))
+    )
+    db.add(new_quiz)
+    await db.flush()
+    
+    # Auto-enroll creator
+    attempt = QuizAttempt(user_id=user_id, quiz_id=new_quiz.id, is_archived=False)
+    db.add(attempt)
+    await db.commit()
+    await db.refresh(new_quiz)
+    
+    return {
+        "status": "ok",
+        "quiz": {
+            "id": new_quiz.id,
+            "title": new_quiz.title,
+            "description": new_quiz.description,
+            "cover_image": new_quiz.cover_image,
+            "category_id": new_quiz.category_id,
+            "creator_id": new_quiz.creator_id
+        }
+    }
+
+@router.delete("/{quiz_id:int}")
 async def delete_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
     from app.modules.quiz.models import Quiz
     await db.execute(delete(Quiz).where(Quiz.id == quiz_id))
     await db.commit()
     return {"status": "ok"}
 
-@router.patch("/{quiz_id}")
-@router.put("/{quiz_id}")
+@router.patch("/{quiz_id:int}")
+@router.put("/{quiz_id:int}")
 async def update_quiz(request: Request, quiz_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     user = await AuthService.get_current_user(request, db)
     if not user:

@@ -28,6 +28,10 @@ class GamificationInterface:
         return {"level_up": level_up, "current_level": user_stats.level, "current_xp": user_stats.xp}
 
     @staticmethod
+    async def award_xp(db: AsyncSession, user_id: int, amount: int, source: str = "general"):
+        return await GamificationInterface.add_xp(db, user_id, amount, source)
+
+    @staticmethod
     async def update_streak(db: AsyncSession, user_id: int, local_date_str: Optional[str] = None):
         # 1. Parse local_date_str or fall back to UTC date
         activity_date = None
