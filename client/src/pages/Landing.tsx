@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { QuizMindLogo } from '@/components/QuizMindLogo';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -319,11 +320,8 @@ export default function Landing() {
 
         {/* Mobile Top Header (Transparent, clean, light-mode custom app pill logo!) */}
         <div className="flex items-center justify-between z-10 w-full pt-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8.5 h-8.5 rounded-xl bg-white/80 border border-slate-200/30 flex items-center justify-center shadow-sm">
-              <span className="font-black text-indigo-600 text-xs">QM</span>
-            </div>
-            <span className="font-extrabold text-base tracking-tight text-slate-800">QuizMind</span>
+          <div className="flex items-center">
+            <QuizMindLogo height="sm" />
           </div>
           <div className="flex gap-2">
             <button 

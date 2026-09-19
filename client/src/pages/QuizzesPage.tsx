@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import { useRoadmapStatus } from '@/hooks/useRoadmapStatus'
 import { QuizStartModal } from '@/components/QuizStartModal'
+import { QuizMindLogo } from '@/components/QuizMindLogo'
 
 export interface Quiz {
   id: number
@@ -350,7 +351,7 @@ export default function QuizzesPage() {
   }
 
   const tabsConfig = [
-    { id: 'my' as QuizzesTab, label: 'My Quizzes', count: data?.my_quizzes?.length || 0, icon: BookOpen },
+    { id: 'my' as QuizzesTab, label: 'Sets', count: data?.my_quizzes?.length || 0, icon: BookOpen },
     { id: 'folders' as QuizzesTab, label: 'Folders', count: folders.length, icon: FolderIcon },
     { id: 'discover' as QuizzesTab, label: 'Discover', count: data?.discover_quizzes?.length || 0, icon: Globe },
     { id: 'archived' as QuizzesTab, label: 'Archived', count: data?.archived_quizzes?.length || 0, icon: Archive },
@@ -364,16 +365,17 @@ export default function QuizzesPage() {
           {/* Row 1: Title, Desktop Tabs & Quick Actions */}
           <div className="flex items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-xs shadow-indigo-500/20 shrink-0">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-slate-100 leading-none">
-                    Quizzes
-                  </h1>
-                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10.5px] font-extrabold leading-none">
-                    {rawQuizzes.length} total
+              <div className="flex items-center gap-2.5">
+                <Link to="/" className="active:scale-95 transition-transform flex items-center">
+                  <QuizMindLogo height="sm" />
+                </Link>
+                <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 hidden sm:inline-block">
+                    Sets
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-black leading-none">
+                    {rawQuizzes.length}
                   </span>
                 </div>
               </div>
@@ -445,14 +447,14 @@ export default function QuizzesPage() {
                 )}
               </button>
 
-              {/* New Quiz Button */}
+              {/* New Set Button */}
               <Link
                 to="/manage/import"
                 className="h-8.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white flex items-center gap-1.5 text-xs font-black shadow-xs shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
-                title="Create or import new quiz"
+                title="Create or import new set"
               >
                 <Plus className="w-4 h-4 stroke-[3]" />
-                <span>New Quiz</span>
+                <span>New Set</span>
               </Link>
             </div>
 

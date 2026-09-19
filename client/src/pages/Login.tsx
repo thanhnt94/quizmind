@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
+import { QuizMindLogo } from '@/components/QuizMindLogo';
 
 export default function Login() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -102,9 +103,7 @@ export default function Login() {
       <div className="w-full max-w-md bg-white/[0.02] border border-white/5 backdrop-blur-xl rounded-2xl p-8 shadow-2xl relative z-10">
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#4f46e5] to-[#ec4899] flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-4">
-            <span className="font-extrabold text-xl text-white">Q</span>
-          </div>
+          <QuizMindLogo mode="icon" size={68} className="mb-4 drop-shadow-md" />
           <h2 className="font-extrabold text-3xl tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
             Welcome to <span className="bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">QuizMind</span>
           </h2>
