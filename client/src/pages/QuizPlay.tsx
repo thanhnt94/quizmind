@@ -1177,10 +1177,20 @@ export default function QuizPlay() {
     let nextIdx = -1
 
     if (activeMode === 'sequential') {
+      // Find next unanswered question from currentIndex + 1 forward
       for (let i = currentIndex + 1; i < total; i++) {
-        if (!questions[i].is_ignored) {
+        if (!questions[i].is_ignored && sessionAnswers[i] === undefined) {
           nextIdx = i
           break
+        }
+      }
+      if (nextIdx === -1) {
+        // Loop back to find any earlier unanswered question
+        for (let i = 0; i <= currentIndex; i++) {
+          if (!questions[i].is_ignored && sessionAnswers[i] === undefined) {
+            nextIdx = i
+            break
+          }
         }
       }
     } else if (activeMode === 'random') {
@@ -1205,6 +1215,14 @@ export default function QuizPlay() {
           !q.is_ignored
         )
       }
+      if (nextIdx === -1) {
+        setLearningModeAlert({
+          visible: true,
+          message: 'All new cards completed! Serving next unanswered cards.',
+          type: 'info'
+        })
+        setTimeout(() => setLearningModeAlert(null), 3000)
+      }
     } else if (activeMode === 'review') {
       // Find next question with historical mistakes (total - correct > 0) and not answered in THIS session
       nextIdx = questions.findIndex((q: any, i: number) => 
@@ -1221,9 +1239,17 @@ export default function QuizPlay() {
           !q.is_ignored
         )
       }
+      if (nextIdx === -1) {
+        setLearningModeAlert({
+          visible: true,
+          message: 'No review mistakes remaining! Serving next unanswered cards.',
+          type: 'info'
+        })
+        setTimeout(() => setLearningModeAlert(null), 3000)
+      }
     } else if (activeMode === 'hardest') {
       // Find the unanswered question in this session with the lowest correctness ratio.
-      // We prioritize cards that have been attempted at least once.
+      // Prioritize cards attempted at least once.
       let bestIdx = -1
       let minRatio = Infinity
       let maxWrongs = -1
@@ -1239,7 +1265,6 @@ export default function QuizPlay() {
 
         if (t > 0) {
           const ratio = c / t
-          // Sort by lowest ratio first, then by absolute wrong count if ratios are equal
           if (ratio < minRatio) {
             minRatio = ratio
             maxWrongs = wrongs
@@ -1251,7 +1276,16 @@ export default function QuizPlay() {
         }
       }
 
-      nextIdx = bestIdx
+      if (bestIdx !== -1) {
+        nextIdx = bestIdx
+      } else {
+        setLearningModeAlert({
+          visible: true,
+          message: 'Serving next unanswered cards until difficulty stats are recorded.',
+          type: 'info'
+        })
+        setTimeout(() => setLearningModeAlert(null), 3000)
+      }
     }
 
     // Fallback: If no candidate was found for the active mode, fall back to next unanswered question in this session,
@@ -1278,94 +1312,8 @@ export default function QuizPlay() {
     setActiveMode(mode)
     updateUserSettings({ quiz_learning_mode: mode })
     setIsModeMenuOpen(false)
-
-    if (!session || !session.questions) return
-
-    const questions = session.questions
-    const total = questions.length
-
-    // If the current question is already answered (feedback is shown), 
-    // we don't jump immediately. The next question will automatically follow the new mode.
-    if (showFeedback) return
-
-    let targetIdx = -1
-    let alertMsg = ''
-
-    if (mode === 'unseen') {
-      targetIdx = questions.findIndex((q: any, i: number) => 
-        (q.stats?.total || 0) === 0 && 
-        sessionAnswers[i] === undefined
-      )
-      if (targetIdx === -1) {
-        alertMsg = 'All cards have been attempted! Serving remaining cards sequentially.'
-      }
-    } else if (mode === 'review') {
-      targetIdx = questions.findIndex((q: any, i: number) => 
-        ((q.stats?.total || 0) - (q.stats?.correct || 0)) > 0 && 
-        sessionAnswers[i] === undefined
-      )
-      if (targetIdx === -1) {
-        alertMsg = "No incorrect cards found yet! We'll serve questions sequentially until mistakes are recorded."
-      }
-    } else if (mode === 'hardest') {
-      let bestIdx = -1
-      let minRatio = Infinity
-      let maxWrongs = -1
-
-      for (let i = 0; i < total; i++) {
-        if (sessionAnswers[i] !== undefined) continue
-
-        const q = questions[i]
-        const t = q.stats?.total || 0
-        const c = q.stats?.correct || 0
-        const wrongs = t - c
-
-        if (t > 0) {
-          const ratio = c / t
-          if (ratio < minRatio) {
-            minRatio = ratio
-            maxWrongs = wrongs
-            bestIdx = i
-          } else if (ratio === minRatio && wrongs > maxWrongs) {
-            maxWrongs = wrongs
-            bestIdx = i
-          }
-        }
-      }
-
-      if (bestIdx !== -1) {
-        targetIdx = bestIdx
-      } else {
-        alertMsg = 'No attempted cards found yet! Serving sequentially until difficulty stats are gathered.'
-      }
-    } else if (mode === 'random') {
-      if (sessionAnswers[currentIndex] === undefined) {
-        targetIdx = currentIndex
-      } else {
-        const pool = questions.map((_: any, i: number) => i).filter((i: number) => sessionAnswers[i] === undefined)
-        if (pool.length > 0) {
-          targetIdx = pool[Math.floor(Math.random() * pool.length)]
-        }
-      }
-    } else if (mode === 'sequential') {
-      targetIdx = questions.findIndex((_: any, i: number) => sessionAnswers[i] === undefined)
-    }
-
-    if (alertMsg) {
-      setLearningModeAlert({
-        visible: true,
-        message: alertMsg,
-        type: 'info'
-      })
-      setTimeout(() => {
-        setLearningModeAlert(prev => prev ? { ...prev, visible: false } : null)
-      }, 4500)
-    }
-
-    if (targetIdx !== -1 && targetIdx !== currentIndex) {
-      navigateToQuestion(targetIdx)
-    }
   }
+
 
   const askAI = async (manualText?: string) => {
     if (!currentQuestion) return

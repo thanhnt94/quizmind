@@ -75,12 +75,11 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
   }
 
   const LEARNING_MODES = [
-    { id: 'sequential', label: 'Sequential', icon: ListOrdered, desc: 'In order (1 to end)' },
-    { id: 'random', label: 'Shuffle', icon: Shuffle, desc: 'Random order' },
-    { id: 'unseen', label: 'New First', icon: EyeOff, desc: 'Unattempted' },
-    { id: 'review', label: 'Mistakes', icon: AlertCircle, desc: 'Review wrongs' },
-    { id: 'hardest', label: 'Hardest', icon: TrendingUp, desc: 'Lowest accuracy' },
-    { id: 'mcq', label: 'MCQ All', icon: CheckCircle2, desc: 'All questions' },
+    { id: 'sequential', label: 'Order', icon: ListOrdered, desc: 'In order (1 to end)' },
+    { id: 'random', label: 'Random', icon: Shuffle, desc: 'Randomized order' },
+    { id: 'unseen', label: 'New', icon: EyeOff, desc: 'Unattempted cards' },
+    { id: 'review', label: 'Review', icon: AlertCircle, desc: 'Mistakes & review' },
+    { id: 'hardest', label: 'Hardest', icon: TrendingUp, desc: 'Lowest accuracy first' },
   ]
 
   const FONT_SIZE_OPTIONS = [
@@ -191,12 +190,12 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
 
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
-          {/* 1. Learning Mode (2x3 Grid) */}
+          {/* 1. Next Card Order (5 Dispatch Modes) */}
           <div>
             <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-2">
-              Learning Mode
+              Next Card Order
             </label>
-            <div className="grid grid-cols-3 gap-1.5 bg-slate-50/80 dark:bg-slate-800/40 p-1.5 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-5 gap-1 bg-slate-50/80 dark:bg-slate-800/40 p-1 rounded-2xl border border-slate-100 dark:border-slate-800">
               {LEARNING_MODES.map((m) => {
                 const Icon = m.icon
                 const isSelected = activeMode === m.id
@@ -208,14 +207,15 @@ export const PlaySettingsModal: React.FC<PlaySettingsModalProps> = ({
                       applyLearningMode(m.id)
                     }}
                     className={cn(
-                      "flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl text-center transition-all active:scale-95 cursor-pointer",
+                      "flex flex-col items-center justify-center gap-1 py-2 px-0.5 rounded-xl text-center transition-all active:scale-95 cursor-pointer",
                       isSelected
                         ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/80 dark:border-slate-700 font-black"
                         : "text-slate-500 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-700/50 font-bold"
                     )}
+                    title={m.desc}
                   >
-                    <Icon className={cn("w-4 h-4", isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400")} />
-                    <span className="text-[10px] leading-tight truncate w-full">{m.label}</span>
+                    <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400")} />
+                    <span className="text-[9px] leading-tight truncate w-full">{m.label}</span>
                   </button>
                 )
               })}

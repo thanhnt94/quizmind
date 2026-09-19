@@ -60,38 +60,38 @@ export interface QuizQuickControlsSheetProps {
 const QUIZ_MODES = [
   {
     id: 'sequential',
-    short: 'CLASSIC',
-    name: 'Sequential 1 to End',
+    short: 'ORDER',
+    name: 'Sequential (1 to End)',
     icon: '📖',
     activeClass: 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
   },
   {
     id: 'random',
-    short: 'SHUFFLE',
+    short: 'RANDOM',
     name: 'Randomized Order',
     icon: '🔀',
     activeClass: 'bg-purple-600 text-white shadow-sm shadow-purple-500/20'
   },
   {
-    id: 'hardest',
-    short: 'MASTERY',
-    name: 'Leitner Spaced Repetition',
-    icon: '🏆',
-    activeClass: 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
+    id: 'unseen',
+    short: 'NEW',
+    name: 'New & Unattempted',
+    icon: '✨',
+    activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
   },
   {
     id: 'review',
-    short: 'REV',
+    short: 'REVIEW',
     name: 'Review Mistakes',
     icon: '📚',
     activeClass: 'bg-rose-600 text-white shadow-sm shadow-rose-500/20'
   },
   {
-    id: 'unseen',
-    short: 'NEW',
-    name: 'New & Unattempted First',
-    icon: '✨',
-    activeClass: 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
+    id: 'hardest',
+    short: 'HARDEST',
+    name: 'Lowest Accuracy First',
+    icon: '🏆',
+    activeClass: 'bg-amber-600 text-white shadow-sm shadow-amber-500/20'
   }
 ]
 
@@ -283,15 +283,15 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
               </div>
             </div>
 
-            {/* 5 Quiz Study Modes Switcher */}
+            {/* 5 Next Card Selection Modes Switcher */}
             {onSelectMode && (
               <div className="flex flex-col gap-1 text-left px-0.5">
                 <div className="flex items-center justify-between px-1">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                    Quiz Study Mode
+                    Next Card Order
                   </span>
                   <span className="text-[9px] font-bold text-slate-400">
-                    5 Modes Available
+                    5 Dispatch Modes
                   </span>
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 p-1 rounded-2xl bg-slate-100 border border-slate-200/80">
@@ -301,7 +301,17 @@ export const QuizQuickControlsSheet: React.FC<QuizQuickControlsSheetProps> = ({
                       <button
                         key={m.id}
                         type="button"
-                        onClick={() => onSelectMode(m.id)}
+                        onClick={() => {
+                          onSelectMode(m.id)
+                          const toastMessages: Record<string, string> = {
+                            sequential: 'Next Card: Sequential Order 📖',
+                            random: 'Next Card: Randomized Shuffle 🔀',
+                            unseen: 'Next Card: New & Unattempted ✨',
+                            review: 'Next Card: Mistakes & Review Due 📚',
+                            hardest: 'Next Card: Lowest Accuracy First 🏆',
+                          }
+                          showLocalToast?.(toastMessages[m.id] || `Next Card: ${m.short}`, 'info')
+                        }}
                         className={cn(
                           "flex flex-col items-center justify-center py-2 px-0.5 rounded-xl transition-all cursor-pointer select-none",
                           isActive
