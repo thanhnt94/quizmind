@@ -66,9 +66,9 @@ export default function LeaderboardTab({
   const remainingUsers = currentLeaderboard.list.slice(3)
 
   const categoryLabels: Record<LeaderboardCategory, { label: string, icon: any, unit: string, sub: string, activeColor: string }> = {
-    xp: { label: 'XP', icon: Zap, unit: 'XP', sub: 'Total experience', activeColor: 'text-amber-500' },
-    streak: { label: 'Streak', icon: Flame, unit: 'days', sub: 'Daily study streak', activeColor: 'text-orange-500' },
-    questions: { label: 'Questions', icon: Target, unit: 'questions', sub: 'Questions answered', activeColor: 'text-indigo-500' },
+    xp: { label: 'XP', icon: Zap, unit: 'XP', sub: 'Total experience', activeColor: 'text-indigo-600' },
+    streak: { label: 'Streak', icon: Flame, unit: 'days', sub: 'Daily study streak', activeColor: 'text-violet-600' },
+    questions: { label: 'Questions', icon: Target, unit: 'questions', sub: 'Questions answered', activeColor: 'text-purple-600' },
     time: { label: 'Time', icon: Clock, unit: '', sub: 'Study time', activeColor: 'text-emerald-500' },
   }
 
@@ -79,20 +79,20 @@ export default function LeaderboardTab({
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl px-3.5 sm:px-4 py-2 text-white border border-slate-700/60 shadow-md flex items-center justify-between gap-3 w-full shrink-0 select-none"
+          className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl px-3.5 sm:px-4 py-2 text-white border border-indigo-900/60 shadow-md flex items-center justify-between gap-3 w-full shrink-0 select-none"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-2xs">
+            <div className="w-7 h-7 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shrink-0 shadow-2xs">
               <Trophy className="w-3.5 h-3.5" />
             </div>
             <div className="min-w-0 flex items-center gap-2">
               <span className="text-[10px] sm:text-[11px] font-bold text-slate-300 uppercase tracking-wider">Your Position:</span>
-              <span className="text-sm sm:text-base font-black text-amber-400 leading-none">#{currentLeaderboard.user_rank}</span>
+              <span className="text-sm sm:text-base font-black text-indigo-400 leading-none">#{currentLeaderboard.user_rank}</span>
             </div>
           </div>
 
           <div className="text-right shrink-0">
-            <span className="text-xs sm:text-sm font-black text-amber-300 tracking-tight">
+            <span className="text-xs sm:text-sm font-black text-indigo-300 tracking-tight">
               {activeCategory === 'time'
                 ? formatStudyTime(currentLeaderboard.user_value)
                 : `${currentLeaderboard.user_value.toLocaleString()} ${categoryLabels[activeCategory].unit}`}
@@ -174,7 +174,7 @@ export default function LeaderboardTab({
 
         {isLoading ? (
           <div className="py-16 text-center flex flex-col items-center justify-center gap-2.5 my-auto">
-            <Zap className="w-7 h-7 text-amber-500 animate-pulse" />
+            <Zap className="w-7 h-7 text-indigo-600 animate-pulse" />
             <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
               Loading leaderboard data...
             </span>
@@ -200,20 +200,20 @@ export default function LeaderboardTab({
                       item: topThree[0],
                       pos: 1,
                       height: 'h-18 sm:h-22',
-                      bg: 'from-amber-200/60 via-amber-100/40 to-amber-50/30 border-amber-300/80',
-                      text: 'text-amber-900',
-                      ring: 'ring-2 ring-amber-400 border-amber-300',
-                      badgeBg: 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-900',
+                      bg: 'from-indigo-100/80 via-violet-50/60 to-white border-indigo-200/90',
+                      text: 'text-indigo-950',
+                      ring: 'ring-2 ring-indigo-500 border-indigo-300',
+                      badgeBg: 'bg-gradient-to-tr from-indigo-600 to-violet-600 text-white',
                       crown: true
                     },
                     {
                       item: topThree[2],
                       pos: 3,
                       height: 'h-10 sm:h-13',
-                      bg: 'from-orange-200/60 via-orange-100/40 to-orange-50/30 border-orange-200/80',
-                      text: 'text-orange-900',
-                      ring: 'ring-2 ring-orange-300 border-orange-200',
-                      badgeBg: 'bg-gradient-to-tr from-orange-500 to-amber-500 text-white',
+                      bg: 'from-purple-100/60 via-purple-50/40 to-white border-purple-200/80',
+                      text: 'text-purple-950',
+                      ring: 'ring-2 ring-purple-300 border-purple-200',
+                      badgeBg: 'bg-gradient-to-tr from-purple-500 to-indigo-500 text-white',
                       crown: false
                     }
                   ].filter(p => p.item)
@@ -227,13 +227,13 @@ export default function LeaderboardTab({
                       <div key={user.user_id} className="w-full flex flex-col items-center text-center">
                         <div className="relative mb-1.5">
                           {pod.crown && (
-                            <Crown className="w-5 h-5 text-amber-500 absolute -top-4 sm:-top-4.5 left-1/2 -translate-x-1/2 drop-shadow-sm animate-pulse" />
+                            <Crown className="w-5 h-5 text-amber-400 absolute -top-4 sm:-top-4.5 left-1/2 -translate-x-1/2 drop-shadow-sm animate-pulse" />
                           )}
                           <div className={cn(
                             "rounded-full border flex items-center justify-center font-black bg-white shadow-xs relative transition-transform",
                             pod.pos === 1 ? "w-11 h-11 sm:w-14 sm:h-14 text-sm sm:text-base" : "w-9 h-9 sm:w-11 sm:h-11 text-xs sm:text-sm",
                             pod.ring,
-                            isCurrentUser && "ring-offset-2 ring-offset-amber-100"
+                            isCurrentUser && "ring-offset-2 ring-offset-indigo-100"
                           )}>
                             {initial}
                             {/* Rank Badge */}
@@ -252,7 +252,7 @@ export default function LeaderboardTab({
                               {user.full_name || user.username}
                             </span>
                             {isCurrentUser && (
-                              <span className="px-1 py-0.2 bg-amber-100 text-amber-800 text-[8px] font-black rounded-full leading-none shrink-0">You</span>
+                              <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 text-[8px] font-black rounded-full leading-none shrink-0 border border-indigo-200/70">You</span>
                             )}
                           </div>
                           <div className="flex items-center justify-center gap-1 mt-0.5">
@@ -310,7 +310,7 @@ export default function LeaderboardTab({
                         className={cn(
                           "w-full flex items-center gap-2.5 p-2 sm:p-2.5 rounded-2xl border transition-all text-left",
                           isCurrentUser
-                            ? "bg-amber-50/80 border-amber-200/90 shadow-xs ring-1 ring-amber-300/60"
+                            ? "bg-indigo-50/80 border-indigo-200/90 shadow-xs ring-1 ring-indigo-300/60"
                             : "bg-slate-50/70 border-slate-100/90 hover:border-slate-200 hover:bg-slate-100/50"
                         )}
                       >
@@ -320,7 +320,7 @@ export default function LeaderboardTab({
                         <div className="relative shrink-0">
                           <div className={cn(
                             "w-8 h-8 rounded-xl border flex items-center justify-center text-xs font-black shadow-2xs",
-                            isCurrentUser ? "bg-amber-100/80 border-amber-300 text-amber-900" : "bg-white border-slate-200 text-slate-700"
+                            isCurrentUser ? "bg-indigo-100/80 border-indigo-300 text-indigo-900" : "bg-white border-slate-200 text-slate-700"
                           )}>
                             {initial}
                           </div>
@@ -342,7 +342,7 @@ export default function LeaderboardTab({
                               {user.full_name || user.username}
                             </h4>
                             {isCurrentUser && (
-                              <span className="px-1.5 py-0.2 bg-amber-200/80 text-amber-900 text-[8px] font-black rounded-full leading-none">
+                              <span className="px-1.5 py-0.2 bg-indigo-200/80 text-indigo-900 text-[8px] font-black rounded-full leading-none">
                                 You
                               </span>
                             )}
@@ -365,7 +365,7 @@ export default function LeaderboardTab({
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="text-xs sm:text-sm font-black text-orange-600 tracking-tight">
+                          <div className="text-xs sm:text-sm font-black text-indigo-600 tracking-tight">
                             {activeCategory === 'time'
                               ? formatStudyTime(user.value)
                               : `${user.value.toLocaleString()} ${categoryLabels[activeCategory].unit}`}

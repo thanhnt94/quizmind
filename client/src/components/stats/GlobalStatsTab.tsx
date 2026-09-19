@@ -48,8 +48,8 @@ export default function GlobalStatsTab({ globalStats, isLoading }: GlobalStatsTa
       value: stats.total_questions.toLocaleString(),
       sub: 'Multiple-choice questions created',
       icon: Layers,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50 border-amber-100',
+      color: 'text-violet-600',
+      bg: 'bg-violet-50 border-violet-100',
       tag: 'Questions'
     },
     {

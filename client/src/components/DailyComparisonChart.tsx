@@ -85,7 +85,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-7 shadow-sm flex flex-col gap-5 text-left relative overflow-hidden">
-      <div className="h-1 absolute top-0 inset-x-0 bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500" />
+      <div className="h-1 absolute top-0 inset-x-0 bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500" />
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
         <div>
@@ -108,7 +108,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
               New Today
             </span>
-            <div className="w-6 h-6 rounded-lg bg-orange-100/50 flex items-center justify-center text-orange-600">
+            <div className="w-6 h-6 rounded-lg bg-indigo-100/60 flex items-center justify-center text-indigo-600">
               <Zap className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -199,8 +199,8 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
                   const day = payload[0].payload as DailyComparisonDay;
                   return (
                     <div className="bg-slate-900 text-white rounded-2xl p-3 shadow-xl border border-slate-800 text-xs font-medium space-y-1">
-                      <p className="font-bold text-amber-300">{formatLabel(day.date)} ({day.date})</p>
-                      <p className="flex justify-between gap-4"><span>New:</span> <span className="font-bold text-orange-400">{day.new_cards} questions</span></p>
+                      <p className="font-bold text-indigo-300">{formatLabel(day.date)} ({day.date})</p>
+                      <p className="flex justify-between gap-4"><span>New:</span> <span className="font-bold text-violet-400">{day.new_cards} questions</span></p>
                       <p className="flex justify-between gap-4"><span>Total:</span> <span className="font-bold text-indigo-400">{day.unique_cards} questions</span></p>
                       <p className="flex justify-between gap-4"><span>Time:</span> <span className="font-bold text-emerald-400">{day.study_minutes} mins</span></p>
                     </div>
@@ -209,7 +209,7 @@ export default function DailyComparisonChart({ data, allTimeAvg, isLoading }: Da
                 return null;
               }}
             />
-            <Bar dataKey="new_cards" fill="#F97316" radius={[4, 4, 0, 0]} name="New questions" />
+            <Bar dataKey="new_cards" fill="#8B5CF6" radius={[4, 4, 0, 0]} name="New questions" />
             <Bar dataKey="unique_cards" fill="#6366F1" radius={[4, 4, 0, 0]} name="Total questions" />
           </BarChart>
         </ResponsiveContainer>

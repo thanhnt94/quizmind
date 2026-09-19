@@ -148,16 +148,16 @@ export default function Stats() {
       label: 'Leaderboard',
       shortLabel: 'Leaderboard',
       icon: Trophy,
-      color: 'text-amber-600',
-      badgeBg: 'bg-amber-50'
+      color: 'text-indigo-600',
+      badgeBg: 'bg-indigo-50'
     },
     {
       id: 'personal',
       label: 'Personal Stats',
       shortLabel: 'Personal',
       icon: User,
-      color: 'text-indigo-600',
-      badgeBg: 'bg-indigo-50'
+      color: 'text-violet-600',
+      badgeBg: 'bg-violet-50'
     },
     {
       id: 'global',
@@ -174,9 +174,9 @@ export default function Stats() {
       {/* ═══════════ TOP UNIFIED HEADER ═══════════ */}
       <div className="shrink-0 z-30 bg-white/95 md:backdrop-blur-md border-b border-slate-200/80 shadow-2xs md:shadow-none px-3.5 sm:px-6 lg:px-8 xl:px-10 py-2 sm:py-2.5">
         <div className="w-full max-w-[1700px] 2xl:max-w-[1900px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 text-left">
-          {/* Left: Warm Branding with Orange Squircle & Badge */}
+          {/* Left: Branding with Indigo/Violet Squircle & Badge */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-orange-50 border border-orange-200/80 text-orange-600 flex items-center justify-center shadow-2xs shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-indigo-50 border border-indigo-200/80 text-indigo-600 flex items-center justify-center shadow-2xs shrink-0">
               <TrendingUp className="w-5 h-5 stroke-[2.4]" />
             </div>
             <div className="min-w-0">
@@ -184,13 +184,13 @@ export default function Stats() {
                 <h1 className="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-tight leading-none truncate">
                   Stats & Leaderboard
                 </h1>
-                <span className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200/70 text-orange-700 text-[10px] font-black shrink-0 leading-none">
+                <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200/70 text-indigo-700 text-[10px] font-black shrink-0 leading-none">
                   Rankings
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs font-semibold text-slate-400 mt-1 flex items-center gap-1 leading-none truncate">
                 <span>Track personal progress & global rankings</span>
-                <span className="text-amber-500">✨</span>
+                <span className="text-indigo-500">✨</span>
               </p>
             </div>
           </div>
@@ -217,7 +217,7 @@ export default function Stats() {
                   >
                     <Icon className={cn(
                       "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
-                      isActive ? "text-orange-500 stroke-[2.4]" : "text-slate-400"
+                      isActive ? "text-indigo-600 stroke-[2.4]" : "text-slate-400"
                     )} />
                     <span className="truncate text-[11px] sm:text-xs leading-tight">{tab.shortLabel}</span>
                   </button>

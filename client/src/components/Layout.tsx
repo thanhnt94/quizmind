@@ -27,7 +27,7 @@ export default function Layout() {
   // Exactly 4 core items for clean mobile-first reachability
   const navItems = [
     { label: 'Home', path: '/', icon: Home },
-    { label: 'Quizzes', path: '/quizzes', icon: Layers },
+    { label: 'Sets', path: '/quizzes', icon: Layers },
     { label: 'Stats', path: '/stats', icon: BarChart3 },
     { label: 'Settings', path: '/settings', icon: Settings },
   ]

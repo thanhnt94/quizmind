@@ -55,17 +55,17 @@ export default function SpeedAccuracyWidget({ speedAccuracyStats }: SpeedAccurac
 
       {/* Solve Velocity */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-5 md:p-7 shadow-sm flex flex-col justify-between relative overflow-hidden">
-        <div className="h-1 absolute top-0 inset-x-0 bg-gradient-to-r from-amber-500 to-orange-500" />
+        <div className="h-1 absolute top-0 inset-x-0 bg-gradient-to-r from-indigo-500 to-violet-500" />
         <div>
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500">
+            <div className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100/60 flex items-center justify-center text-violet-600">
               <Timer className="w-4.5 h-4.5" />
             </div>
             <div>
               <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-widest italic leading-none">
                 Retrieval Velocity
               </h3>
-              <p className="text-[9px] font-bold text-amber-500 mt-1 uppercase tracking-widest">
+              <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
                 Average response latency per question
               </p>
             </div>

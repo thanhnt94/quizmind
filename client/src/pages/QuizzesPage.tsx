@@ -366,17 +366,21 @@ export default function QuizzesPage() {
           <div className="flex items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2.5">
-                <Link to="/" className="active:scale-95 transition-transform flex items-center">
-                  <QuizMindLogo height="sm" />
-                </Link>
-                <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5 hidden sm:block" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 hidden sm:inline-block">
-                    Sets
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-black leading-none">
-                    {rawQuizzes.length}
-                  </span>
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                  <Layers className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none">
+                      Sets
+                    </h1>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-black leading-none">
+                      {rawQuizzes.length}
+                    </span>
+                  </div>
+                  <p className="text-[10px] sm:text-xs font-semibold text-slate-400 mt-0.5 leading-none hidden xs:block">
+                    Question decks & study materials
+                  </p>
                 </div>
               </div>
 
@@ -459,7 +463,7 @@ export default function QuizzesPage() {
             </div>
 
             {/* Mobile Actions */}
-            <div className="flex md:hidden items-center gap-1.5">
+            <div className="flex md:hidden items-center gap-2">
               <button
                 onClick={() => setIsSearchOpen(prev => !prev)}
                 className={cn(
@@ -468,18 +472,18 @@ export default function QuizzesPage() {
                     ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 font-bold"
                     : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
                 )}
-                title="Search quizzes"
+                title="Search sets"
               >
                 <Search className="w-4 h-4" />
               </button>
 
               <Link
                 to="/manage/import"
-                className="h-8.5 px-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white flex items-center gap-1 text-xs font-black shadow-xs shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
-                title="Create or import new quiz"
+                className="h-8.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white flex items-center gap-1.5 text-xs font-black shadow-xs shadow-indigo-500/25 active:scale-95 transition-all cursor-pointer"
+                title="Create or import new set"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>New</span>
+                <span>New Set</span>
               </Link>
             </div>
           </div>
@@ -490,7 +494,7 @@ export default function QuizzesPage() {
               {tabsConfig.map((tab) => {
                 const isActive = activeTab === tab.id
                 const TabIcon = tab.icon
-                const shortLabel = tab.id === 'my' ? 'Quizzes' : tab.id === 'folders' ? 'Folders' : tab.id === 'discover' ? 'Discover' : 'Archive'
+                const shortLabel = tab.id === 'my' ? 'Sets' : tab.id === 'folders' ? 'Folders' : tab.id === 'discover' ? 'Discover' : 'Archive'
                 return (
                   <button
                     key={tab.id}

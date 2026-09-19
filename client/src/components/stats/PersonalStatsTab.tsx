@@ -167,9 +167,9 @@ export default function PersonalStatsTab({
             <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5">{periodSummary.total_correct} correct answers</p>
           </div>
 
-          <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-100/60">
-            <span className="text-[8px] font-black text-amber-500 uppercase tracking-wider block">Study Time</span>
-            <div className="text-lg sm:text-xl font-black text-amber-600 mt-0.5">
+          <div className="bg-violet-50/70 p-3 rounded-2xl border border-violet-100/60">
+            <span className="text-[8px] font-black text-violet-500 uppercase tracking-wider block">Study Time</span>
+            <div className="text-lg sm:text-xl font-black text-violet-700 mt-0.5">
               {periodSummary.total_time_hours} <span className="text-[10px] font-bold text-slate-400">hrs</span>
             </div>
             <p className="text-[7.5px] font-bold text-slate-400 uppercase mt-0.5">~{periodSummary.total_time_minutes} mins focused</p>
@@ -190,7 +190,7 @@ export default function PersonalStatsTab({
         <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white border border-indigo-800/50 shadow-md space-y-3 relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-amber-300">
+              <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-indigo-300">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
@@ -214,7 +214,7 @@ export default function PersonalStatsTab({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-white/10">
               {weeklyReport.ai_insights.map((insight: string, idx: number) => (
                 <div key={idx} className="text-xs font-medium text-indigo-100/90 leading-relaxed flex items-start gap-2 bg-white/5 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-amber-400 text-sm leading-none">•</span>
+                  <span className="text-indigo-400 text-sm leading-none">•</span>
                   <span>{insight}</span>
                 </div>
               ))}
@@ -264,7 +264,7 @@ export default function PersonalStatsTab({
               onClick={() => setActiveChartTab('hours')}
               className={cn(
                 "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                activeChartTab === 'hours' ? "bg-white text-amber-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
+                activeChartTab === 'hours' ? "bg-white text-violet-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
               )}
             >
               Hourly
